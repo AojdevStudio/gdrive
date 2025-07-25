@@ -9,9 +9,9 @@ import {
   ListToolsRequestSchema,
   ReadResourceRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
-import fs from "fs";
+import * as fs from "fs";
 import { google } from "googleapis";
-import path from "path";
+import * as path from "path";
 import { sheets_v4 } from 'googleapis';
 
 const drive = google.drive("v3");

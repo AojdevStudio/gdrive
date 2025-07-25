@@ -1,0 +1,144 @@
+# Source: https://docs.anthropic.com/en/docs/build-with-claude/prompt-engineering/extended-thinking-tips
+# Converted: 2025-07-12
+# Structure: An advanced guide detailing strategies, technical considerations, and prompting techniques for using an AI's extended thinking feature.
+
+# This document provides advanced strategies for leveraging extended thinking.
+extended_thinking_guide:
+  title: 'Extended Thinking Tips'
+  summary: "This guide provides advanced strategies and techniques for getting the most out of Claude's extended thinking features, which allow it to work through complex problems step-by-step."
+
+  # Foundational knowledge and related documentation.
+  prerequisites:
+    description: 'This guide presumes you have reviewed the basic steps and implementation guides for extended thinking.'
+    related_guides:
+      - title: 'Extended thinking models'
+        url: '/en/docs/about-claude/models/extended-thinking-models'
+      - title: 'Getting started with extended thinking models'
+        url: '/en/docs/about-claude/models/extended-thinking-models#getting-started-with-extended-thinking-models'
+      - title: 'Extended thinking implementation guide'
+        url: '/en/docs/build-with-claude/extended-thinking'
+
+  # Technical details and constraints for using the feature.
+  technical_considerations:
+    - name: 'Minimum Token Budget'
+      detail: 'Thinking tokens have a minimum budget of 1024. Start with the minimum and increase as needed.'
+    - name: 'Large Workloads'
+      detail: 'For thinking budgets above 32K tokens, use batch processing to avoid networking issues and timeouts.'
+    - name: 'Language Support'
+      detail: 'Extended thinking performs best in English, though final outputs can be in any supported language.'
+    - name: 'Alternative for Small Budgets'
+      detail: 'For needs below the minimum budget, use standard mode with traditional chain-of-thought prompting using XML tags like <thinking>.'
+      related_link: '/en/docs/build-with-claude/prompt-engineering/chain-of-thought'
+
+  # A collection of best practices for prompting with extended thinking enabled.
+  prompting_techniques:
+    - technique: 'General vs. Specific Instructions'
+      recommendation: "Start with high-level instructions to think deeply. The model's creativity may exceed a human's ability to prescribe the optimal process."
+      recommended_approach:
+        prompt: |
+          Please think about this math problem thoroughly and in great detail.
+          Consider multiple approaches and show your complete reasoning.
+          Try different methods if your first approach doesn't work.
+      less_effective_approach:
+        prompt: |
+          Think through this math problem step by step:
+          1. First, identify the variables
+          2. Then, set up the equation
+          3. Next, solve for x
+          ...
+      iteration_tip: 'Start general, then read the thinking output and iterate with more specific instructions to steer the model if needed.'
+
+    - technique: 'Multishot Prompting'
+      description: 'Provide few-shot examples using XML tags like <thinking> or <scratchpad> to show the desired reasoning pattern. The model will generalize this pattern.'
+      example:
+        prompt: |
+          I'm going to show you how to solve a math problem, then I want you to solve a similar one.
+
+          Problem 1: What is 15% of 80?
+
+          <thinking>
+          To find 15% of 80:
+          1. Convert 15% to a decimal: 15% = 0.15
+          2. Multiply: 0.15 × 80 = 12
+          </thinking>
+
+          The answer is 12.
+
+          Now solve this one:
+          Problem 2: What is 35% of 240?
+      note: "It's also possible you'll get better results by giving Claude free rein to think in the way it deems best."
+
+    - technique: 'Maximizing Instruction Following'
+      description: 'Extended thinking significantly improves instruction following. The model typically reasons about instructions in the thinking block and then executes them.'
+      tips:
+        - 'Be clear and specific about your desired output.'
+        - 'For complex instructions, break them into numbered steps.'
+        - 'Allow a sufficient token budget for the model to process instructions fully.'
+
+    - technique: 'Debugging and Steering'
+      description: "You can use the model's thinking output to debug its logic, though it's not perfectly reliable."
+      recommendations:
+        what_not_to_do:
+          - "Do not pass the model's extended thinking back in a subsequent user prompt; it can degrade performance."
+          - 'Prefilling extended thinking is explicitly not allowed.'
+          - "Manually changing the model's output text that follows its thinking block will likely cause confusion."
+      special_note: 'If the model repeats its thinking in the final output, instruct it to only output the answer.'
+
+    - technique: 'Handling Long Outputs'
+      description: 'For generating comprehensive datasets or long-form content.'
+      tips:
+        - 'Increase both the maximum extended thinking length and explicitly ask for longer outputs.'
+        - 'For very long outputs (20,000+ words), request a detailed outline with paragraph-level word counts.'
+      warning: 'Do not increase the thinking budget unnecessarily. Start small and increase as needed to find the optimal setting for your use case.'
+
+    - technique: 'Reflection and Work Checking'
+      description: 'Improve consistency and reduce errors by instructing the model to verify its work before finishing.'
+      methods:
+        - 'Ask the model to verify its work with a simple test.'
+        - 'Instruct the model to analyze if a previous step achieved the expected result.'
+        - 'For coding tasks, ask the model to run through test cases in its thinking block.'
+      example_prompt: |
+        Write a function to calculate the factorial of a number.
+        Before you finish, please verify your solution with test cases for:
+        - n=0
+        - n=1
+        - n=5
+        - n=10
+        And fix any issues you find.
+
+  # Use cases where extended thinking provides significant advantages.
+  exemplary_use_cases:
+    - title: 'Complex STEM Problems'
+      description: 'Tasks that require building mental models, applying specialized knowledge, and working through sequential logical steps.'
+      enhanced_prompt_scenario: 'Write a Python script for a bouncing yellow ball within a tesseract, handling collision detection as the tesseract rotates.'
+    - title: 'Constraint Optimization Problems'
+      description: 'Challenges that require satisfying multiple competing requirements simultaneously, allowing the model to methodically address each constraint.'
+      enhanced_prompt_scenario: 'Plan a 7-day trip to Japan with a detailed list of constraints including budget, locations, diet, and activity preferences.'
+    - title: 'Structured Thinking Frameworks'
+      description: 'Give the model an explicit methodology to follow, which works best with ample thinking space to execute each step.'
+      enhanced_prompt_scenario: "Develop a market entry strategy for Microsoft using Blue Ocean Strategy, Porter's Five Forces, scenario planning, the Ansoff Matrix, and the Three Horizons framework."
+
+  # Additional resources and a definition for a related UI component.
+  supplementary_info:
+    # A component likely used on the source documentation website.
+    ui_component_definition:
+      name: 'TryInConsoleButton'
+      language: 'JavaScript (React)'
+      purpose: 'Creates a link to an Anthropic workbench console with pre-filled parameters from the prompt example.'
+      parameters:
+        - name: 'userPrompt'
+        - name: 'systemPrompt'
+        - name: 'maxTokens'
+        - name: 'thinkingBudgetTokens'
+        - name: 'buttonVariant'
+        - name: 'children'
+    # Links to further reading and practical examples.
+    next_steps:
+      - title: 'Extended thinking cookbook'
+        icon: 'book'
+        description: 'Explore practical examples of extended thinking in our cookbook.'
+        href: 'https://github.com/anthropics/anthropic-cookbook/tree/main/extended_thinking'
+      - title: 'Extended thinking guide'
+        icon: 'code'
+        description: 'See complete technical documentation for implementing extended thinking.'
+        href: '/en/docs/build-with-claude/extended-thinking'

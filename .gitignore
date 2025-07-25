@@ -1,0 +1,13 @@
+*node_modules*
+*dist*
+*build*
+*logs* 
+*.env
+.DS_Store
+*.linear-cache
+
+# Credential files - NEVER commit these
+*.gdrive-server-credentials.json
+*gcp-oauth.keys.json
+credentials/
+.credentials

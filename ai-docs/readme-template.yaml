@@ -1,0 +1,121 @@
+# YAML representation of a project README template.
+# All values with {{...}} are intended to be replaced by a templating engine.
+project_readme_template:
+  metadata:
+    project_name: "{{PROJECT_NAME}}"
+    tagline: "{{TAGLINE_OR_SHORT_DESCRIPTION}}"
+    version: "{{VERSION}}"
+    license_type: "{{LICENSE_TYPE}}"
+    requirements: "{{REQUIREMENTS}}"
+    community_links:
+      - text: "{{COMMUNITY_LINK_TEXT}}"
+        url: "#"
+      - text: "{{SUBSCRIPTION_LINK_TEXT}}"
+        url: "#"
+
+  description:
+    intro: >
+      {{PROJECT_NAME}} is a {{PROJECT_TYPE}} designed to {{PRIMARY_PURPOSE}}.
+      It goes beyond {{GENERIC_SOLUTION_TYPE}} by enabling {{DISTINGUISHING_FEATURE_OR_METHOD}}
+      to support {{TARGET_AUDIENCE_OR_DOMAIN}}.
+    use_cases:
+      - "{{USE_CASE_1}}"
+      - "{{USE_CASE_2}}"
+      - "{{USE_CASE_3}}"
+      - "{{USE_CASE_4}}"
+    outcome: >
+      {{PROJECT_NAME}} helps achieve {{CORE_OUTCOME_OR_BENEFIT}} through {{KEY_APPROACH_OR_TECHNIQUE}}.
+    support_callout: "⭐ If you find this project helpful, please give it a star to support development and receive updates."
+
+  key_highlights:
+    - title: "{{HIGHLIGHT_TITLE_1}}"
+      description: "{{HIGHLIGHT_DESCRIPTION_1}}"
+    - title: "{{HIGHLIGHT_TITLE_2}}"
+      description: "{{HIGHLIGHT_DESCRIPTION_2}}"
+    summary:
+      intro: >
+        {{PROJECT_NAME}} is designed to address challenges such as {{CHALLENGE_1}}, {{CHALLENGE_2}},
+        and more—delivering {{BENEFIT_1}}, {{BENEFIT_2}}, and {{BENEFIT_3}} through
+        {{GENERAL_APPROACH_OR_MECHANISM}}.
+      guide_link:
+        text: "📘 Read the Full Guide"
+        url: "#"
+
+  quick_navigation:
+    - title: "{{LINK_TITLE_1}}"
+      url: "#"
+    - title: "{{LINK_TITLE_2}}"
+      url: "#"
+    - title: "{{LINK_TITLE_3}}"
+      url: "#"
+    - title: "{{LINK_TITLE_4}}"
+      url: "#"
+    - title: "{{LINK_TITLE_5}}"
+      url: "#"
+    - title: "{{LINK_TITLE_6}}"
+      url: "#"
+    - title: "{{LINK_TITLE_7}}"
+      url: "#"
+    - title: "{{LINK_TITLE_8}}"
+      url: "#"
+
+  setup_and_updates:
+    recommended_command:
+      primary: "{{INSTALL_COMMAND_PRIMARY}}"
+      alternative: "{{INSTALL_COMMAND_ALTERNATIVE}}" # For existing setups
+    installation_features:
+      - "✅ {{INSTALL_FEATURE_1}}"
+      - "✅ {{INSTALL_FEATURE_2}}"
+      - "✅ {{INSTALL_FEATURE_3}}"
+      - "✅ {{INSTALL_FEATURE_4}}"
+    quick_start_options:
+      - name: "{{START_MODE_NAME_1}}"
+        steps:
+          - "{{STEP_1_DESCRIPTION}}"
+          - "{{STEP_2_DESCRIPTION}}"
+          - "{{STEP_3_DESCRIPTION}}"
+          - "{{STEP_4_DESCRIPTION}}"
+          - "{{STEP_5_DESCRIPTION}}"
+      - name: "{{START_MODE_NAME_2}}"
+        steps:
+          - instruction: "{{CLONE_INSTRUCTION_HEADING}}"
+            code_block: "git clone https://github.com/{{REPOSITORY_PATH}}.git"
+            language: "bash"
+          - instruction: "{{INSTALL_INSTRUCTION_HEADING}}"
+            code_block: "{{INSTALL_COMMAND_IDE}}"
+            language: "bash"
+    modular_features:
+      description: "{{PROJECT_NAME}} can be extended to support use cases such as:"
+      examples:
+        - "{{USE_CASE_EXAMPLE_1}}"
+        - "{{USE_CASE_EXAMPLE_2}}"
+        - "{{USE_CASE_EXAMPLE_3}}"
+        - "{{USE_CASE_EXAMPLE_4}}"
+        - "{{USE_CASE_EXAMPLE_5}}"
+      expansion_note: "🧩 {{EXPANSION_NOTE}}"
+
+  resources:
+    documentation:
+      - title: "📖 {{DOC_LINK_TITLE_1}}"
+        url: "#"
+      - title: "🏗️ {{DOC_LINK_TITLE_2}}"
+        url: "#"
+      - title: "🚀 {{DOC_LINK_TITLE_3}}"
+        url: "#"
+      - title: "🧑‍💻 {{DOC_LINK_TITLE_4}}"
+        url: "#"
+    support_and_community:
+      - channel: "💬 {{SUPPORT_CHANNEL_1}}"
+        url: "#"
+      - channel: "🐞 {{SUPPORT_CHANNEL_2}}"
+        url: "#"
+      - channel: "🗨️ {{SUPPORT_CHANNEL_3}}"
+        url: "#"
+
+  contributing:
+    message: "We welcome all contributions!"
+    guidelines: "📋 See CONTRIBUTING.md for how to get started."
+
+  license:
+    type: "{{LICENSE_TYPE}}"
+    details: "See LICENSE for details."

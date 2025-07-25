@@ -1,0 +1,171 @@
+# Structure: A comprehensive guide for creating custom Claude commands, outlining categories, creation process, best practices, and advanced patterns.
+
+---
+# A guide for creating custom Claude commands, following a standardized template.
+command_creation_guide:
+  quick_start:
+    description: 'Use the `/create-command` slash command for an interactive creation process.'
+    usage_examples:
+      - command: '/create-command'
+        description: 'Initiates an interactive mode for command creation.'
+      - command: '/create-command "analyze-deps" project utility'
+        description: 'Creates a new command with specified name, location, and category.'
+      - command: '/create-command "git-flow" user workflow'
+        description: 'Creates a user-level workflow command.'
+
+  command_categories:
+    - name: 'Planning Commands'
+      description: 'For multi-stage, interactive, and conversational workflows that produce documentation or plans.'
+      examples: ['brainstorming', 'proposals', 'roadmaps']
+    - name: 'Implementation Commands'
+      description: 'For direct actions like file creation, modification, or code generation.'
+      examples: ['scaffolding', 'refactoring', 'migrations']
+    - name: 'Analysis Commands'
+      description: 'For review, auditing, and generating reports or insights.'
+      examples: ['code review', 'dependency analysis', 'performance audit']
+    - name: 'Workflow Commands'
+      description: 'For orchestrating multiple steps and coordinating between different tools.'
+      examples: ['release process', 'testing pipeline', 'deployment']
+    - name: 'Utility Commands'
+      description: 'For simple, reusable tools and helpers that perform quick operations.'
+      examples: ['formatting', 'search', 'validation']
+
+  creation_process:
+    - step: 1
+      title: 'Define Purpose'
+      questions:
+        - 'What problem does this command solve?'
+        - 'Who will use it and when?'
+        - 'What is the expected output?'
+    - step: 2
+      title: 'Choose Location'
+      locations:
+        - name: 'Project Commands'
+          path: '.claude/commands/'
+          description: 'Specific to the current codebase.'
+        - name: 'User Commands'
+          path: '~/.claude/commands/'
+          description: 'Available across all projects.'
+    - step: 3
+      title: 'Select Pattern'
+      description: 'Study similar existing commands to understand common patterns.'
+      actions:
+        - description: 'List existing commands'
+          command: |
+            ls -la .claude/commands/
+            ls -la ~/.claude/commands/
+        - description: "Read a similar command's source"
+          command: 'cat .claude/commands/similar-command.md'
+    - step: 4
+      title: 'Generate Command'
+      description: 'Follow the 6-part template structure to build the command.'
+      template_structure:
+        - 'YAML frontmatter'
+        - 'Main heading'
+        - 'Brief description'
+        - 'Arguments section (if needed)'
+        - 'Instructions section'
+        - 'Context section'
+
+  template_example:
+    description: 'A skeletal example of the command template format.'
+    structure:
+      frontmatter:
+        allowed-tools: 'Read, Write, Bash'
+        description: 'Brief description of what the command does'
+      heading: 'Command Name'
+      description_body: 'This command [does what] by [how it works] for [purpose/benefit].'
+      arguments:
+        variable_name: 'InputType'
+        placeholder: '$ARGUMENTS'
+        usage_examples:
+          - command: '/command'
+            description: 'Default behavior'
+          - command: '/command value'
+            description: 'With an argument'
+          - command: '/command "complex value"'
+            description: 'With a quoted argument'
+      instructions:
+        - 'Step 1: Initial action'
+        - 'Step 2: Process/analyze'
+        - 'Step 3: Generate output'
+        - 'Step 4: Save results'
+        - 'Step 5: Provide summary'
+      context:
+        current_state: '!`relevant command`'
+        input_files: '@relevant/files.md'
+        key_concepts: 'concept1 (explanation)'
+
+  best_practices:
+    - title: 'Self-Contained Commands'
+      guidelines:
+        - 'Include all necessary context within the command file.'
+        - 'Do not rely on external documentation for operation.'
+        - 'Provide clear usage examples.'
+    - title: 'Dynamic Context'
+      guidelines:
+        - 'Use `!` for runtime data gathering (e.g., `!git status`).'
+        - 'Use `@` for static file references (e.g., `@README.md`).'
+        - 'Use `$ARGUMENTS` to capture user input from the command line.'
+    - title: 'Clear Instructions'
+      guidelines:
+        - 'Start each instruction step with an action verb.'
+        - 'Be specific about the inputs and outputs for each step.'
+        - 'Keep steps sequential and logical.'
+    - title: 'Consistent Naming'
+      guidelines:
+        - 'Use lowercase with hyphens for filenames (e.g., `analyze-code`).'
+        - 'Use descriptive verbs in the command name (e.g., `generate`, `validate`).'
+        - 'Add a numeric prefix for commands that are part of an ordered workflow (e.g., `01-plan`, `02-implement`).'
+
+  advanced_patterns:
+    - pattern_name: 'Conditional Logic'
+      description: "Use arguments to branch the command's logic."
+      example: |
+        ## Instructions
+        - If $ARGUMENTS contains "test": focus on test generation
+        - If $ARGUMENTS contains "docs": focus on documentation
+        - Otherwise: provide general analysis
+    - pattern_name: 'Multiple File Operations'
+      description: 'Use shell commands to find and process multiple files.'
+      example: |
+        ## Instructions
+        - Read all TypeScript files: !`find . -name "*.ts" -type f`
+        - Analyze import patterns in each file
+        - Generate dependency graph
+        - Save visualization to `docs/dependencies.svg`
+    - pattern_name: 'Integration with Tools'
+      description: 'Use context commands to pull data from external developer tools.'
+      example: |
+        ## Context
+        - Linear issues: !`cdev list issues`
+        - Git worktrees: !`git worktree list`
+        - Test results: !`npm test -- --json`
+
+  testing_your_command:
+    - 'Create the command file in the appropriate `commands` directory.'
+    - 'Test the command with various inputs (no arguments, simple arguments, complex quoted arguments).'
+    - 'Verify that the output matches your expectations.'
+    - "Refine the command's instructions and context based on test results."
+
+  sharing_commands:
+    project_commands:
+      description: 'Commands specific to a project.'
+      guidelines:
+        - 'Commit the command file to `.claude/commands/`.'
+        - "Document the new command in the project's README."
+        - 'Include usage examples in the documentation.'
+    user_commands:
+      description: 'Commands available globally to a user.'
+      guidelines:
+        - 'Save the command file to `~/.claude/commands/`.'
+        - 'Share the command via a GitHub Gist or a repository.'
+        - 'Include clear installation instructions for other users.'
+
+  command_maintenance:
+    - 'Review commands periodically to ensure they are still relevant.'
+    - 'Update commands to adapt to new project patterns or tool changes.'
+    - 'Remove obsolete commands that are no longer used.'
+    - 'Consolidate similar commands to reduce redundancy.'
+---
+

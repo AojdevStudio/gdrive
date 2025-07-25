@@ -1,0 +1,212 @@
+# Structure: A comprehensive template for creating custom Claude Code slash commands, including structure, examples, key patterns, and best practices.
+
+```yaml
+# Defines the standard structure for creating custom Claude Code slash commands.
+claude_code_slash_command_template:
+  # The overall structure that all custom slash commands must follow.
+  command_structure:
+    yaml_frontmatter:
+      description: "A YAML block at the very top of the file for command metadata."
+      template: |
+        ---
+        allowed-tools: Tool1, Tool2, Tool3
+        description: Brief one-line description of what the command does
+        ---
+      guidelines:
+        - "List only the tools the command actually needs."
+        - "Keep the description under 80 characters."
+        - "Use action verbs (e.g., analyze, convert, generate)."
+    main_heading:
+      description: "The primary H1 heading for the command."
+      template: "# Command Name"
+      guidelines:
+        - "Use Title Case."
+        - "Keep it concise (1-3 words)."
+        - "The name should match the filename (without the .md extension)."
+    brief_description:
+      description: "A single sentence explaining the command's purpose."
+      template: "This command [does what] by [how it works] for [purpose/benefit]."
+      guidelines:
+        - "Focus on the 'what' and the 'why'."
+        - "Mention key technologies or patterns if they are central to the command."
+    arguments_section:
+      description: "Defines how the command processes user-provided arguments."
+      template: |
+        **variables:**
+        [VariableName]: $ARGUMENTS
+
+        **Usage Examples:**
+
+        - `/command` - Default behavior with no arguments
+        - `/command value1` - Behavior with first argument
+        - `/command value1 "value with spaces"` - Multiple arguments example
+      guidelines:
+        - "Replace `[VariableName]` with a descriptive name (e.g., Query, FilePath, Topic, IssueId, Pattern)."
+        - "Omit the variables section if the command does not take arguments."
+        - "Provide clear usage examples for different argument patterns."
+        - "Reference `$ARGUMENTS` in the instructions to process user input."
+    yaml_configuration_section:
+      description: "The core logic and context for the command, defined in a YAML block."
+      guidelines:
+        - "Use a clear hierarchical structure with proper indentation."
+        - "Group related items under descriptive parent keys."
+        - "Use lists for ordered sequences or multiple items."
+        - "Include comments with '#' for complex sections."
+        - "Use quoted strings for commands and complex values."
+      structure:
+        instructions:
+          description: "A sequence of steps detailing the command's execution logic."
+          example:
+            - step: 1
+              action: "What to do first"
+              details: "Specific implementation details"
+        context:
+          description: "Provides necessary context like files, commands, and reference data."
+          sub_sections:
+            current_state:
+              description: "Commands to check the current environment state."
+              example:
+                - name: "State Check Name"
+                  command: "!`command to check current state`"
+                  description: "What this state check reveals"
+            input_files:
+              description: "A list of files to be used as input."
+              example:
+                - "@file1.md"
+            reference_docs:
+              description: "A list of documentation files for reference."
+              example:
+                - "@path/to/documentation.md"
+            key_concepts:
+              description: "Definitions of important concepts."
+              example:
+                - name: "concept1"
+                  description: "Brief explanation of concept1"
+            important_values:
+              description: "A list of key static values."
+              example:
+                - "value1"
+        validation:
+          description: "Conditions to check before and after execution."
+          example:
+            pre_conditions:
+              - "Condition that must be true before execution"
+            post_conditions:
+              - "Expected state after execution"
+        error_handling:
+          description: "Defines how to respond to specific errors."
+          example:
+            - error: "FileNotFound"
+              action: "Create default configuration"
+            - error: "PermissionDenied"
+              action: "Request user permission or skip"
+
+  # A complete example demonstrating the template in action.
+  template_example:
+    command_name: "Rule to Hook"
+    frontmatter:
+      allowed-tools: "Read, Write, Bash"
+      description: "Convert project rules to executable hooks using modern patterns."
+    description: "This command converts natural language project rules into Claude Code hook configurations, leveraging modern uv scripting patterns for sophisticated implementations."
+    arguments:
+      variable_name: "RuleText"
+      variable_placeholder: "$ARGUMENTS"
+    usage_examples:
+      - command: "/rule2hook"
+        description: "Convert all rules from CLAUDE.md files."
+      - command: "/rule2hook PreToolUse \"validate bash commands for security\""
+        description: "Create a specific PreToolUse hook."
+      - command: "/rule2hook PostToolUse \"format code after file changes\""
+        description: "Create a PostToolUse hook."
+    configuration:
+      instructions:
+        - step: 1
+          action: "Parse arguments or scan for rules"
+          details: "If arguments are provided, use $ARGUMENTS to get hook_event and rule_text. If no arguments, read and analyze project CLAUDE.md files."
+        - step: 2
+          action: "Analyze rules and determine hook types"
+          details: "Determine appropriate hook events and tool matchers based on rule keywords."
+        - step: 3
+          action: "Generate hook implementations"
+          details: "Generate hook configurations using jq for simple cases, and uv scripts for complex logic."
+        - step: 4
+          action: "Save configuration"
+          details: "Create a complete JSON configuration and save it to ~/.claude/hooks.json."
+        - step: 5
+          action: "Provide summary"
+          details: "Provide an implementation summary with usage examples."
+      context:
+        current_state:
+          - name: "Current hooks configuration"
+            command: "!`cat ~/.claude/hooks.json 2>/dev/null || echo \"{}\"`"
+            description: "Existing hook configurations to merge with."
+        input_files:
+          - "@CLAUDE.md"
+          - "@CLAUDE.local.md"
+          - "@~/.claude/CLAUDE.md"
+        reference_docs:
+          - "@ai_docs/claude-code-hooks-documentation.md"
+          - "@ai_docs/astral-uv-scripting-documentation.md"
+        hook_events:
+          - name: "PreToolUse"
+            description: "Executed before tool use, can block execution."
+          - name: "PostToolUse"
+            description: "Executed after tool use completes."
+          - name: "Stop"
+            description: "Executed when the session ends."
+          - name: "Notification"
+            description: "Triggered for system alerts."
+        common_matchers:
+          - "Bash"
+          - "Write|Edit|MultiEdit"
+          - "Read"
+          - "WebFetch|WebSearch"
+          - ".*"
+        exit_codes:
+          - code: 0
+            meaning: "Continue normal execution"
+          - code: 2
+            meaning: "Block tool execution"
+          - code: "other"
+            meaning: "Log error and continue"
+
+  # Important patterns and conventions to use when creating commands.
+  key_patterns:
+    dynamic_data_gathering_in_yaml:
+      - "Use `command:` field with backtick syntax for shell commands."
+      - "Handle missing files gracefully with `2>/dev/null || echo \"default\"`."
+      - "Escape quotes properly in YAML strings."
+    file_references_in_yaml:
+      - "List files under `input_files:` or `reference_docs:` arrays."
+      - "Use the '@' prefix consistently for all file references."
+      - "Group related files under appropriate parent keys."
+    structured_data_benefits:
+      - "Clear hierarchy shows relationships between concepts."
+      - "Easy to add new fields without breaking the existing structure."
+      - "Machine-readable format enables potential automation."
+      - "Consistent indentation improves scannability."
+    yaml_best_practices:
+      - "Use quoted strings for complex values or special characters."
+      - "Use comments with '#' for sections needing explanation."
+      - "Use consistent naming: `snake_case` for keys."
+      - "Group related items under descriptive parent keys."
+
+  # High-level best practices for command design.
+  best_practices:
+    - "Self-Contained: Command should work without external documentation."
+    - "Consistent: Follow the markdown + YAML structure exactly."
+    - "Structured: Use YAML for configuration and complex data."
+    - "Actionable: Include clear steps with `action` and `details` fields."
+    - "Contextual: Include all necessary reference information."
+    - "Maintainable: The YAML format makes updates easier."
+
+  # Step-by-step instructions for creating a new custom command.
+  usage_instructions:
+    - "Copy this template file."
+    - "Fill in the markdown sections (frontmatter, heading, description, usage)."
+    - "Define the YAML configuration section with instructions and context."
+    - "Test that all `command:` entries work in the target environment."
+    - "Verify that all '@' file references exist."
+    - "Validate the YAML syntax, ensuring proper indentation and quotes."
+    - "Save the new command to `.claude/commands/[name].md`."
+```

@@ -1,0 +1,211 @@
+# Guide for Writing Linear Issues for Parallel Development
+linear_issue_template_guide:
+  title: 'Template for writing Linear issues that work optimally with semantic analysis and parallel decomposition'
+
+  # The recommended structure for a Linear issue.
+  template_structure:
+    title_format: '[Action] [Technology/System] - [Key Capability/Feature]'
+    description_tasks:
+      - '[Infrastructure/Backend Task] - [Technology] [Action]'
+      - '[Data/Storage Task] - [Technology] [Action]'
+      - '[API/Integration Task] - [Technology] [Action]'
+      - '[Frontend/UI Task] - [Technology] [Action]'
+      - '[Authentication/Security Task] - [Technology] [Action]'
+      - '[Testing/Validation Task] - [Technology] [Action]'
+      - '[Deployment/Configuration Task] - [Technology] [Action]'
+    acceptance_criteria:
+      - '[Specific technical outcome 1]'
+      - '[Specific technical outcome 2]'
+      - '[Integration/performance requirement]'
+      - '[Testing requirement]'
+    technical_constraints:
+      - '[Architecture requirement]'
+      - '[Technology stack requirement]'
+      - '[Performance requirement]'
+
+  # An example of a well-formed issue following the template.
+  example_well_structured_issue:
+    title: 'Enhanced Google Drive MCP Server - Full Write Capabilities'
+    description:
+      - 'Implement MCP server integration layer using TypeScript'
+      - 'Create Google Drive API client with OAuth2 authentication'
+      - 'Add file upload/download operations with error handling'
+      - 'Implement storage sync functionality with conflict resolution'
+      - 'Build authentication system for Google Drive API access'
+      - 'Add comprehensive error handling and input validation'
+      - 'Create test suite covering all file operations'
+      - 'Add Docker deployment configuration with environment management'
+    acceptance_criteria:
+      - 'Google Drive operations (read/write/delete) work correctly'
+      - 'MCP server starts without errors and handles requests'
+      - 'File operations support common formats (docs, sheets, slides)'
+      - 'Authentication integrates with existing OAuth system'
+      - 'All tests pass with >90% coverage'
+      - 'Docker container deploys successfully'
+    technical_constraints:
+      - 'Must use existing TypeScript/Node.js stack'
+      - 'Integration with current MCP architecture'
+      - 'OAuth2 flow compatible with existing auth system'
+      - 'Support for large file uploads (>100MB)'
+
+  # Core principles for writing effective issues.
+  key_writing_guidelines:
+    - title: 'Use Numbered Lists (Critical)'
+      details:
+        - "The system parses numbered requirements using the regex: /^\\s*\\d+\\.\\s*(.+)/"
+        - 'Each number becomes a separate requirement for analysis.'
+        - 'Without numbers, the entire description is treated as a single requirement.'
+    - title: 'Include Specific Technologies'
+      good_examples:
+        - 'React components'
+        - 'Google Drive API'
+        - 'MCP server'
+        - 'Docker deployment'
+      bad_examples:
+        - 'UI components'
+        - 'file system'
+        - 'server'
+        - 'deployment'
+    - title: 'Use Action Verbs'
+      preferred_verbs:
+        - 'Implement'
+        - 'Create'
+        - 'Build'
+        - 'Add'
+        - 'Integrate'
+        - 'Enhance'
+        - 'Deploy'
+      note: 'These words provide semantic signals that help categorize work complexity.'
+    - title: 'Specify File Operations'
+      examples:
+        - operation: 'Create'
+          description: 'Create new authentication module'
+        - operation: 'Modify'
+          description: 'Update existing API endpoints'
+        - operation: 'Integrate'
+          description: 'Integrate with current auth system'
+    - title: 'Indicate Complexity Levels'
+      examples:
+        - level: 'Basic'
+          description: 'simple login form, basic file upload'
+        - level: 'Enhanced'
+          description: 'OAuth2 integration, conflict resolution'
+        - level: 'Enterprise'
+          description: 'SSO integration, advanced security'
+
+  # How the system analyzes issues to create parallel agents.
+  semantic_analysis_engine:
+    domain_detection:
+      description: 'The system looks for these patterns to identify the task domain.'
+      patterns:
+        - domain: 'Auth'
+          keywords: ['auth', 'login', 'oauth', 'token', 'authentication']
+        - domain: 'API'
+          keywords: ['api', 'endpoint', 'server', 'integration', 'client']
+        - domain: 'Data'
+          keywords: ['storage', 'database', 'sync', 'crud', 'persistence']
+        - domain: 'UI'
+          keywords: ['component', 'form', 'interface', 'frontend', 'react']
+        - domain: 'Infrastructure'
+          keywords: ['docker', 'deploy', 'configuration', 'environment']
+        - domain: 'Testing'
+          keywords: ['test', 'validation', 'coverage', 'e2e']
+    technology_recognition:
+      description: 'The system recognizes these technologies to understand the stack.'
+      stacks:
+        - type: 'Frontend'
+          technologies: ['react', 'vue', 'angular', 'next.js', 'typescript']
+        - type: 'Backend'
+          technologies: ['node.js', 'express', 'fastapi', 'django', 'rails']
+        - type: 'Data'
+          technologies: ['postgres', 'mongodb', 'redis', 'prisma', 'supabase']
+        - type: 'Cloud'
+          technologies: ['aws', 'gcp', 'azure', 'docker', 'kubernetes']
+        - type: 'APIs'
+          technologies: ['rest', 'graphql', 'grpc', 'webhook', 'oauth']
+    complexity_analysis:
+      description: 'The system calculates effort based on action, technology, and integration scope.'
+      factors:
+        - "Action complexity: 'implement' (high) vs 'update' (medium)"
+        - "Technology complexity: 'oauth2' (high) vs 'basic auth' (low)"
+        - "Integration scope: 'new system' (high) vs 'existing component' (low)"
+
+  # Logic for creating specialized agents based on issue requirements.
+  agent_creation_logic:
+    - issue_type: 'Backend-Heavy Issues'
+      example_requirements:
+        - 'Implement REST API endpoints'
+        - 'Add database schema and migrations'
+        - 'Create authentication middleware'
+        - 'Build file upload system'
+      resulting_agents: ['backend_api_agent', 'data_storage_agent', 'auth_agent']
+    - issue_type: 'Full-Stack Issues'
+      example_requirements:
+        - 'Create React dashboard components'
+        - 'Implement GraphQL API backend'
+        - 'Add real-time WebSocket features'
+        - 'Build authentication system'
+      resulting_agents: ['frontend_ui_agent', 'backend_api_agent', 'realtime_agent', 'auth_agent']
+    - issue_type: 'Infrastructure-Heavy Issues'
+      example_requirements:
+        - 'Add Docker containerization'
+        - 'Implement CI/CD pipeline'
+        - 'Create monitoring and logging'
+        - 'Add deployment automation'
+      resulting_agents: ['infrastructure_agent', 'deployment_agent', 'monitoring_agent']
+
+  # Common mistakes that hinder the analysis process.
+  common_mistakes_to_avoid:
+    - title: 'Poorly Structured Issue'
+      example: 'Add user authentication to the app with forms and API integration and testing'
+      problems: ['No numbering', 'Vague requirements', 'Mixed complexity']
+    - title: 'Missing Technology Specifics'
+      example:
+        - '1. Create user interface'
+        - '2. Add backend functionality'
+        - '3. Implement data storage'
+      problems: ['No tech stack specified', 'Unclear implementation requirements']
+    - title: 'Overly Complex Single Requirements'
+      example: '1. Implement comprehensive user management system with authentication, authorization, password reset, email verification, role-based access control, audit logging, and social login integration'
+      problems: ['Multiple complex features in one requirement', 'Should be broken down']
+
+  # Best practices for structuring issues.
+  best_practices:
+    - title: 'Progressive Complexity'
+      example:
+        - '1. Create basic authentication system (30 min)'
+        - '2. Add OAuth2 integration (45 min)'
+        - '3. Implement role-based permissions (60 min)'
+    - title: 'Clear Dependencies'
+      example:
+        - '1. Set up database schema and models'
+        - '2. Create API endpoints using the models'
+        - '3. Build frontend forms that call the APIs'
+    - title: 'Testable Outcomes'
+      example:
+        - '1. Implement file upload API with validation'
+        - '2. Add comprehensive test suite for upload operations'
+        - '3. Create frontend components with error handling'
+
+  # A final checklist before submitting an issue.
+  quick_reference_checklist:
+    - 'Numbered requirements (1., 2., 3., etc.)'
+    - 'Specific technologies mentioned (React, Node.js, Docker)'
+    - 'Clear action verbs (Implement, Create, Add, Build)'
+    - 'File operation types specified (create, modify, integrate)'
+    - 'Acceptance criteria defined with technical outcomes'
+    - 'Technology constraints noted if applicable'
+    - 'Complexity appropriate for parallel decomposition (2-6 requirements)'
+
+  # Advanced tips for optimizing the workflow.
+  pro_tips:
+    for_maximum_parallelization:
+      - 'Structure requirements by domain (backend → data → frontend → testing)'
+      - 'Use specific technology terms the system recognizes'
+      - 'Include both creation and integration tasks'
+      - 'Specify testing requirements separately'
+    for_complex_features:
+      - 'Break into 4-6 numbered requirements maximum'
+      - 'Each requirement should be 30-60 minutes of work'
+      - 'Lead with infrastructure, end with testing'
+      - 'Include deployment/configuration as a final step'

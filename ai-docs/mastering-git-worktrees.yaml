@@ -1,0 +1,163 @@
+# A guide to mastering parallel development workflows using Git worktrees with Claude Code.
+git_worktrees_with_claude_code_guide:
+  overview:
+    title: 'Mastering Git Worktrees with Claude Code for Parallel Development'
+    description: 'This guide examines how to use Git worktrees to run multiple, isolated Claude Code instances simultaneously, eliminating the context-switching bottleneck and accelerating development velocity by tackling different parts of a project in parallel.'
+    key_concept: 'Instead of context-switching on a single branch, worktrees allow for multiple, simultaneous, context-aware AI development streams on the same repository.'
+
+  context_switching_problem:
+    title: 'The Context Switching Nightmare'
+    description: "When an AI assistant like Claude builds a deep understanding of a codebase, switching branches for urgent tasks forces a context reset. This 'context switching tax' wastes time and momentum as the AI must re-learn the architecture and your goals for each task."
+    traditional_workflow_pain_points:
+      - "`git stash` current work, potentially losing the AI's immediate context."
+      - '`git checkout` to a new branch for the new task.'
+      - 'Start the AI from scratch, re-explaining the project architecture.'
+      - 'Fix the bug while the AI struggles to catch up.'
+      - 'Deploy the fix.'
+      - 'Switch back to the original feature branch.'
+      - 'Spend significant time getting the AI back up to speed.'
+    solution_summary: 'Git worktrees solve this by allowing multiple Claude Code sessions to run in parallel, each in its own isolated directory with a persistent, deep context of its specific task.'
+
+  workflow_comparison:
+    title: 'Traditional vs. Worktree Workflow'
+    traditional_approach:
+      title: 'Traditional Single-Directory Approach'
+      diagram: |
+        ┌─────────────────────────────────────────────────────────────┐
+        │ Single Repository Directory                                 │
+        │ ┌─────────────────────────────────────────────────────────┐ │
+        │ │ Current Branch: main → feature/auth → bugfix → main     │ │
+        │ │                                                         │ │
+        │ │ Context Lost ❌   Context Lost ❌   Context Lost ❌    │ │
+        │ │      ↓                ↓                ↓                │ │
+        │ │   git stash       git checkout     git checkout         │ │
+        │ │   git checkout    git stash        git stash            │ │
+        │ │   restart AI      restart AI       restart AI           │ │
+        │ └─────────────────────────────────────────────────────────┘ │
+        │ Sequential Work Only - One Task at a Time                   │
+        └─────────────────────────────────────────────────────────────┘
+    git_worktrees_approach:
+      title: 'Git Worktrees Approach'
+      diagram: |
+        ┌─────────────────────────────────────────────────────────────┐
+        │ Multiple Isolated Directories                               │
+        │ ┌─────────────────┐ ┌─────────────────┐ ┌─────────────────┐ │
+        │ │ ml-training/    │ │ ml-inference/   │ │ ml-hotfix/      │ │
+        │ │ Branch: train   │ │ Branch: api     │ │ Branch: bugfix  │ │
+        │ │ Claude Code ✅  │ │ Claude Code ✅  │ │ Claude Code ✅ │ │
+        │ │ Context: FULL   │ │ Context: FULL   │ │ Context: FULL   │ │
+        │ │ Status: Active  │ │ Status: Active  │ │ Status: Active  │ │
+        │ └─────────────────┘ └─────────────────┘ └─────────────────┘ │
+        │ Parallel Work ✅ - Multiple Tasks Simultaneously            │
+        └─────────────────────────────────────────────────────────────┘
+
+  worktrees_fundamentals:
+    title: 'Understanding Git Worktrees'
+    description: 'Git worktrees let you check out multiple branches into separate physical directories, all linked to the same underlying repository. Each directory is an isolated workspace but shares the same Git history, eliminating the need for `git stash` or context switching.'
+    key_benefits:
+      - 'Each directory maintains complete file isolation, preventing conflicts.'
+      - 'All worktrees share the same Git history, branches, and remotes.'
+      - 'Eliminates the need for `git stash` as work stays in its directory.'
+      - 'Prevents context switching overhead for the AI assistant.'
+      - 'Zero risk of accidentally committing to the wrong branch.'
+
+  claude_code_context_management:
+    title: 'Claude Code Context Management'
+    description: 'Understanding how Claude Code builds context is crucial. It uses file system awareness, Git history, dependency analysis, conversation memory, and code pattern recognition to build a deep understanding of the task at hand.'
+    workflow_impact:
+      traditional_branch_switching:
+        title: 'Single Directory Workflow'
+        flow: 'Branch Switch → Context Reset → Manual Re-explanation → Lost Time'
+        summary: 'When the file system changes during a branch checkout, the AI loses its context, requiring a costly and inefficient process of re-learning the codebase.'
+      worktree_advantage:
+        title: 'Multi-Directory Workflow'
+        flow: 'Directory Switch → Persistent Context → Immediate Productivity'
+        summary: 'Switching directories does not alter the state of any worktree, allowing the AI to retain its full, deep understanding of the task, enabling immediate productivity with zero warm-up time.'
+
+  parallel_development_setup:
+    title: 'Productivity Setup'
+    description: 'Create worktrees for each parallel task and open them in separate editor windows to enable simultaneous, context-aware AI development.'
+    setup_commands: |
+      # Create worktrees for different development streams
+      git worktree add ../ml-pipeline-training -b feature/model-training main
+      git worktree add ../ml-pipeline-inference -b feature/inference-api main
+      git worktree add ../ml-pipeline-hotfix -b hotfix/data-corruption main
+
+      # Open each worktree in a separate editor window
+      code ../ml-pipeline-training    # Window 1: Model training pipeline
+      code ../ml-pipeline-inference   # Window 2: Inference API development
+      code ../ml-pipeline-hotfix      # Window 3: Critical data bug fix
+    capabilities:
+      - 'Work on a PyTorch training loop in one window.'
+      - 'Build a FastAPI inference endpoint in another.'
+      - 'Fix a critical data bug in a third, all without losing context.'
+
+  use_cases:
+    - title: 'Model Comparison'
+      description: 'Compare different AI models on identical tasks by setting up separate worktrees for each, giving them the same prompt, and evaluating their performance and code quality in parallel.'
+    - title: 'Safe Framework Migrations'
+      description: 'Test large-scale refactoring, like migrating from TensorFlow to PyTorch, in an isolated worktree. If the migration fails, simply delete the folder with no impact on your Git history.'
+    - title: 'Enhanced Code Reviews'
+      description: 'Create a worktree from a feature branch to have the AI add docstrings, generate documentation, create unit tests, and clean up code style without polluting the original branch.'
+    - title: 'Parallel Environment Testing'
+      description: 'Run multiple Python environments and experiments simultaneously, such as different API endpoints or Jupyter notebooks, each in its own worktree and on its own port.'
+    - title: 'Safe Dependency Upgrades'
+      description: 'Test major dependency upgrades in a dedicated worktree to identify and fix compatibility issues without disrupting the main development line.'
+    - title: 'Simultaneous Feature Development'
+      description: 'Work on multiple complex features at the same time, such as feature engineering, model optimization, and MLOps monitoring, each with its own dedicated AI-assisted environment.'
+
+  troubleshooting:
+    - problem: 'fatal: ‘branch’ is already checked out'
+      description: 'You are trying to create a worktree for a branch that is already checked out in another directory.'
+      solution:
+        - 'List all worktrees to find the conflict: `git worktree list`'
+        - 'Remove the conflicting worktree: `git worktree remove /path/to/conflict`'
+        - 'Alternatively, use `--force` to override if you are certain: `git worktree add --force ../new-path existing-branch`'
+    - problem: 'Excessive disk space usage from dependencies'
+      description: 'Each worktree can have its own set of dependencies, leading to high disk space consumption.'
+      solution: 'Use shared virtual environments (Conda), shared package caches (Poetry), or containerization with shared volumes (Docker) to deduplicate packages.'
+    - problem: 'Data and model conflicts between ML worktrees'
+      description: 'Different experiments may overwrite or corrupt shared data or model files.'
+      solution: 'Use isolated data paths via environment variables or Docker volumes, and manage models with a tool like MLflow Model Registry to prevent conflicts.'
+    - problem: 'Managing too many worktrees'
+      description: "It's easy to lose track of what each worktree is for."
+      solution: 'Adopt a consistent naming convention (e.g., `project-type-description`) and use scripts to regularly clean up merged and abandoned worktrees.'
+
+  automation_scripts:
+    - title: 'Automated Worktree Creation'
+      description: 'A script to create a new worktree, set up its environment, create a task file, and open it in your editor.'
+      script_path: 'create-worktree.sh'
+      script_content: |
+        #!/bin/bash
+        if [ $# -eq 0 ]; then
+            echo "Usage: $0 <branch-name> [base-branch]"
+            exit 1
+        fi
+        BRANCH_NAME=$1
+        BASE_BRANCH=${2:-main}
+        REPO_NAME=$(basename $(git rev-parse --show-toplevel))
+        WORKTREE_PATH="../${REPO_NAME}-${BRANCH_NAME}"
+        git worktree add -b "$BRANCH_NAME" "$WORKTREE_PATH" "$BASE_BRANCH"
+        cd "$WORKTREE_PATH"
+        # Add your setup command, e.g., npm install or pip install
+        echo "# Task: $BRANCH_NAME" > TASK.md
+        code .
+        echo "Worktree created at: $WORKTREE_PATH"
+    - title: 'Automated Worktree Cleanup'
+      description: 'A script to find and remove worktrees whose branches have been merged into the main branch.'
+      script_path: 'cleanup-worktrees.sh'
+      script_content: |
+        #!/bin/bash
+        echo "Cleaning up merged worktrees..."
+        git worktree list | grep -v "$(git rev-parse --show-toplevel)" | while read worktree branch commit; do
+            branch_name=$(echo $branch | sed 's/\[//g' | sed 's/\]//g')
+            if git branch --merged main | grep -q "$branch_name"; then
+                echo "Removing merged worktree: $worktree ($branch_name)"
+                git worktree remove "$worktree"
+                git branch -d "$branch_name"
+            fi
+        done
+        echo "Cleanup complete!"
+
+  conclusion:
+    summary: 'Git worktrees paired with an AI assistant like Claude Code represents a fundamental shift in development. It moves from a sequential, single-threaded process to a parallel, multi-stream approach where the developer acts as a conductor for multiple AI-powered workflows. This context-aware, parallel methodology is the future of software development.'

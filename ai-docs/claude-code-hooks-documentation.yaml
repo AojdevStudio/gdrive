@@ -1,0 +1,261 @@
+# Structure: A comprehensive guide to Claude Code hooks, detailing their purpose, configuration, event types, data schemas, security considerations, and debugging methods.
+
+---
+# Documentation for Claude Code hooks, which allow customizing and extending behavior.
+claude_code_hooks_documentation:
+  introduction:
+    description: 'Claude Code hooks are user-defined shell commands that execute at various points in the lifecycle, providing deterministic control over behavior. They turn instructional prompts into app-level code that executes reliably.'
+    use_cases:
+      - 'Notifications: Customize how you get notified.'
+      - 'Automatic formatting: Run code formatters like prettier or gofmt after file edits.'
+      - 'Logging: Track executed commands for compliance or debugging.'
+      - 'Feedback: Provide automated feedback on code that violates conventions.'
+      - 'Custom permissions: Block modifications to sensitive files or directories.'
+    security_warning:
+      title: 'Security and User Responsibility'
+      message: 'Hooks execute shell commands with your full user permissions without confirmation. You are responsible for ensuring your hooks are safe and secure. Anthropic is not liable for any data loss or system damage resulting from hook usage.'
+
+  quickstart:
+    description: 'A guide to adding a hook that logs shell commands run by Claude Code.'
+    prerequisite: 'Install `jq` for JSON processing in the command line.'
+    steps:
+      - step: 1
+        title: 'Open hooks configuration'
+        details: 'Run the `/hooks` slash command and select the `PreToolUse` hook event. This event runs before tool calls and can block them.'
+      - step: 2
+        title: 'Add a matcher'
+        details: 'Select `+ Add new matcher…` and enter `Bash` to run the hook only for Bash tool calls.'
+      - step: 3
+        title: 'Add the hook command'
+        details: 'Select `+ Add new hook…` and enter the following command to log the tool input to a file.'
+        command: 'jq -r ''"\(.tool_input.command) - \(.tool_input.description // "No description")"'' >> ~/.claude/bash-command-log.txt'
+      - step: 4
+        title: 'Save your configuration'
+        details: 'Select `User settings` for the storage location to apply the hook to all projects. Press Esc to return to the REPL.'
+      - step: 5
+        title: 'Verify your hook'
+        details: 'Run `/hooks` again or check `~/.claude/settings.json` to see your saved configuration.'
+        final_configuration:
+          hooks:
+            PreToolUse:
+              - matcher: 'Bash'
+                hooks:
+                  - type: 'command'
+                    command: 'jq -r ''"\\(.tool_input.command) - \\(.tool_input.description // "No description")"'' >> ~/.claude/bash-command-log.txt'
+
+  configuration:
+    description: 'Hooks are configured in standard Claude Code settings files.'
+    settings_files:
+      - path: '~/.claude/settings.json'
+        scope: 'User settings'
+      - path: '.claude/settings.json'
+        scope: 'Project settings'
+      - path: '.claude/settings.local.json'
+        scope: 'Local project settings (not committed)'
+      - scope: 'Enterprise managed policy settings'
+    structure:
+      description: 'Hooks are organized by event, then by matcher, with each matcher having an array of hook commands.'
+      json_schema:
+        hooks:
+          EventName:
+            - matcher: 'ToolPattern'
+              hooks:
+                - type: 'command'
+                  command: 'your-command-here'
+                  timeout: 60 # Optional, in seconds
+      field_definitions:
+        - field: 'matcher'
+          description: 'A regex pattern to match tool names (for `PreToolUse` and `PostToolUse`). An empty string matches all tools for the event.'
+          examples:
+            - "'Write' (exact match)"
+            - "'Edit|Write' (regex OR)"
+            - "'Notebook.*' (regex wildcard)"
+        - field: 'hooks'
+          description: 'An array of commands to execute when the pattern matches.'
+        - field: 'hooks.type'
+          description: "The type of hook. Currently, only 'command' is supported."
+        - field: 'hooks.command'
+          description: 'The shell command to execute.'
+        - field: 'hooks.timeout'
+          description: '(Optional) The maximum execution time in seconds for the command.'
+
+  hook_events:
+    - name: 'PreToolUse'
+      description: 'Runs after Claude creates tool parameters but before the tool call is processed.'
+      common_matchers:
+        [
+          'Task',
+          'Bash',
+          'Glob',
+          'Grep',
+          'Read',
+          'Edit',
+          'MultiEdit',
+          'Write',
+          'WebFetch',
+          'WebSearch',
+        ]
+    - name: 'PostToolUse'
+      description: 'Runs immediately after a tool completes successfully. Recognizes the same matchers as PreToolUse.'
+    - name: 'Notification'
+      description: 'Runs when Claude Code sends notifications to the user.'
+    - name: 'Stop'
+      description: 'Runs when the main Claude Code agent has finished responding.'
+    - name: 'SubagentStop'
+      description: 'Runs when a Claude Code subagent (e.g., from a Task tool call) has finished responding.'
+
+  hook_input_schema:
+    description: 'Hooks receive a JSON object via stdin containing session information and event-specific data.'
+    common_fields:
+      session_id: 'string'
+      transcript_path: 'string' # Path to the conversation JSONL file
+      hook_event_name: 'string'
+    event_specific_payloads:
+      - event: 'PreToolUse'
+        description: 'The `tool_input` schema depends on the specific tool being called.'
+        example_payload:
+          session_id: 'abc123'
+          transcript_path: '~/.claude/projects/.../transcript.jsonl'
+          hook_event_name: 'PreToolUse'
+          tool_name: 'Write'
+          tool_input:
+            file_path: '/path/to/file.txt'
+            content: 'file content'
+      - event: 'PostToolUse'
+        description: 'The `tool_input` and `tool_response` schemas depend on the tool.'
+        example_payload:
+          session_id: 'abc123'
+          transcript_path: '~/.claude/projects/.../transcript.jsonl'
+          hook_event_name: 'PostToolUse'
+          tool_name: 'Write'
+          tool_input: { 'file_path': '/path/to/file.txt', 'content': 'file content' }
+          tool_response: { 'filePath': '/path/to/file.txt', 'success': true }
+      - event: 'Notification'
+        example_payload:
+          session_id: 'abc123'
+          transcript_path: '~/.claude/projects/.../transcript.jsonl'
+          hook_event_name: 'Notification'
+          message: 'Task completed successfully'
+      - event: 'Stop / SubagentStop'
+        description: '`stop_hook_active` is true if Claude is already continuing due to a stop hook, to help prevent infinite loops.'
+        example_payload:
+          session_id: 'abc123'
+          transcript_path: '~/.claude/projects/.../transcript.jsonl'
+          hook_event_name: 'Stop'
+          stop_hook_active: true
+
+  hook_output_schema:
+    description: "Hooks can return output via simple exit codes or advanced structured JSON to control Claude Code's execution flow."
+    simple_exit_code:
+      description: "The hook's exit code determines its status. `stdout` is for user visibility, while `stderr` is for feedback to Claude."
+      exit_codes:
+        - code: 0
+          status: 'Success'
+          behavior: '`stdout` is shown to the user in transcript mode (CTRL-R). Claude does not see this output.'
+        - code: 2
+          status: 'Blocking Error'
+          behavior: '`stderr` is fed back to Claude to process automatically. See behavior table below.'
+        - code: 'Other'
+          status: 'Non-blocking Error'
+          behavior: '`stderr` is shown to the user, and execution continues.'
+      exit_code_2_behavior:
+        - event: 'PreToolUse'
+          behavior: 'Blocks the tool call and shows the error to Claude.'
+        - event: 'PostToolUse'
+          behavior: 'Shows the error to Claude (tool has already run).'
+        - event: 'Notification'
+          behavior: 'Shows `stderr` to the user only.'
+        - event: 'Stop'
+          behavior: 'Blocks Claude from stopping and shows the error to Claude.'
+        - event: 'SubagentStop'
+          behavior: 'Blocks the subagent from stopping and shows the error to the subagent.'
+    advanced_json_output:
+      description: 'Hooks can return a structured JSON object on stdout for more sophisticated control.'
+      common_fields:
+        - field: 'continue'
+          type: 'boolean'
+          default: true
+          description: "If false, Claude stops all processing after the hooks run. Takes precedence over a 'block' decision."
+        - field: 'stopReason'
+          type: 'string'
+          description: 'A message shown to the user when `continue` is false.'
+        - field: 'suppressOutput'
+          type: 'boolean'
+          default: false
+          description: "If true, hides the hook's `stdout` from the user's transcript mode."
+      decision_control:
+        - event: 'PreToolUse'
+          fields:
+            decision: "'approve' | 'block' | undefined"
+            reason: 'string'
+          behavior:
+            approve: 'Bypasses the permission system. `reason` is shown to the user.'
+            block: 'Prevents the tool call from executing. `reason` is shown to Claude as feedback.'
+        - event: 'PostToolUse'
+          fields:
+            decision: "'block' | undefined"
+            reason: 'string'
+          behavior:
+            block: 'Automatically prompts Claude with the `reason` as feedback.'
+        - event: 'Stop / SubagentStop'
+          fields:
+            decision: "'block' | undefined"
+            reason: 'string'
+          behavior:
+            block: 'Prevents Claude from stopping. The `reason` must be provided to tell Claude how to proceed.'
+
+  mcp_tools_integration:
+    description: 'Hooks work seamlessly with Model Context Protocol (MCP) tools, which have a specific naming pattern.'
+    tool_naming_pattern: 'mcp__<server>__<tool>'
+    examples:
+      - 'mcp__memory__create_entities'
+      - 'mcp__filesystem__read_file'
+    configuration_example:
+      hooks:
+        PreToolUse:
+          - matcher: 'mcp__memory__.*'
+            hooks:
+              - type: 'command'
+                command: "echo 'Memory operation initiated' >> ~/mcp-operations.log"
+          - matcher: 'mcp__.*__write.*'
+            hooks:
+              - type: 'command'
+                command: '/home/user/scripts/validate-mcp-write.py'
+
+  security_considerations:
+    disclaimer:
+      title: 'USE AT YOUR OWN RISK'
+      points:
+        - 'You are solely responsible for the commands you configure.'
+        - 'Hooks can modify, delete, or access any files your user account can access.'
+        - 'Malicious or poorly written hooks can cause data loss or system damage.'
+        - 'Anthropic provides no warranty and assumes no liability for any damages resulting from hook usage.'
+        - 'You should thoroughly test hooks in a safe environment before production use.'
+    best_practices:
+      - 'Validate and sanitize inputs; never trust input data blindly.'
+      - 'Always quote shell variables (e.g., `"$VAR"`).'
+      - 'Block path traversal by checking for `..` in file paths.'
+      - 'Use absolute paths for scripts and commands.'
+      - 'Write logic to skip sensitive files (e.g., `.env`, `.git/`, private keys).'
+    configuration_safety:
+      description: 'To prevent malicious modifications from affecting a live session, changes to settings files do not take effect immediately. Claude Code uses a snapshot of hooks from startup and requires changes to be reviewed in the `/hooks` menu to apply.'
+
+  debugging:
+    troubleshooting_steps:
+      - 'Check if the `/hooks` menu displays your configuration correctly.'
+      - 'Verify that your settings files are valid JSON.'
+      - 'Test your hook commands manually in your shell.'
+      - 'Check the exit codes returned by your scripts.'
+      - 'Review stdout and stderr formatting to ensure they match expectations.'
+      - 'Ensure proper quote escaping within your JSON configuration.'
+      - 'Use the `claude --debug` flag for detailed logging.'
+    debug_log_example: |
+      [DEBUG] Executing hooks for PostToolUse:Write
+      [DEBUG] Getting matching hook commands for PostToolUse with query: Write
+      [DEBUG] Found 1 hook matchers in settings
+      [DEBUG] Matched 1 hooks for query "Write"
+      [DEBUG] Found 1 hook commands to execute
+      [DEBUG] Executing hook command: <Your command> with timeout 60000ms
+      [DEBUG] Hook command completed with status 0: <Your stdout>
+---
+

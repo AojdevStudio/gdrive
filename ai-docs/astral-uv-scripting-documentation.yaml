@@ -1,0 +1,260 @@
+# Comprehensive documentation for scripting with Astral UV (uv).
+astral_uv_scripting_documentation:
+  # High-level overview of Astral UV's capabilities.
+  overview:
+    description: 'Astral UV is a fast Python package manager and project manager that excels at script execution and dependency management. It provides powerful scripting capabilities enabling developers to run Python scripts with automatic dependency resolution, inline metadata, and various execution modes.'
+
+  # Core concepts of executing Python scripts with uv.
+  script_execution_fundamentals:
+    basic_execution:
+      description: 'The most basic way to run a Python script with uv.'
+      example:
+        command: 'uv run example.py'
+        output: 'Hello world'
+    run_from_stdin:
+      description: 'Execute Python scripts directly from standard input.'
+      example:
+        command: 'echo ''print("hello world!")'' | uv run -'
+        output: 'hello world!'
+    multi_line_with_heredoc:
+      description: 'Execute complex multi-line scripts using shell here-documents.'
+      example:
+        command: |
+          uv run - <<EOF
+          print("hello world!")
+          EOF
+    script_arguments:
+      description: 'Pass arguments to your scripts.'
+      example:
+        python_code: |
+          # example.py
+          import sys
+          print(" ".join(sys.argv[1:]))
+        commands:
+          - command: 'uv run example.py test'
+            output: 'test'
+          - command: 'uv run example.py hello world!'
+            output: 'hello world!'
+
+  # Using PEP 723 for inline script metadata.
+  inline_script_metadata:
+    basic_metadata:
+      description: 'Define dependencies directly in your script using inline metadata.'
+      example: |
+        # /// script
+        # dependencies = [
+        #   "requests<3",
+        #   "rich",
+        # ]
+        # ///
+        import requests
+        from rich.pretty import pprint
+        resp = requests.get("https://peps.python.org/api/peps.json")
+        data = resp.json()
+        pprint([(k, v["title"]) for k, v in data.items()][:10])
+    python_version_requirements:
+      description: 'Specify Python version constraints in your script.'
+      example: |
+        # /// script
+        # requires-python = ">=3.12"
+        # dependencies = []
+        # ///
+        # Use some syntax added in Python 3.12
+        type Point = tuple[float, float]
+        print(Point)
+    advanced_metadata_with_uv_config:
+      description: 'Include uv-specific configuration in your script metadata for features like time-based dependency resolution.'
+      example: |
+        # /// script
+        # dependencies = [
+        #   "requests",
+        # ]
+        # [tool.uv]
+        # exclude-newer = "2023-10-16T00:00:00Z"
+        # ///
+        import requests
+        print(requests.__version__)
+
+  # Managing dependencies for standalone scripts.
+  dependency_management:
+    add_to_script:
+      description: 'Use `uv add --script` to add dependencies to existing scripts, modifying the inline metadata block.'
+      command: "uv add --script example.py 'requests<3' 'rich'"
+    from_alternative_indexes:
+      description: 'Add dependencies from alternative package indexes.'
+      command: 'uv add --index "https://example.com/simple" --script example.py ''requests<3'' ''rich'''
+    temporary_with_flag:
+      description: 'Run scripts with temporary dependencies using the `--with` flag.'
+      examples:
+        - command: 'uv run --with rich example.py'
+        - command: "uv run --with 'rich>12,<13' example.py"
+    skip_project_dependencies:
+      description: 'Run scripts in an isolated environment without installing project dependencies.'
+      command: 'uv run --no-project example.py'
+
+  # Creating executable scripts using shebangs.
+  executable_scripts_with_shebangs:
+    basic_shebang:
+      description: 'Create executable scripts with a uv shebang.'
+      script_content: |
+        #!/usr/bin/env -S uv run --script
+        print("Hello, world!")
+      usage:
+        - command: 'chmod +x greet'
+          description: 'Make the script executable.'
+        - command: './greet'
+          description: 'Run the script directly.'
+          output: 'Hello, world!'
+    shebang_with_inline_dependencies:
+      description: 'Combine a shebang with inline metadata for self-contained executable scripts.'
+      script_content: |
+        #!/usr/bin/env -S uv run --script
+        #
+        # /// script
+        # requires-python = ">=3.12"
+        # dependencies = ["httpx"]
+        # ///
+        import httpx
+        print(httpx.get("https://example.com"))
+
+  # Initializing new scripts and using templates.
+  script_initialization_and_templates:
+    init_new_script:
+      description: 'Create a new script with a pre-populated inline metadata block.'
+      command: 'uv init --script example.py --python 3.12'
+    generated_template:
+      description: 'The default template generated by the `init --script` command.'
+      template_code: |
+        # /// script
+        # requires-python = ">=3.12"
+        # dependencies = []
+        # ///
+        # Your script content here
+
+  # Managing Python versions for script execution.
+  python_version_management:
+    specific_python_version:
+      description: 'Run scripts with a specific Python version.'
+      command: 'uv run --python 3.10 example.py'
+    version_detection_script:
+      description: 'A simple script to check which Python version is being used.'
+      script_code: |
+        # version_check.py
+        import sys
+        print(".".join(map(str, sys.version_info[:3])))
+
+  # Ensuring reproducible script environments.
+  script_locking_and_reproducibility:
+    lock_dependencies:
+      description: 'Create a lock file for scripts to ensure reproducible dependency resolution.'
+      command: 'uv lock --script example.py'
+      outcome: 'This creates a `.lock` file adjacent to your script.'
+    reproducibility_with_exclude_newer:
+      description: 'Use timestamp-based exclusion in `tool.uv` for reproducibility without a lock file.'
+      example_metadata: |
+        # [tool.uv]
+        # exclude-newer = "2023-10-16T00:00:00Z"
+
+  # Running GUI scripts and handling platform specifics.
+  gui_scripts:
+    tkinter_script:
+      description: 'Run Windows GUI scripts with a `.pyw` extension to avoid opening a console window.'
+      platform: 'Windows'
+      command: 'uv run example.pyw'
+    pyqt5_script:
+      description: 'Running PyQt5 applications with temporary dependencies.'
+      platform: 'Windows'
+      command: 'uv run --with PyQt5 example_pyqt.pyw'
+
+  # Configuring script environments.
+  environment_and_configuration:
+    env_files:
+      description: 'Load environment variables from `.env` files for script execution.'
+      command: 'uv run --env-file .env -- python -c ''import os; print(os.getenv("MY_VAR"))'''
+    uv_environment_variables:
+      - name: 'UV_ENV_FILE'
+        description: 'Specify `.env` files for `uv run`.'
+      - name: 'UV_CUSTOM_COMPILE_COMMAND'
+        description: 'Override the compile command included in the headers of compiled `.pyc` files.'
+
+  # Integrating uv scripting with other development tools.
+  tool_integration:
+    marimo_notebooks:
+      description: 'Run and manage dependencies for Marimo notebooks as scripts.'
+      commands:
+        - description: 'Run a notebook as a script.'
+          command: 'uv run my_notebook.py'
+        - description: 'Edit a notebook in a sandboxed environment.'
+          command: 'uvx marimo edit --sandbox my_notebook.py'
+        - description: "Add dependencies directly to a notebook's metadata."
+          command: 'uv add --script my_notebook.py numpy'
+    dependency_bots:
+      description: 'Configure Renovate to detect and update inline script dependencies.'
+      renovate_config: |
+        {
+          "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+          "pep723": {
+            "fileMatch": ["scripts/generate_docs\\.py", "scripts/run_server\\.py"]
+          }
+        }
+
+  # Executing tools with `uvx`.
+  tool_execution_with_uvx:
+    temporary_execution:
+      description: 'Run command-line tools without permanently installing them.'
+      commands:
+        - 'uvx ruff'
+        - 'uvx pycowsay hello from uv'
+    tool_versioning:
+      description: 'Specify exact versions or ranges for tools.'
+      commands:
+        - 'uvx ruff@0.3.0 check'
+        - 'uvx ruff@latest check'
+        - "uvx --from 'ruff==0.3.0' ruff check"
+    tools_with_dependencies:
+      description: 'Include additional dependencies required by a tool.'
+      commands:
+        - 'uvx --with mkdocs-material mkdocs --help'
+        - "uvx --with 'mypy[faster-cache,reports]' mypy --xml-report mypy_report"
+    from_alternative_sources:
+      description: 'Run tools directly from Git repositories.'
+      commands:
+        - 'uvx --from git+https://github.com/httpie/cli httpie'
+        - 'uvx --from git+https://github.com/httpie/cli@master httpie'
+
+  # Best practices for writing and managing scripts.
+  best_practices:
+    script_organization:
+      - 'Use inline metadata for standalone scripts to make them self-contained.'
+      - 'Version pin critical dependencies for reproducibility.'
+      - 'Include Python version requirements when using newer syntax.'
+      - 'Use descriptive dependency constraints (e.g., `requests<3`).'
+    development_workflow:
+      - 'Start with a basic script and simple functionality.'
+      - 'Add dependencies as needed using `uv add --script`.'
+      - 'Test with different Python versions using the `--python` flag.'
+      - 'Lock dependencies with `uv lock --script` for production or CI environments.'
+    performance_optimization:
+      - 'Use `--no-project` for standalone scripts to avoid resolving project dependencies.'
+      - "Leverage uv's caching for significantly faster repeated executions."
+      - 'Pin dependency versions to ensure consistent and fast builds.'
+      - 'Use `exclude-newer` for reproducible environments without the overhead of a full lock.'
+
+  # Common troubleshooting steps and debugging commands.
+  troubleshooting:
+    common_issues:
+      - issue: 'ModuleNotFoundError'
+        solution: 'Add missing dependencies with `--with` or by editing the inline metadata.'
+      - issue: 'Python version conflicts'
+        solution: 'Specify a compatible Python version using `--python` or `requires-python`.'
+      - issue: 'Permission errors on executable scripts'
+        solution: 'Ensure the script has execute permissions (`chmod +x`).'
+    debug_commands:
+      - command: 'uv run --help'
+        description: 'Show help for the run command.'
+      - command: 'uv python list'
+        description: 'List available Python versions discovered by uv.'
+      - command: 'uv tool list'
+        description: 'List tools installed via `uv tool install`.'
+      - command: 'uv cache dir'
+        description: 'Show the location of the uv cache directory.'

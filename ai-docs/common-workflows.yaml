@@ -1,0 +1,174 @@
+# Structure: A guide on advanced Claude Code usage, including parallel sessions with Git worktrees, Unix-style utility integration, and creating custom slash commands.
+
+---
+# Guide for Advanced Claude Code Usage
+claude_code_workflows:
+  run_parallel_sessions_with_git_worktrees:
+    description: 'Instructions for working on multiple tasks simultaneously with complete code isolation between Claude Code instances using Git worktrees.'
+    steps:
+      - title: 'Understand Git worktrees'
+        description: |
+          Git worktrees allow you to check out multiple branches from the same repository into separate directories. Each worktree has its own working directory with isolated files, while sharing the same Git history.
+        reference:
+          text: 'Official Git worktree documentation'
+          url: 'https://git-scm.com/docs/git-worktree'
+      - title: 'Create a new worktree'
+        description: 'This creates a new directory with a separate working copy of your repository.'
+        code_examples:
+          - description: 'Create a new worktree with a new branch'
+            language: 'bash'
+            code: 'git worktree add ../project-feature-a -b feature-a'
+          - description: 'Or create a worktree with an existing branch'
+            language: 'bash'
+            code: 'git worktree add ../project-bugfix bugfix-123'
+      - title: 'Run Claude Code in each worktree'
+        description: 'Navigate to your worktree and run Claude Code in this isolated environment.'
+        code_example:
+          language: 'bash'
+          code: |
+            cd ../project-feature-a
+            claude
+      - title: 'Run Claude in another worktree'
+        code_example:
+          language: 'bash'
+          code: |
+            cd ../project-bugfix
+            claude
+      - title: 'Manage your worktrees'
+        code_examples:
+          - description: 'List all worktrees'
+            language: 'bash'
+            code: 'git worktree list'
+          - description: 'Remove a worktree when done'
+            language: 'bash'
+            code: 'git worktree remove ../project-feature-a'
+    tips:
+      - 'Each worktree has an independent file state, perfect for parallel Claude Code sessions.'
+      - "Changes in one worktree won't affect others, preventing interference between Claude instances."
+      - 'All worktrees share the same Git history and remote connections.'
+      - 'For long-running tasks, Claude can work in one worktree while you develop in another.'
+      - 'Use descriptive directory names to identify the task for each worktree.'
+      - 'Initialize your development environment in each new worktree (e.g., `npm install` for JS, setting up virtual environments for Python).'
+
+  use_as_unix_style_utility:
+    description: 'Techniques for integrating Claude Code into command-line workflows, similar to standard Unix utilities.'
+    add_to_verification_process:
+      description: 'Use Claude Code as a linter or automated code reviewer in your build scripts.'
+      code_example:
+        file: 'package.json'
+        language: 'json'
+        script_name: 'lint:claude'
+        code: |
+          {
+            "scripts": {
+              "lint:claude": "claude -p 'you are a linter. please look at the changes vs. main and report any issues related to typos. report the filename and line number on one line, and a description of the issue on the second line. do not return any other text.'"
+            }
+          }
+      tips:
+        - 'Use Claude for automated code review in your CI/CD pipeline.'
+        - 'Customize the prompt to check for specific issues relevant to your project.'
+        - 'Consider creating multiple scripts for different types of verification.'
+    pipe_in_pipe_out:
+      description: 'Pipe data into Claude for processing and get back structured output.'
+      code_example:
+        description: 'Pipe a build error log to Claude for analysis.'
+        language: 'bash'
+        code: "cat build-error.txt | claude -p 'concisely explain the root cause of this build error' > output.txt"
+      tips:
+        - 'Use pipes to integrate Claude into existing shell scripts.'
+        - 'Combine with other Unix tools for powerful workflows.'
+        - 'Consider using --output-format for structured output.'
+    control_output_format:
+      description: "Control Claude's output format for seamless integration with scripts and tools."
+      steps:
+        - title: 'Use text format (default)'
+          description: "Outputs just Claude's plain text response."
+          code_example:
+            language: 'bash'
+            code: "cat data.txt | claude -p 'summarize this data' --output-format text > summary.txt"
+        - title: 'Use JSON format'
+          description: 'Outputs a JSON array of messages with metadata including cost and duration.'
+          code_example:
+            language: 'bash'
+            code: "cat code.py | claude -p 'analyze this code for bugs' --output-format json > analysis.json"
+        - title: 'Use streaming JSON format'
+          description: 'Outputs a series of JSON objects in real-time. The entire concatenated output is not a single valid JSON object.'
+          code_example:
+            language: 'bash'
+            code: "cat log.txt | claude -p 'parse this log file for errors' --output-format stream-json"
+      tips:
+        - 'Use `--output-format text` for simple integrations needing only the response.'
+        - 'Use `--output-format json` when you need the full conversation log with metadata.'
+        - 'Use `--output-format stream-json` for real-time processing of each conversation turn.'
+
+  create_custom_slash_commands:
+    description: 'Create custom slash commands to quickly execute specific prompts or tasks.'
+    reference:
+      text: 'Slash commands reference page'
+      url: '/en/docs/claude-code/slash-commands'
+    project_specific_commands:
+      description: 'Create reusable slash commands for your project that all team members can use.'
+      steps:
+        - title: 'Create a commands directory'
+          code_example:
+            language: 'bash'
+            code: 'mkdir -p .claude/commands'
+        - title: 'Create a Markdown file for each command'
+          code_example:
+            language: 'bash'
+            code: |
+              echo "Analyze the performance of this code and suggest three specific optimizations:" > .claude/commands/optimize.md
+        - title: 'Use your custom command'
+          code_example:
+            language: 'text'
+            code: '> /optimize'
+      tips:
+        - 'Command names are derived from the filename (e.g., `optimize.md` becomes `/optimize`).'
+        - 'Organize commands in subdirectories (e.g., `.claude/commands/frontend/component.md` creates `/component`).'
+        - 'Project commands are available to everyone who clones the repository.'
+        - 'The Markdown file content becomes the prompt for the command.'
+    add_command_arguments:
+      description: 'Create flexible slash commands that accept additional input using the $ARGUMENTS placeholder.'
+      steps:
+        - title: 'Create a command file with the $ARGUMENTS placeholder'
+          code_example:
+            language: 'bash'
+            code: |
+              echo "Find and fix issue #$ARGUMENTS. Follow these steps: 1. Understand the issue described in the ticket 2. Locate the relevant code in our codebase 3. Implement a solution that addresses the root cause 4. Add appropriate tests 5. Prepare a concise PR description" > .claude/commands/fix-issue.md
+        - title: 'Use the command with an argument'
+          description: "This will replace $ARGUMENTS with '123' in the prompt."
+          code_example:
+            language: 'text'
+            code: '> /fix-issue 123'
+      tips:
+        - 'The `$ARGUMENTS` placeholder is replaced with any text following the command.'
+        - 'Position `$ARGUMENTS` anywhere in your command template for flexibility.'
+        - 'Useful for generating tests, creating documentation, reviewing files, or translating content.'
+    personal_slash_commands:
+      description: 'Create personal slash commands that work across all your projects.'
+      steps:
+        - title: 'Create a commands directory in your home folder'
+          code_example:
+            language: 'bash'
+            code: 'mkdir -p ~/.claude/commands'
+        - title: 'Create a Markdown file for each command'
+          code_example:
+            language: 'bash'
+            code: |
+              echo "Review this code for security vulnerabilities, focusing on:" > ~/.claude/commands/security-review.md
+        - title: 'Use your personal custom command'
+          code_example:
+            language: 'text'
+            code: '> /security-review'
+      tips:
+        - "Personal commands show '(user)' in their description when listed with `/help`."
+        - 'They are only available to you and are not shared with your team.'
+        - 'They work across all your projects, enabling consistent personal workflows.'
+
+  next_steps:
+    - title: 'Claude Code reference implementation'
+      icon: 'code'
+      href: 'https://github.com/anthropics/claude-code/tree/main/.devcontainer'
+      description: 'Clone our development container reference implementation.'
+---
+

@@ -1,0 +1,207 @@
+# CLAUDE.md Protocol Framework Template
+# A systematic approach for generating protocol-based CLAUDE.md files for new projects.
+protocol_framework_template:
+  framework_generation_instructions:
+    # Questions to analyze before building protocols.
+    pre_analysis_questions:
+      - title: 'Project Type'
+        description: 'Web app, CLI tool, library, microservices, mobile app, etc.'
+      - title: 'Tech Stack'
+        description: 'Languages, frameworks, databases, deployment platforms.'
+      - title: 'Team Structure'
+        description: 'Solo developer, small team, enterprise, open source.'
+      - title: 'Workflow Complexity'
+        description: 'Simple tasks vs. multi-step coordination needs.'
+      - title: 'Quality Requirements'
+        description: 'Testing standards, code review processes, deployment gates.'
+      - title: 'Integration Needs'
+        description: 'CI/CD, external APIs, monitoring, documentation.'
+    # Matrix for determining the appropriate scope of the protocol framework.
+    framework_decision_matrix:
+      scope_determination: 'Project Complexity + Team Size = Framework Scope'
+      scopes:
+        - condition: 'Simple Projects (Solo, <5 files)'
+          outcome: 'Minimal Protocol Set'
+        - condition: 'Medium Projects (Small team, standard features)'
+          outcome: 'Core Protocol Set'
+        - condition: 'Complex Projects (Multi-team, enterprise features)'
+          outcome: 'Full Protocol Set'
+        - condition: 'Specialized Projects (AI/ML, crypto, etc.)'
+          outcome: 'Domain-Specific Extensions'
+
+  # Core categories that should be included in every CLAUDE.md file.
+  universal_protocol_categories:
+    - category: 'Core Meta-Cognitive Framework'
+      protocols:
+        - 'Project Understanding Schema (adapted to domain)'
+        - 'Problem Analysis Schema (debugging, requirements, etc.)'
+        - 'Decision Making Protocols (architecture, tech choices, priorities)'
+    - category: 'Development Workflow Protocols'
+      protocols:
+        - 'Primary Development Workflow (explore → plan → test → code → refactor → commit)'
+        - 'Code Review Protocol (if team environment)'
+        - 'Deployment/Release Protocol (based on deployment strategy)'
+    - category: 'Code Quality & Analysis Tools'
+      protocols:
+        - 'Code Analysis Protocol (language/framework specific)'
+        - 'Testing Strategy Protocol (unit, integration, e2e based on project)'
+        - 'Refactoring Protocol (safe improvement practices)'
+    - category: 'Project Management Integration'
+      protocols:
+        - 'Task Management Protocol (GitHub Issues, Linear, Jira, etc.)'
+        - 'Documentation Protocol (README, API docs, architecture docs)'
+        - 'Communication Protocol (PR descriptions, commit messages, team updates)'
+    - category: 'Domain-Specific Protocols'
+      protocols:
+        - 'Technology-Specific Tools (React components, API design, database schemas)'
+        - 'Business Logic Protocols (domain modeling, validation, business rules)'
+        - 'Integration Protocols (external APIs, third-party services)'
+    - category: 'Self-Improvement Mechanisms'
+      protocols:
+        - 'Learning Protocol (capture lessons from each task)'
+        - 'Process Optimization (improve workflows based on experience)'
+        - 'Knowledge Base Protocol (build project-specific knowledge)'
+
+  # The step-by-step process for generating the protocol template.
+  template_generation_process:
+    phase_1_project_analysis:
+      command: '/analyze.project_context'
+      intent: 'Understand project characteristics and requirements'
+      input:
+        project_files: '<codebase_structure>'
+        team_context: '<development_team_info>'
+        requirements: '<project_goals_and_constraints>'
+      process:
+        - action_command: '/scan'
+          action_description: 'Analyze codebase structure and technologies'
+          instruction: 'Identify languages, frameworks, patterns, and complexity'
+        - action_command: '/assess'
+          action_description: 'Evaluate workflow requirements and team dynamics'
+          instruction: 'Determine coordination needs and quality standards'
+        - action_command: '/categorize'
+          action_description: 'Classify project type and complexity level'
+          instruction: 'Select appropriate protocol framework scope'
+      output:
+        project_profile: 'Comprehensive project characteristics'
+        framework_scope: 'Recommended protocol categories and depth'
+        customization_needs: 'Domain-specific requirements'
+    phase_2_protocol_selection:
+      command: '/select.protocol_framework'
+      intent: 'Choose appropriate protocol categories for project needs'
+      input:
+        project_profile: '<project_analysis_results>'
+        reference_frameworks: '<existing_protocol_examples>'
+        team_preferences: '<development_team_workflow_preferences>'
+      process:
+        - action_command: '/map'
+          action_description: 'Match project needs to protocol categories'
+          instruction: 'Select core protocols and identify customization areas'
+        - action_command: '/prioritize'
+          action_description: 'Order protocols by importance and implementation effort'
+          instruction: 'Focus on highest-impact protocols first'
+        - action_command: '/adapt'
+          action_description: 'Customize protocols for project-specific technologies and workflows'
+          instruction: 'Modify language, tools, and processes for project context'
+      output:
+        protocol_selection: 'Chosen protocol categories and priorities'
+        customization_plan: 'Project-specific adaptations needed'
+        implementation_roadmap: 'Phased protocol implementation approach'
+    phase_3_framework_implementation:
+      command: '/implement.protocol_framework'
+      intent: 'Generate complete CLAUDE.md file with project-adapted protocols'
+      input:
+        protocol_selection: '<selected_protocol_categories>'
+        project_context: '<technology_and_workflow_context>'
+        reference_examples: '<template_protocols_to_adapt>'
+      process:
+        - action_command: '/generate'
+          action_description: 'Create project-specific protocol definitions'
+          instruction: 'Adapt templates to project technologies and workflows'
+        - action_command: '/integrate'
+          action_description: 'Ensure protocols work together cohesively'
+          instruction: 'Verify workflow compatibility and avoid conflicts'
+        - action_command: '/validate'
+          action_description: 'Review protocols for completeness and usability'
+          instruction: 'Ensure protocols address project needs and are actionable'
+        - action_command: '/document'
+          action_description: 'Add usage guidance and examples'
+          instruction: 'Provide clear instructions for protocol activation and usage'
+      output:
+        claude_md: 'Complete project-specific CLAUDE.md file'
+        usage_guide: 'Instructions for effective protocol utilization'
+        improvement_plan: 'Future enhancement and optimization opportunities'
+
+  # Key materials to reference when creating a new framework.
+  reference_materials:
+    - title: 'This Template File'
+      details:
+        - 'Systematic approach to framework creation'
+        - 'Decision matrix for complexity assessment'
+        - 'Universal protocol categories'
+    - title: 'Example Protocol Files'
+      details:
+        - '/Users/ossieirondi/projects/dev-utils/desktop-commander/outputs/CLAUDE-protocol-enhanced.md (parallel development)'
+        - 'Context-Engineering repository examples (general software development)'
+        - 'Domain-specific examples as available'
+    - title: 'Project-Specific Context'
+      details:
+        - 'Existing documentation (README, architecture docs)'
+        - 'Codebase structure and technologies'
+        - 'Team workflow preferences and tools'
+        - 'Quality requirements and constraints'
+
+  # Commands for rapid protocol framework creation.
+  quick_start_commands:
+    - description: 'Analyze project context'
+      command: '/analyze.project_context'
+    - description: 'Generate appropriate framework'
+      command: '/implement.protocol_framework'
+    - description: 'Validate and customize'
+      command: '/validate.framework_fit'
+
+  # The maturity levels of a protocol framework.
+  framework_maturity_levels:
+    - level: 1
+      title: 'Basic (Immediate Value)'
+      description:
+        - 'Core development workflow'
+        - 'Code analysis tools'
+        - 'Basic troubleshooting protocols'
+    - level: 2
+      title: 'Intermediate (Team Coordination)'
+      description:
+        - 'Project management integration'
+        - 'Code review protocols'
+        - 'Documentation standards'
+    - level: 3
+      title: 'Advanced (Optimization)'
+      description:
+        - 'Self-improvement mechanisms'
+        - 'Performance optimization protocols'
+        - 'Advanced reasoning frameworks'
+    - level: 4
+      title: 'Specialized (Domain Expertise)'
+      description:
+        - 'Domain-specific protocols'
+        - 'Industry-specific quality standards'
+        - 'Regulatory compliance frameworks'
+
+  # Criteria for a successful protocol framework implementation.
+  success_criteria:
+    - 'Reduce Decision Fatigue: Clear processes for common decisions'
+    - 'Improve Consistency: Standardized approaches across tasks'
+    - 'Enhance Quality: Built-in validation and improvement mechanisms'
+    - 'Enable Learning: Capture and apply lessons learned'
+    - 'Scale Effectively: Adapt to growing project complexity'
+    - 'Team Alignment: Shared understanding of workflows and standards'
+
+  # Guidelines for maintaining and evolving the framework.
+  maintenance_and_evolution:
+    - principle: 'Living Documents'
+      description: 'Updated based on project evolution'
+    - principle: 'Team-Owned'
+      description: 'Collaboratively maintained and improved'
+    - principle: 'Evidence-Based'
+      description: 'Modified based on measurable outcomes'
+    - principle: 'Contextual'
+      description: 'Adapted to changing project needs and constraints'

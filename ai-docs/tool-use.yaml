@@ -1,0 +1,156 @@
+# Guide on implementing tool use with the Claude API
+tool_implementation_guide:
+  # Guidance on selecting the appropriate model for different tool complexities
+  model_selection:
+    - model_family: "Claude Opus 4, Sonnet 4, Sonnet 3.7, Opus 3"
+      use_case: "Complex tools and ambiguous queries due to better handling of multiple tools and clarification seeking."
+    - model_family: "Claude Haiku 3.5, Haiku 3"
+      use_case: "Straightforward tools, with the caveat that they might infer missing parameters."
+    - special_note:
+        type: "Tip"
+        text: "For using Claude Sonnet 3.7 with tool use and extended thinking, refer to the specific guide on extended thinking."
+
+  # Details on how to define client tools in the API request
+  client_tool_specification:
+    description: "Client tools are specified in the 'tools' top-level parameter of the API request."
+    parameters:
+      - name: "name"
+        description: "The name of the tool. Must match the regex '^[a-zA-Z0-9_-]{1,64}$'."
+      - name: "description"
+        description: "A detailed plaintext description of what the tool does, when it should be used, and how it behaves."
+      - name: "input_schema"
+        description: "A JSON Schema object defining the expected parameters for the tool."
+    example_tool_definition:
+      name: "get_weather"
+      description: "Get the current weather in a given location"
+      input_schema:
+        type: "object"
+        properties:
+          location:
+            type: "string"
+            description: "The city and state, e.g. San Francisco, CA"
+          unit:
+            type: "string"
+            enum: ["celsius", "fahrenheit"]
+            description: "The unit of temperature, either 'celsius' or 'fahrenheit'"
+        required:
+          - "location"
+
+  # Information on the system prompt automatically generated for tool use
+  tool_use_system_prompt:
+    description: "When the 'tools' parameter is used, a special system prompt is constructed to instruct the model."
+    template: |
+      In this environment you have access to a set of tools you can use to answer the user's question.
+      {{ FORMATTING INSTRUCTIONS }}
+      String and scalar parameters should be specified as is, while lists and objects should use JSON format. Note that spaces for string values are not stripped. The output is not expected to be valid XML and is parsed with regular expressions.
+      Here are the functions available in JSONSchema format:
+      {{ TOOL DEFINITIONS IN JSON SCHEMA }}
+      {{ USER SYSTEM PROMPT }}
+      {{ TOOL CONFIGURATION }}
+
+  # Best practices for defining tools to ensure optimal performance
+  best_practices_for_tool_definitions:
+    - practice: "Provide extremely detailed descriptions."
+      details: "This is the most important factor. Explain what the tool does, when to use it, parameter meanings, and any limitations. Aim for 3-4 sentences or more for complex tools."
+    - practice: "Prioritize descriptions over examples."
+      details: "A clear, comprehensive explanation is more important than examples. Add examples only after the description is complete."
+    examples:
+      good_description:
+        name: "get_stock_price"
+        description: "Retrieves the current stock price for a given ticker symbol. The ticker symbol must be a valid symbol for a publicly traded company on a major US stock exchange like NYSE or NASDAQ. The tool will return the latest trade price in USD. It should be used when the user asks about the current or most recent price of a specific stock. It will not provide any other information about the stock or company."
+        input_schema:
+          type: "object"
+          properties:
+            ticker:
+              type: "string"
+              description: "The stock ticker symbol, e.g. AAPL for Apple Inc."
+          required: ["ticker"]
+      poor_description:
+        name: "get_stock_price"
+        description: "Gets the stock price for a ticker."
+        input_schema:
+          type: "object"
+          properties:
+            ticker:
+              type: "string"
+          required: ["ticker"]
+
+  # Methods for controlling the model's output and tool usage
+  output_control:
+    forcing_tool_use:
+      description: "You can force Claude to use a specific tool by using the 'tool_choice' field."
+      example: 'tool_choice = {"type": "tool", "name": "get_weather"}'
+      options:
+        - name: "auto"
+          description: "Default. Allows Claude to decide whether to use tools."
+        - name: "any"
+          description: "Claude must use one of the provided tools."
+        - name: "tool"
+          description: "Forces Claude to use a specific tool."
+        - name: "none"
+          description: "Default when no tools are provided. Prevents Claude from using any tools."
+      notes:
+        - "Changes to 'tool_choice' can invalidate the prompt cache."
+        - "'any' and 'tool' choices are not supported with extended thinking."
+    json_output:
+      description: "Tools can be used to force the model to return JSON output that follows a specific schema, e.g., using a 'record_summary' tool."
+    chain_of_thought:
+      description: "Claude often shows its step-by-step reasoning in `<thinking>` tags before using a tool, especially the Opus 3 model with 'tool_choice' set to 'auto'."
+      prompting_for_cot: "For Sonnet and Haiku, you can prompt for a chain of thought by adding 'Before answering, explain your reasoning step-by-step in tags.' to the user message or system prompt."
+      warning: "The exact format of chain-of-thought tags may change; do not rely on a specific tag like `<thinking>` in your code."
+    parallel_tool_use:
+      description: "By default, Claude may use multiple tools to answer a query."
+      disabling:
+        - "Set `disable_parallel_tool_use=true` when `tool_choice` is 'auto' to use at most one tool."
+        - "Set `disable_parallel_tool_use=true` when `tool_choice` is 'any' or 'tool' to use exactly one tool."
+      maximizing_parallel_use:
+        system_prompts:
+          - model: "Claude 4 models (Opus 4 and Sonnet 4)"
+            prompt: "For maximum efficiency, whenever you need to perform multiple independent operations, invoke all relevant tools simultaneously rather than sequentially."
+          - model: "All models (stronger)"
+            prompt: |
+              <use_parallel_tool_calls>
+              For maximum efficiency, whenever you perform multiple independent operations, invoke all relevant tools simultaneously rather than sequentially. Prioritize calling tools in parallel whenever possible. For example, when reading 3 files, run 3 tool calls in parallel to read all 3 files into context at the same time. When running multiple read-only commands like `ls` or `list_dir`, always run all of the commands in parallel. Err on the side of maximizing parallel tool calls rather than running too many tools sequentially.
+              </use_parallel_tool_calls>
+        user_message_prompting:
+          - "Encourage simultaneous actions, e.g., 'Check the weather in Paris and London simultaneously.'"
+          - "Be explicit: 'Please use parallel tool calls to get the weather for Paris, London, and Tokyo at the same time.'"
+      special_note_sonnet_3_7:
+        type: "Warning"
+        text: "Claude Sonnet 3.7 may be less likely to use parallel tools. To work around this, enable token-efficient tool use or use a 'batch tool' meta-tool. See cookbook for an example."
+
+  # How to handle various content blocks related to tool use and results
+  handling_content_blocks:
+    client_tools:
+      description: "The response will have a 'stop_reason' of 'tool_use' and one or more 'tool_use' content blocks."
+      process:
+        - "1. Extract 'name', 'id', and 'input' from the 'tool_use' block."
+        - "2. Run the corresponding tool in your codebase with the provided input."
+        - "3. Send a new 'user' message with a 'tool_result' content block containing the 'tool_use_id' and the tool's output."
+      formatting_requirements:
+        - "Tool result blocks must immediately follow their corresponding tool use blocks."
+        - "In the user message, 'tool_result' blocks must come first in the content array, before any text."
+    server_tools:
+      description: "Claude executes the tool internally and incorporates results directly into its response without needing user interaction."
+    max_tokens_stop_reason:
+      description: "If a response is truncated with an incomplete tool use block, retry the request with a higher 'max_tokens' value."
+    pause_turn_stop_reason:
+      description: "When using server tools like web search, the API might return 'pause_turn' for long-running tasks."
+      handling: "Continue the conversation by passing the paused response back in a subsequent request to let Claude continue its turn."
+
+  # Guidance on troubleshooting common errors during tool use
+  troubleshooting:
+    - error_type: "Tool execution error"
+      solution: "Return an error message in the 'content' of the 'tool_result' block and set 'is_error': true."
+    - error_type: "Invalid tool name or missing parameters"
+      solution: "Improve the tool's 'description' for clarity. You can also return an error message in the 'tool_result' to allow Claude to retry with corrections."
+    - error_type: "<search_quality_reflection> tags"
+      solution: "Add 'Do not reflect on the quality of the returned search results in your response' to your prompt."
+    - error_type: "Server tool errors"
+      solution: "Claude handles these transparently. You do not need to handle 'is_error' for server tools."
+    - error_type: "Parallel tool calls not working"
+      causes:
+        - "Incorrect tool result formatting (e.g., separate user messages for each result)."
+        - "Weak prompting."
+        - "Model-specific behavior (e.g., Sonnet 3.7 may need stronger prompting)."
+      verification: "Calculate the average number of tools per tool-calling message; it should be > 1.0 if parallel calls are effective."
