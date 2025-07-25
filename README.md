@@ -1,6 +1,26 @@
-# Google Drive server
+# Google Drive MCP Server
 
-This MCP server integrates with Google Drive to allow listing, reading, and searching over files.
+A Model Context Protocol (MCP) server that provides comprehensive integration with Google Drive, Sheets, Docs, and Forms. This server enables AI assistants to interact with Google Workspace through a standardized interface.
+
+## Features
+
+### Current Features
+- **Google Drive Integration**
+  - List and search files/folders
+  - Read file contents with automatic format conversion
+  - Export Google Workspace files to readable formats
+  
+- **Google Sheets Support**
+  - List sheets within spreadsheets
+  - Read sheet contents with range support
+  - Export sheets as CSV
+
+### Planned Features (See [PLAN.md](./PLAN.md))
+- **Write Capabilities**: Create, update, and manage files/folders
+- **Enhanced Sheets**: Update cells, formatting, and formulas
+- **Google Docs**: Create and manipulate documents
+- **Google Forms**: Create forms and handle responses
+- **Advanced Search**: Natural language queries with caching
 
 ## Components
 
@@ -10,6 +30,24 @@ This MCP server integrates with Google Drive to allow listing, reading, and sear
   - Search for files in Google Drive
   - Input: `query` (string): Search query
   - Returns file names and MIME types of matching files
+
+- **read**
+  - Read contents of a file from Google Drive
+  - Input: `fileId` (string): The Google Drive file ID
+  - Returns file contents in appropriate format
+
+- **listSheets**
+  - List all sheets within a Google Spreadsheet
+  - Input: `spreadsheetId` (string): The spreadsheet ID
+  - Returns list of sheet names and IDs
+
+- **readSheet**
+  - Read contents of a specific sheet
+  - Inputs:
+    - `spreadsheetId` (string): The spreadsheet ID
+    - `sheetName` (string): Name of the sheet
+    - `range` (string, optional): A1 notation range (e.g., 'A1:D10')
+  - Returns formatted table of sheet contents
 
 ### Resources
 
