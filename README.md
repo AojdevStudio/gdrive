@@ -4,27 +4,67 @@ A Model Context Protocol (MCP) server that provides comprehensive integration wi
 
 ## Features
 
-### Current Features
+### Current Features (v0.6.2 - Phase 3)
 - **Google Drive Integration**
   - List and search files/folders
   - Read file contents with automatic format conversion
+  - Create new files and folders
+  - Update existing file contents
   - Export Google Workspace files to readable formats
   
 - **Google Sheets Support**
   - List sheets within spreadsheets
   - Read sheet contents with range support
+  - Update cell values with A1 notation
+  - Append rows to existing sheets
   - Export sheets as CSV
 
-### Planned Features (See [PLAN.md](./PLAN.md))
-- **Write Capabilities**: Create, update, and manage files/folders
-- **Enhanced Sheets**: Update cells, formatting, and formulas
-- **Google Docs**: Create and manipulate documents
-- **Google Forms**: Create forms and handle responses
-- **Advanced Search**: Natural language queries with caching
+- **Google Forms Integration**
+  - Create new forms with titles and descriptions
+  - Add questions with multiple types (text, multiple choice, checkbox, etc.)
+  - Retrieve form structure and metadata
+  - List and analyze form responses
+  - Support for various question types and validation
+
+- **Enhanced Search**
+  - Natural language query parsing
+  - Smart query mappings (e.g., "spreadsheets modified this week")
+  - Advanced filtering by MIME type, modification date, owner
+  - Improved search result ranking and display
+
+- **Docker Support**
+  - Containerized deployment with Docker
+  - Docker Compose configuration
+  - Health checks and volume management
+
+- **Google Docs Integration** ✅
+  - Create new documents with title and content
+  - Insert text at specific positions
+  - Find and replace text content
+  - Apply text formatting and styles
+  - Insert tables with custom dimensions
+
+- **Batch Operations** ✅
+  - Process multiple files in single operations
+  - Support for create, update, delete, and move operations
+  - Efficient API usage with comprehensive error handling
+
+- **Redis Caching & Performance** ✅
+  - High-performance Redis caching for search results and file reads
+  - Automatic cache invalidation on write operations
+  - Performance monitoring with real-time statistics
+  - Structured logging with Winston
+
+### Planned Features (Phase 4 - See [PLAN.md](./PLAN.md))
+- **Advanced Forms**: Quiz mode, validation rules, sections
+- **Permissions Management**: Share files and manage access
+- **Push Notifications**: Real-time updates for form responses
 
 ## Components
 
 ### Tools
+
+#### Read Operations
 
 - **search**
   - Search for files in Google Drive
@@ -48,6 +88,98 @@ A Model Context Protocol (MCP) server that provides comprehensive integration wi
     - `sheetName` (string): Name of the sheet
     - `range` (string, optional): A1 notation range (e.g., 'A1:D10')
   - Returns formatted table of sheet contents
+
+#### Write Operations
+
+- **createFile**
+  - Create a new file in Google Drive
+  - Inputs:
+    - `name` (string): Name of the file
+    - `mimeType` (string): MIME type (e.g., 'text/plain')
+    - `content` (string): File content
+    - `parentFolderId` (string, optional): Parent folder ID
+  - Returns created file ID and details
+
+- **updateFile**
+  - Update content of an existing file
+  - Inputs:
+    - `fileId` (string): ID of file to update
+    - `content` (string): New content
+    - `mimeType` (string, optional): Content MIME type
+  - Returns update confirmation
+
+- **createFolder**
+  - Create a new folder in Google Drive
+  - Inputs:
+    - `name` (string): Folder name
+    - `parentFolderId` (string, optional): Parent folder ID
+  - Returns created folder ID
+
+#### Sheets Operations
+
+- **updateCells**
+  - Update cells in a spreadsheet
+  - Inputs:
+    - `spreadsheetId` (string): Spreadsheet ID
+    - `range` (string): A1 notation range (e.g., 'Sheet1!A1:B2')
+    - `values` (array): 2D array of values
+    - `valueInputOption` (string): 'RAW' or 'USER_ENTERED' (default)
+  - Returns number of cells updated
+
+- **appendRows**
+  - Append rows to a spreadsheet
+  - Inputs:
+    - `spreadsheetId` (string): Spreadsheet ID
+    - `range` (string): Sheet name or range to append to
+    - `values` (array): 2D array of values
+    - `valueInputOption` (string): 'RAW' or 'USER_ENTERED' (default)
+  - Returns number of rows appended
+
+#### Forms Operations
+
+- **createForm**
+  - Create a new Google Form
+  - Inputs:
+    - `title` (string): Title of the form
+    - `description` (string, optional): Description of the form
+  - Returns form ID and edit URL
+
+- **getForm**
+  - Retrieve form structure and metadata
+  - Inputs:
+    - `formId` (string): The Google Form ID
+  - Returns form details including title, description, and question count
+
+- **addQuestion**
+  - Add a question to a Google Form
+  - Inputs:
+    - `formId` (string): The Google Form ID
+    - `questionType` (string): Question type (TEXT, PARAGRAPH_TEXT, MULTIPLE_CHOICE, CHECKBOX, DROPDOWN, LINEAR_SCALE, DATE, TIME, FILE_UPLOAD)
+    - `title` (string): Question text
+    - `options` (array, optional): Options for choice questions
+    - `required` (boolean, optional): Whether question is required
+  - Returns confirmation with question details
+
+- **listResponses**
+  - List responses for a Google Form
+  - Inputs:
+    - `formId` (string): The Google Form ID
+    - `pageSize` (number, optional): Max responses to return (1-5000, default 100)
+  - Returns list of responses with timestamps and answer counts
+
+#### Enhanced Search
+
+- **enhancedSearch**
+  - Natural language search with intelligent parsing
+  - Inputs:
+    - `query` (string): Natural language search query
+    - `maxResults` (number, optional): Max results to return (1-100, default 10)
+    - `filters` (object, optional): Additional filters for mimeType, modifiedAfter, owner
+  - Supports queries like:
+    - "spreadsheets modified this week"
+    - "forms about customer feedback"
+    - "documents shared with me"
+  - Returns enhanced search results with detailed file information
 
 ### Resources
 
