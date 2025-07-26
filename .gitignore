@@ -6,6 +6,12 @@
 .DS_Store
 *.linear-cache
 
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
 # Credential files - NEVER commit these
 *.gdrive-server-credentials.json
 *gcp-oauth.keys.json
