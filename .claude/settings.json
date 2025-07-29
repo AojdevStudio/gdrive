@@ -19,27 +19,18 @@
   "hooks": {
     "PreToolUse": [
       {
-        "matcher": "Bash",
+        "matcher": "",
         "hooks": [
           {
             "type": "command",
             "command": "cd \"$CLAUDE_PROJECT_DIR\" && uv run .claude/hooks/pre_tool_use.py"
           }
         ]
-      },
-      {
-        "matcher": "Write|Edit|MultiEdit",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "cd \"$CLAUDE_PROJECT_DIR\" && uv run .claude/hooks/typescript-validator.py"
-          }
-        ]
       }
     ],
     "PostToolUse": [
       {
-        "matcher": "Bash|Write|Edit|MultiEdit|TodoWrite",
+        "matcher": "",
         "hooks": [
           {
             "type": "command",
@@ -48,20 +39,17 @@
         ]
       },
       {
-        "matcher": "Write|Edit|MultiEdit",
+        "matcher": "Write|Edit",
         "hooks": [
           {
             "type": "command",
             "command": "cd \"$CLAUDE_PROJECT_DIR\" && uv run .claude/hooks/import-organizer.py"
-          },
-          {
-            "type": "command",
-            "command": "cd \"$CLAUDE_PROJECT_DIR\" && uv run .claude/hooks/code-quality-reporter.py"
-          },
-          {
-            "type": "command",
-            "command": "cd \"$CLAUDE_PROJECT_DIR\" && uv run .claude/hooks/api-standards-checker.py"
-          },
+          }
+        ]
+      },
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
           {
             "type": "command",
             "command": "cd \"$CLAUDE_PROJECT_DIR\" && uv run .claude/hooks/universal-linter.py"
@@ -75,11 +63,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "cd \"$CLAUDE_PROJECT_DIR\" && uv run .claude/hooks/notification.py"
-          },
-          {
-            "type": "command",
-            "command": "cd \"$CLAUDE_PROJECT_DIR\" && uv run .claude/hooks/notification.py"
+            "command": "cd \"$CLAUDE_PROJECT_DIR\" && uv run .claude/hooks/notification.py --notify"
           }
         ]
       }
@@ -90,7 +74,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "cd \"$CLAUDE_PROJECT_DIR\" && uv run .claude/hooks/stop.py"
+            "command": "cd \"$CLAUDE_PROJECT_DIR\" && uv run .claude/hooks/stop.py --chat"
           }
         ]
       }

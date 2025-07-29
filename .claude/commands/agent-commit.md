@@ -1,11 +1,11 @@
 ---
-allowed-tools: Read, Bash, Write, Edit, MultiEdit
-description: Commit and merge completed agent work with validation checks
+allowed-tools: Bash, Read, Write, Edit
+description: Commit and merge completed agent work
 ---
 
 # Agent Commit
 
-This command commits completed agent work and merges the worktree back to main branch with comprehensive validation and safety checks.
+Use the git-flow-manager sub-agent to commit and merge completed agent work from workspace $ARGUMENTS. Validate checklist completion, generate structured commit message from agent_context.json with issue linking support, merge to main branch with --no-ff, and clean up worktree after successful integration.
 
 **variables:**
 WorkspacePath: $ARGUMENTS
@@ -32,7 +32,7 @@ agent_work_completion_workflow:
     - action: 'Perform safety checks'
       details: 'On the main branch, stash any local changes and pull the latest updates to ensure a clean state.'
     - action: 'Generate commit message'
-      details: 'Create a structured commit message using the defined format or use the custom message if provided.'
+      details: 'Create a structured commit message using the defined format or use the custom message if provided. Include issue references (e.g., Closes #123, Fixes ENG-456) in the commit body for GitHub/Linear integration.'
     - action: 'Commit changes'
       details: "Stage and commit all changes within the agent's worktree."
     - action: 'Merge to main'
@@ -61,6 +61,30 @@ agent_work_completion_workflow:
       cleanup_rules:
         - 'Remove the worktree after a successful merge.'
         - 'Delete the local branch after it has been merged.'
+      
+      issue_linking:
+        description: 'Include issue references in commit messages for GitHub/Linear integration'
+        closing_keywords:
+          - 'Closes' # Auto-closes when PR merges
+          - 'Fixes'
+          - 'Resolves'
+        referencing_keywords:
+          - 'Part of' # Links without closing
+          - 'Related to'
+          - 'Contributes to'
+        format_guidelines:
+          - 'Place issue references in commit body, not subject'
+          - 'Use format: Closes #123 for GitHub issues'
+          - 'Use format: Fixes ENG-123 for Linear issues'
+          - 'Multiple issues: Fixes ENG-123, ENG-124'
+        example_commit_message: |
+          feat(backend-api): implement authentication endpoints
+          
+          Added JWT token generation and validation with refresh token support.
+          Includes rate limiting and secure password hashing.
+          
+          Closes #42
+          Fixes CDE-2
 
     safety_requirements:
       - 'The main branch must be clean (no uncommitted changes).'
