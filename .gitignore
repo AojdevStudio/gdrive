@@ -17,3 +17,22 @@ __pycache__/
 *gcp-oauth.keys.json
 credentials/
 .credentials
+
+# Token files - NEVER commit these
+*.gdrive-mcp-tokens.json
+*gdrive-mcp-tokens.json
+
+# Audit logs
+*.gdrive-mcp-audit.log
+*gdrive-mcp-audit.log
+
+# Test coverage
+coverage/
+.nyc_output/
+
+# IDE
+.vscode/
+.idea/
+
+# Redis dump
+dump.rdb

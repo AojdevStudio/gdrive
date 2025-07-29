@@ -14,6 +14,9 @@ import { google } from "googleapis";
 import * as path from "path";
 import { createClient } from "redis";
 import winston from "winston";
+import { AuthManager, AuthState } from "./src/auth/AuthManager.js";
+import { TokenManager } from "./src/auth/TokenManager.js";
+import { performHealthCheck, HealthStatus } from "./src/health-check.js";
 
 const drive = google.drive("v3");
 const sheets = google.sheets("v4");
@@ -48,177 +51,224 @@ const logger = winston.createLogger({
         winston.format.printf(({ timestamp, level, message, ...meta }) => {
           return `${timestamp} [${level}]: ${message} ${Object.keys(meta).length ? JSON.stringify(meta) : ''}`;
         })
-      ),
-      stderrLevels: ['error', 'warn', 'info', 'verbose', 'debug', 'silly']
+      )
     })
   ]
 });
 
 // Performance monitoring
 class PerformanceMonitor {
-  private static operationTimes: Map<string, number[]> = new Map();
-  
-  static startTimer(operation: string): () => void {
-    const start = Date.now();
-    
-    return () => {
-      const duration = Date.now() - start;
-      
-      if (!this.operationTimes.has(operation)) {
-        this.operationTimes.set(operation, []);
-      }
-      
-      const times = this.operationTimes.get(operation)!;
-      times.push(duration);
-      
-      // Keep only last 100 measurements
-      if (times.length > 100) {
-        times.shift();
-      }
-      
-      logger.info('Operation completed', {
-        operation,
-        duration,
-        unit: 'ms'
-      });
-      
-      // Log slow operations
-      if (duration > 5000) {
-        logger.warn('Slow operation detected', {
-          operation,
-          duration,
-          threshold: 5000,
-          unit: 'ms'
-        });
+  private metrics: Map<string, { count: number; totalTime: number; errors: number }> = new Map();
+  private cacheHits = 0;
+  private cacheMisses = 0;
+  private startTime = Date.now();
+
+  track(operation: string, duration: number, error: boolean = false) {
+    const current = this.metrics.get(operation) || { count: 0, totalTime: 0, errors: 0 };
+    current.count++;
+    current.totalTime += duration;
+    if (error) current.errors++;
+    this.metrics.set(operation, current);
+  }
+
+  recordCacheHit() { this.cacheHits++; }
+  recordCacheMiss() { this.cacheMisses++; }
+
+  getStats() {
+    const stats: any = {
+      uptime: Date.now() - this.startTime,
+      operations: {},
+      cache: {
+        hits: this.cacheHits,
+        misses: this.cacheMisses,
+        hitRate: this.cacheHits / (this.cacheHits + this.cacheMisses) || 0
       }
     };
-  }
-  
-  static getStats(operation: string) {
-    const times = this.operationTimes.get(operation) || [];
-    if (times.length === 0) return null;
-    
-    const sorted = times.slice().sort((a, b) => a - b);
-    const avg = times.reduce((a, b) => a + b, 0) / times.length;
-    const p50 = sorted[Math.floor(sorted.length * 0.5)];
-    const p95 = sorted[Math.floor(sorted.length * 0.95)];
-    const p99 = sorted[Math.floor(sorted.length * 0.99)];
-    
-    return {
-      count: times.length,
-      avg: Math.round(avg),
-      min: Math.min(...times),
-      max: Math.max(...times),
-      p50,
-      p95,
-      p99
-    };
-  }
-  
-  static logStats() {
-    for (const [operation, times] of this.operationTimes.entries()) {
-      const stats = this.getStats(operation);
-      if (stats && stats.count > 0) {
-        logger.info('Performance statistics', {
-          operation,
-          ...stats,
-          unit: 'ms'
-        });
-      }
+
+    for (const [op, data] of this.metrics) {
+      stats.operations[op] = {
+        count: data.count,
+        avgTime: data.totalTime / data.count,
+        errorRate: data.errors / data.count
+      };
     }
+
+    return stats;
   }
 }
 
-// Log performance stats every 5 minutes
+const performanceMonitor = new PerformanceMonitor();
+
+// Log performance stats every 30 seconds
 setInterval(() => {
-  PerformanceMonitor.logStats();
-}, 5 * 60 * 1000);
+  logger.info('Performance stats', performanceMonitor.getStats());
+}, 30000);
 
 // Redis Cache Manager
 class CacheManager {
   private client: any;
-  private isConnected: boolean = false;
-
-  constructor() {
-    const redisUrl = process.env.REDIS_URL || 'redis://localhost:6379';
-    this.client = createClient({ url: redisUrl });
-    
-    this.client.on('error', (err: any) => {
-      logger.warn('Redis Client Error', { error: err.message });
-      this.isConnected = false;
-    });
-
-    this.client.on('connect', () => {
-      logger.info('Connected to Redis');
-      this.isConnected = true;
-    });
-
-    this.client.on('disconnect', () => {
-      logger.info('Disconnected from Redis');
-      this.isConnected = false;
-    });
-  }
+  private connected = false;
+  private ttl = 300; // 5 minutes
 
   async connect() {
     try {
-      if (!this.isConnected) {
-        await this.client.connect();
-      }
+      this.client = createClient({
+        url: process.env.REDIS_URL || 'redis://localhost:6379',
+        socket: {
+          reconnectStrategy: (retries: number) => {
+            if (retries > 10) {
+              logger.error('Redis reconnection failed after 10 attempts');
+              return false;
+            }
+            return Math.min(retries * 50, 500);
+          }
+        }
+      });
+
+      this.client.on('error', (err: any) => {
+        logger.error('Redis client error', { error: err.message });
+        this.connected = false;
+      });
+
+      this.client.on('connect', () => {
+        logger.info('Redis connected');
+        this.connected = true;
+      });
+
+      await this.client.connect();
     } catch (error) {
-      logger.warn('Failed to connect to Redis', { error });
-      this.isConnected = false;
+      logger.warn('Redis connection failed, continuing without cache', { error });
+      this.connected = false;
     }
   }
 
   async get(key: string): Promise<any> {
-    if (!this.isConnected) return null;
-    
+    if (!this.connected) return null;
+
     try {
-      const value = await this.client.get(key);
-      return value ? JSON.parse(value) : null;
+      const data = await this.client.get(key);
+      if (data) {
+        performanceMonitor.recordCacheHit();
+        return JSON.parse(data);
+      }
+      performanceMonitor.recordCacheMiss();
+      return null;
     } catch (error) {
-      logger.warn('Redis GET error', { key, error });
+      logger.error('Cache get error', { error, key });
       return null;
     }
   }
 
-  async set(key: string, value: any, ttl: number = 300): Promise<void> {
-    if (!this.isConnected) return;
-    
+  async set(key: string, value: any): Promise<void> {
+    if (!this.connected) return;
+
     try {
-      await this.client.setEx(key, ttl, JSON.stringify(value));
+      await this.client.setEx(key, this.ttl, JSON.stringify(value));
     } catch (error) {
-      logger.warn('Redis SET error', { key, ttl, error });
+      logger.error('Cache set error', { error, key });
     }
   }
 
   async invalidate(pattern: string): Promise<void> {
-    if (!this.isConnected) return;
-    
+    if (!this.connected) return;
+
     try {
       const keys = await this.client.keys(pattern);
       if (keys.length > 0) {
         await this.client.del(keys);
+        logger.debug(`Invalidated ${keys.length} cache entries`);
       }
     } catch (error) {
-      logger.warn('Redis INVALIDATE error', { pattern, error });
+      logger.error('Cache invalidation error', { error, pattern });
     }
   }
 
   async disconnect() {
-    if (this.isConnected) {
+    if (this.client && this.connected) {
       await this.client.disconnect();
-      this.isConnected = false;
+      this.connected = false;
     }
   }
 }
 
-// Initialize cache manager
 const cacheManager = new CacheManager();
+
+// Initialize auth manager
+let authManager: AuthManager | null = null;
+let tokenManager: TokenManager | null = null;
+
+// Natural language search parser
+function parseNaturalLanguageQuery(query: string) {
+  const lowerQuery = query.toLowerCase();
+  const filters: any = {};
+
+  // Document type detection
+  if (lowerQuery.includes('spreadsheet') || lowerQuery.includes('sheet')) {
+    filters.mimeType = 'application/vnd.google-apps.spreadsheet';
+  } else if (lowerQuery.includes('document') || lowerQuery.includes('doc')) {
+    filters.mimeType = 'application/vnd.google-apps.document';
+  } else if (lowerQuery.includes('presentation') || lowerQuery.includes('slide')) {
+    filters.mimeType = 'application/vnd.google-apps.presentation';
+  } else if (lowerQuery.includes('folder')) {
+    filters.mimeType = 'application/vnd.google-apps.folder';
+  }
+
+  // Time-based filters
+  const timePatterns = [
+    { pattern: /modified\s+(today|yesterday)/, field: 'modifiedTime' },
+    { pattern: /created\s+(today|yesterday)/, field: 'createdTime' },
+    { pattern: /modified\s+last\s+(\d+)\s+days?/, field: 'modifiedTime', relative: true },
+    { pattern: /created\s+last\s+(\d+)\s+days?/, field: 'createdTime', relative: true }
+  ];
+
+  for (const { pattern, field, relative } of timePatterns) {
+    const match = lowerQuery.match(pattern);
+    if (match) {
+      if (relative && match[1]) {
+        const days = parseInt(match[1]);
+        const date = new Date();
+        date.setDate(date.getDate() - days);
+        filters[field] = date.toISOString();
+      } else if (match[1] === 'today') {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        filters[field] = today.toISOString();
+      } else if (match[1] === 'yesterday') {
+        const yesterday = new Date();
+        yesterday.setDate(yesterday.getDate() - 1);
+        yesterday.setHours(0, 0, 0, 0);
+        filters[field] = yesterday.toISOString();
+      }
+    }
+  }
+
+  // Owner/shared filters
+  if (lowerQuery.includes('shared with me')) {
+    filters.sharedWithMe = true;
+  } else if (lowerQuery.includes('owned by me') || lowerQuery.includes('my files')) {
+    filters.ownedByMe = true;
+  }
+
+  // Extract the actual search terms (remove filter keywords)
+  const filterKeywords = [
+    'spreadsheet', 'sheet', 'document', 'doc', 'presentation', 'slide', 'folder',
+    'modified', 'created', 'today', 'yesterday', 'last', 'days', 'day',
+    'shared with me', 'owned by me', 'my files'
+  ];
+
+  let searchTerms = query;
+  filterKeywords.forEach(keyword => {
+    searchTerms = searchTerms.replace(new RegExp(`\\b${keyword}\\b`, 'gi'), '');
+  });
+
+  searchTerms = searchTerms.replace(/\s+/g, ' ').trim();
+
+  return { searchTerms, filters };
+}
 
 const server = new Server(
   {
-    name: "example-servers/gdrive",
+    name: "gdrive-mcp-server",
     version: "0.6.2",
   },
   {
@@ -229,116 +279,240 @@ const server = new Server(
   },
 );
 
+// List available resources
 server.setRequestHandler(ListResourcesRequestSchema, async (request) => {
-  const pageSize = 10;
-  const params: any = {
-    pageSize,
-    fields: "nextPageToken, files(id, name, mimeType)",
-  };
-
-  if (request.params?.cursor) {
-    params.pageToken = request.params.cursor;
-  }
-
-  const res = await drive.files.list(params);
-  const files = res.data.files!;
-
-  return {
-    resources: files.map((file) => ({
-      uri: `gdrive:///${file.id}`,
-      mimeType: file.mimeType,
-      name: file.name,
-    })),
-    nextCursor: res.data.nextPageToken,
-  };
-});
-
-server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
-  const fileId = request.params.uri.replace("gdrive:///", "");
-
-  // First get file metadata to check mime type
-  const file = await drive.files.get({
-    fileId,
-    fields: "mimeType",
-  });
-
-  // For Google Docs/Sheets/etc we need to export
-  if (file.data.mimeType?.startsWith("application/vnd.google-apps")) {
-    let exportMimeType: string;
-    switch (file.data.mimeType) {
-      case "application/vnd.google-apps.document":
-        exportMimeType = "text/markdown";
-        break;
-      case "application/vnd.google-apps.spreadsheet":
-        exportMimeType = "text/csv";
-        break;
-      case "application/vnd.google-apps.presentation":
-        exportMimeType = "text/plain";
-        break;
-      case "application/vnd.google-apps.drawing":
-        exportMimeType = "image/png";
-        break;
-      default:
-        exportMimeType = "text/plain";
+  const startTime = Date.now();
+  
+  try {
+    // Ensure we're authenticated
+    if (!authManager || authManager.getState() !== AuthState.AUTHENTICATED) {
+      throw new Error('Not authenticated. Please run with "auth" argument first.');
     }
 
-    const res = await drive.files.export(
-      { fileId, mimeType: exportMimeType },
-      { responseType: "text" },
-    );
+    const cacheKey = 'resources:list';
+    const cached = await cacheManager.get(cacheKey);
+    if (cached) {
+      logger.debug('Returning cached resources list');
+      performanceMonitor.track('listResources', Date.now() - startTime);
+      return cached;
+    }
 
-    return {
-      contents: [
-        {
-          uri: request.params.uri,
-          mimeType: exportMimeType,
-          text: res.data,
-        },
-      ],
-    };
-  }
+    const response = await drive.files.list({
+      pageSize: 10,
+      fields: "files(id, name, mimeType, webViewLink)",
+    });
 
-  // For regular files download content
-  const res = await drive.files.get(
-    { fileId, alt: "media" },
-    { responseType: "arraybuffer" },
-  );
-  const mimeType = file.data.mimeType || "application/octet-stream";
-  if (mimeType.startsWith("text/") || mimeType === "application/json") {
-    return {
-      contents: [
-        {
-          uri: request.params.uri,
-          mimeType: mimeType,
-          text: Buffer.from(res.data as ArrayBuffer).toString("utf-8"),
-        },
-      ],
-    };
-  } else {
-    return {
-      contents: [
-        {
-          uri: request.params.uri,
-          mimeType: mimeType,
-          blob: Buffer.from(res.data as ArrayBuffer).toString("base64"),
-        },
-      ],
-    };
+    const resources = response.data.files?.map((file) => ({
+      uri: `gdrive:///${file.id}`,
+      name: file.name || "Untitled",
+      mimeType: file.mimeType,
+      description: `Google Drive file: ${file.name}`,
+    })) || [];
+
+    const result = { resources };
+    await cacheManager.set(cacheKey, result);
+    
+    performanceMonitor.track('listResources', Date.now() - startTime);
+    logger.info('Listed resources', { count: resources.length });
+    
+    return result;
+  } catch (error) {
+    performanceMonitor.track('listResources', Date.now() - startTime, true);
+    logger.error('Failed to list resources', { error });
+    throw error;
   }
 });
 
+// Read a specific resource
+server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
+  const startTime = Date.now();
+  
+  try {
+    // Ensure we're authenticated
+    if (!authManager || authManager.getState() !== AuthState.AUTHENTICATED) {
+      throw new Error('Not authenticated. Please run with "auth" argument first.');
+    }
+
+    const fileId = request.params.uri.replace("gdrive:///", "");
+    
+    const cacheKey = `resource:${fileId}`;
+    const cached = await cacheManager.get(cacheKey);
+    if (cached) {
+      logger.debug('Returning cached resource', { fileId });
+      performanceMonitor.track('readResource', Date.now() - startTime);
+      return cached;
+    }
+
+    const file = await drive.files.get({
+      fileId,
+      fields: "id, name, mimeType",
+    });
+
+    let text = "";
+    let blob = undefined;
+
+    try {
+      if (file.data.mimeType?.startsWith("application/vnd.google-apps.")) {
+        // Export Google Workspace files
+        let exportMimeType = "text/plain";
+        if (file.data.mimeType === "application/vnd.google-apps.document") {
+          exportMimeType = "text/markdown";
+        } else if (file.data.mimeType === "application/vnd.google-apps.spreadsheet") {
+          exportMimeType = "text/csv";
+        } else if (file.data.mimeType === "application/vnd.google-apps.presentation") {
+          exportMimeType = "text/plain";
+        } else if (file.data.mimeType === "application/vnd.google-apps.drawing") {
+          const response = await drive.files.export({
+            fileId,
+            mimeType: "image/png",
+          }, { responseType: "arraybuffer" });
+          
+          blob = Buffer.from(response.data as ArrayBuffer).toString("base64");
+          
+          const result = {
+            contents: [{
+              uri: request.params.uri,
+              mimeType: "image/png",
+              blob,
+            }],
+          };
+          
+          await cacheManager.set(cacheKey, result);
+          performanceMonitor.track('readResource', Date.now() - startTime);
+          logger.info('Read resource (drawing)', { fileId, mimeType: file.data.mimeType });
+          
+          return result;
+        }
+
+        const response = await drive.files.export({
+          fileId,
+          mimeType: exportMimeType,
+        });
+        text = response.data as string;
+      } else if (file.data.mimeType?.startsWith("text/")) {
+        // Download text files
+        const response = await drive.files.get({
+          fileId,
+          alt: "media",
+        });
+        text = response.data as string;
+      } else {
+        // Binary files - return as base64 blob
+        const response = await drive.files.get({
+          fileId,
+          alt: "media",
+        }, { responseType: "arraybuffer" });
+        
+        blob = Buffer.from(response.data as ArrayBuffer).toString("base64");
+      }
+    } catch (error) {
+      logger.error('Failed to read file content', { error, fileId });
+      text = `Error reading file: ${error}`;
+    }
+
+    const result = {
+      contents: [{
+        uri: request.params.uri,
+        mimeType: blob ? file.data.mimeType : "text/plain",
+        text: blob ? undefined : text,
+        blob: blob,
+      }],
+    };
+
+    await cacheManager.set(cacheKey, result);
+    performanceMonitor.track('readResource', Date.now() - startTime);
+    logger.info('Read resource', { fileId, mimeType: file.data.mimeType });
+    
+    return result;
+  } catch (error) {
+    performanceMonitor.track('readResource', Date.now() - startTime, true);
+    logger.error('Failed to read resource', { error, uri: request.params.uri });
+    throw error;
+  }
+});
+
+// List available tools
 server.setRequestHandler(ListToolsRequestSchema, async () => {
   return {
     tools: [
       {
         name: "search",
-        description: "Search for files in Google Drive",
+        description: "Search for files in Google Drive. Supports natural language queries like 'spreadsheets modified last 7 days' or 'documents shared with me'.",
         inputSchema: {
           type: "object",
           properties: {
             query: {
               type: "string",
-              description: "Search query",
+              description: "Natural language search query (e.g., 'budget spreadsheet modified yesterday', 'presentations created last week')",
+            },
+            pageSize: {
+              type: "number",
+              description: "Number of results to return (default: 10, max: 100)",
+              default: 10,
+            },
+          },
+          required: ["query"],
+        },
+      },
+      {
+        name: "enhancedSearch",
+        description: "Enhanced search with advanced filtering options for Google Drive files",
+        inputSchema: {
+          type: "object",
+          properties: {
+            query: {
+              type: "string",
+              description: "Search query for file names and content",
+            },
+            filters: {
+              type: "object",
+              properties: {
+                mimeType: {
+                  type: "string",
+                  description: "Filter by MIME type (e.g., 'application/vnd.google-apps.spreadsheet')",
+                },
+                modifiedAfter: {
+                  type: "string",
+                  description: "ISO 8601 date string for files modified after this date",
+                },
+                modifiedBefore: {
+                  type: "string",
+                  description: "ISO 8601 date string for files modified before this date",
+                },
+                createdAfter: {
+                  type: "string",
+                  description: "ISO 8601 date string for files created after this date",
+                },
+                createdBefore: {
+                  type: "string",
+                  description: "ISO 8601 date string for files created before this date",
+                },
+                sharedWithMe: {
+                  type: "boolean",
+                  description: "Only show files shared with me",
+                },
+                ownedByMe: {
+                  type: "boolean",
+                  description: "Only show files I own",
+                },
+                parents: {
+                  type: "string",
+                  description: "Parent folder ID to search within",
+                },
+                trashed: {
+                  type: "boolean",
+                  description: "Include trashed files (default: false)",
+                },
+              },
+            },
+            pageSize: {
+              type: "number",
+              description: "Number of results to return (default: 10, max: 100)",
+              default: 10,
+            },
+            orderBy: {
+              type: "string",
+              description: "Sort order (e.g., 'modifiedTime desc', 'name', 'createdTime')",
             },
           },
           required: ["query"],
@@ -346,52 +520,16 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       },
       {
         name: "read",
-        description: "Read contents of a file from Google Drive",
+        description: "Read the contents of a Google Drive file",
         inputSchema: {
           type: "object",
           properties: {
             fileId: {
               type: "string",
-              description: "The Google Drive file ID to read",
+              description: "The ID of the file to read",
             },
           },
           required: ["fileId"],
-        },
-      },
-      {
-        name: "listSheets",
-        description: "List all sheets within a Google Spreadsheet",
-        inputSchema: {
-          type: "object",
-          properties: {
-            spreadsheetId: {
-              type: "string",
-              description: "The ID of the Google Spreadsheet",
-            },
-          },
-          required: ["spreadsheetId"],
-        },
-      },
-      {
-        name: "readSheet",
-        description: "Read contents of a specific sheet from Google Spreadsheet",
-        inputSchema: {
-          type: "object",
-          properties: {
-            spreadsheetId: {
-              type: "string",
-              description: "The ID of the Google Spreadsheet",
-            },
-            sheetName: {
-              type: "string",
-              description: "The name of the sheet to read",
-            },
-            range: {
-              type: "string",
-              description: "Optional A1 notation range (e.g. 'A1:D10')",
-            },
-          },
-          required: ["spreadsheetId", "sheetName"],
         },
       },
       {
@@ -402,22 +540,23 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           properties: {
             name: {
               type: "string",
-              description: "Name of the file to create",
-            },
-            mimeType: {
-              type: "string",
-              description: "MIME type of the file (e.g., 'text/plain', 'application/json')",
+              description: "The name of the file",
             },
             content: {
               type: "string",
-              description: "Content of the file",
+              description: "The content of the file",
             },
-            parentFolderId: {
+            mimeType: {
               type: "string",
-              description: "Optional parent folder ID",
+              description: "The MIME type of the file (default: text/plain)",
+              default: "text/plain",
+            },
+            parentId: {
+              type: "string",
+              description: "The ID of the parent folder (optional)",
             },
           },
-          required: ["name", "mimeType", "content"],
+          required: ["name", "content"],
         },
       },
       {
@@ -428,15 +567,11 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           properties: {
             fileId: {
               type: "string",
-              description: "ID of the file to update",
+              description: "The ID of the file to update",
             },
             content: {
               type: "string",
-              description: "New content for the file",
-            },
-            mimeType: {
-              type: "string",
-              description: "MIME type of the content",
+              description: "The new content of the file",
             },
           },
           required: ["fileId", "content"],
@@ -450,29 +585,62 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           properties: {
             name: {
               type: "string",
-              description: "Name of the folder to create",
+              description: "The name of the folder",
             },
-            parentFolderId: {
+            parentId: {
               type: "string",
-              description: "Optional parent folder ID",
+              description: "The ID of the parent folder (optional)",
             },
           },
           required: ["name"],
         },
       },
       {
-        name: "updateCells",
-        description: "Update cells in a Google Sheets spreadsheet",
+        name: "listSheets",
+        description: "List all sheets in a Google Sheets document",
         inputSchema: {
           type: "object",
           properties: {
             spreadsheetId: {
               type: "string",
-              description: "The ID of the Google Spreadsheet",
+              description: "The ID of the Google Sheets document",
+            },
+          },
+          required: ["spreadsheetId"],
+        },
+      },
+      {
+        name: "readSheet",
+        description: "Read data from a specific sheet or range in Google Sheets",
+        inputSchema: {
+          type: "object",
+          properties: {
+            spreadsheetId: {
+              type: "string",
+              description: "The ID of the Google Sheets document",
             },
             range: {
               type: "string",
-              description: "A1 notation range to update (e.g., 'Sheet1!A1:B2')",
+              description: "The A1 notation range to read (e.g., 'Sheet1!A1:B10', 'Sheet1')",
+              default: "Sheet1",
+            },
+          },
+          required: ["spreadsheetId"],
+        },
+      },
+      {
+        name: "updateCells",
+        description: "Update cells in a Google Sheets document",
+        inputSchema: {
+          type: "object",
+          properties: {
+            spreadsheetId: {
+              type: "string",
+              description: "The ID of the Google Sheets document",
+            },
+            range: {
+              type: "string",
+              description: "The A1 notation range to update (e.g., 'Sheet1!A1:B2')",
             },
             values: {
               type: "array",
@@ -484,29 +652,24 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
                 },
               },
             },
-            valueInputOption: {
-              type: "string",
-              description: "How to interpret the input values (RAW or USER_ENTERED)",
-              enum: ["RAW", "USER_ENTERED"],
-              default: "USER_ENTERED",
-            },
           },
           required: ["spreadsheetId", "range", "values"],
         },
       },
       {
         name: "appendRows",
-        description: "Append rows to a Google Sheets spreadsheet",
+        description: "Append rows to a Google Sheets document",
         inputSchema: {
           type: "object",
           properties: {
             spreadsheetId: {
               type: "string",
-              description: "The ID of the Google Spreadsheet",
+              description: "The ID of the Google Sheets document",
             },
-            range: {
+            sheetName: {
               type: "string",
-              description: "A1 notation range or sheet name to append to",
+              description: "The name of the sheet to append to",
+              default: "Sheet1",
             },
             values: {
               type: "array",
@@ -518,29 +681,23 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
                 },
               },
             },
-            valueInputOption: {
-              type: "string",
-              description: "How to interpret the input values",
-              enum: ["RAW", "USER_ENTERED"],
-              default: "USER_ENTERED",
-            },
           },
-          required: ["spreadsheetId", "range", "values"],
+          required: ["spreadsheetId", "values"],
         },
       },
       {
         name: "createForm",
-        description: "Create a new Google Form",
+        description: "Create a new Google Form with questions",
         inputSchema: {
           type: "object",
           properties: {
             title: {
               type: "string",
-              description: "Title of the form",
+              description: "The title of the form",
             },
             description: {
               type: "string",
-              description: "Description of the form (optional)",
+              description: "The description of the form (optional)",
             },
           },
           required: ["title"],
@@ -548,7 +705,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       },
       {
         name: "getForm",
-        description: "Get form structure and metadata",
+        description: "Get details of a Google Form including questions and settings",
         inputSchema: {
           type: "object",
           properties: {
@@ -562,7 +719,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       },
       {
         name: "addQuestion",
-        description: "Add a question to a Google Form",
+        description: "Add a question to an existing Google Form",
         inputSchema: {
           type: "object",
           properties: {
@@ -570,34 +727,50 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
               type: "string",
               description: "The ID of the Google Form",
             },
-            questionType: {
-              type: "string",
-              description: "Type of question",
-              enum: ["TEXT", "PARAGRAPH_TEXT", "MULTIPLE_CHOICE", "CHECKBOX", "DROPDOWN", "LINEAR_SCALE", "DATE", "TIME", "FILE_UPLOAD"],
-            },
             title: {
               type: "string",
-              description: "Question title/text",
+              description: "The question title/text",
             },
-            options: {
-              type: "array",
-              description: "Options for multiple choice, checkbox, or dropdown questions",
-              items: {
-                type: "string",
-              },
+            type: {
+              type: "string",
+              enum: ["TEXT", "PARAGRAPH_TEXT", "MULTIPLE_CHOICE", "CHECKBOX", "DROPDOWN", "LINEAR_SCALE", "DATE", "TIME"],
+              description: "The type of question",
             },
             required: {
               type: "boolean",
               description: "Whether the question is required",
               default: false,
             },
+            options: {
+              type: "array",
+              items: { type: "string" },
+              description: "Options for multiple choice, checkbox, or dropdown questions",
+            },
+            scaleMin: {
+              type: "number",
+              description: "Minimum value for linear scale (default: 1)",
+              default: 1,
+            },
+            scaleMax: {
+              type: "number",
+              description: "Maximum value for linear scale (default: 5)",
+              default: 5,
+            },
+            scaleMinLabel: {
+              type: "string",
+              description: "Label for minimum value in linear scale",
+            },
+            scaleMaxLabel: {
+              type: "string",
+              description: "Label for maximum value in linear scale",
+            },
           },
-          required: ["formId", "questionType", "title"],
+          required: ["formId", "title", "type"],
         },
       },
       {
         name: "listResponses",
-        description: "List responses for a Google Form",
+        description: "List all responses to a Google Form",
         inputSchema: {
           type: "object",
           properties: {
@@ -605,69 +778,27 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
               type: "string",
               description: "The ID of the Google Form",
             },
-            pageSize: {
-              type: "number",
-              description: "Maximum number of responses to return (1-5000)",
-              minimum: 1,
-              maximum: 5000,
-              default: 100,
-            },
           },
           required: ["formId"],
         },
       },
       {
-        name: "enhancedSearch",
-        description: "Enhanced search with natural language parsing",
-        inputSchema: {
-          type: "object",
-          properties: {
-            query: {
-              type: "string",
-              description: "Natural language search query",
-            },
-            maxResults: {
-              type: "number",
-              description: "Maximum number of results to return",
-              default: 10,
-              minimum: 1,
-              maximum: 100,
-            },
-            filters: {
-              type: "object",
-              description: "Additional filters",
-              properties: {
-                mimeType: {
-                  type: "string",
-                  description: "Filter by MIME type",
-                },
-                modifiedAfter: {
-                  type: "string",
-                  description: "Filter by modification date (ISO 8601)",
-                },
-                owner: {
-                  type: "string",
-                  description: "Filter by owner email",
-                },
-              },
-            },
-          },
-          required: ["query"],
-        },
-      },
-      {
         name: "createDocument",
-        description: "Create a new Google Document",
+        description: "Create a new Google Docs document",
         inputSchema: {
           type: "object",
           properties: {
             title: {
               type: "string",
-              description: "Title of the document",
+              description: "The title of the document",
             },
             content: {
               type: "string",
               description: "Initial content for the document (optional)",
+            },
+            parentId: {
+              type: "string",
+              description: "The ID of the parent folder (optional)",
             },
           },
           required: ["title"],
@@ -675,22 +806,22 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       },
       {
         name: "insertText",
-        description: "Insert text into a Google Document at a specific location",
+        description: "Insert text at a specific location in a Google Docs document",
         inputSchema: {
           type: "object",
           properties: {
             documentId: {
               type: "string",
-              description: "The Google Document ID",
+              description: "The ID of the Google Docs document",
             },
             text: {
               type: "string",
-              description: "Text to insert",
+              description: "The text to insert",
             },
-            location: {
+            index: {
               type: "number",
-              description: "Index where to insert text (default: end of document)",
-              default: -1,
+              description: "The zero-based index where to insert the text (1 for beginning of document)",
+              default: 1,
             },
           },
           required: ["documentId", "text"],
@@ -698,105 +829,100 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       },
       {
         name: "replaceText",
-        description: "Find and replace text in a Google Document",
+        description: "Replace all occurrences of text in a Google Docs document",
         inputSchema: {
           type: "object",
           properties: {
             documentId: {
               type: "string",
-              description: "The Google Document ID",
+              description: "The ID of the Google Docs document",
             },
-            findText: {
+            searchText: {
               type: "string",
-              description: "Text to find",
+              description: "The text to search for",
             },
             replaceText: {
               type: "string",
-              description: "Text to replace with",
+              description: "The text to replace with",
             },
             matchCase: {
               type: "boolean",
-              description: "Whether to match case",
+              description: "Whether to match case when searching",
               default: false,
             },
           },
-          required: ["documentId", "findText", "replaceText"],
+          required: ["documentId", "searchText", "replaceText"],
         },
       },
       {
         name: "applyTextStyle",
-        description: "Apply formatting to text in a Google Document",
+        description: "Apply text styling to a range in a Google Docs document",
         inputSchema: {
           type: "object",
           properties: {
             documentId: {
               type: "string",
-              description: "The Google Document ID",
+              description: "The ID of the Google Docs document",
             },
             startIndex: {
               type: "number",
-              description: "Start index of text to format",
+              description: "The start index of the range",
             },
             endIndex: {
               type: "number",
-              description: "End index of text to format",
+              description: "The end index of the range",
             },
-            style: {
+            bold: {
+              type: "boolean",
+              description: "Make text bold",
+            },
+            italic: {
+              type: "boolean",
+              description: "Make text italic",
+            },
+            underline: {
+              type: "boolean",
+              description: "Underline text",
+            },
+            fontSize: {
+              type: "number",
+              description: "Font size in points",
+            },
+            foregroundColor: {
               type: "object",
-              description: "Text formatting style",
+              description: "Text color (RGB values 0-1)",
               properties: {
-                bold: {
-                  type: "boolean",
-                  description: "Make text bold",
-                },
-                italic: {
-                  type: "boolean",
-                  description: "Make text italic",
-                },
-                underline: {
-                  type: "boolean",
-                  description: "Underline text",
-                },
-                fontSize: {
-                  type: "number",
-                  description: "Font size in points",
-                },
-                foregroundColor: {
-                  type: "string",
-                  description: "Text color in hex format (e.g., #FF0000)",
-                },
+                red: { type: "number" },
+                green: { type: "number" },
+                blue: { type: "number" },
               },
             },
           },
-          required: ["documentId", "startIndex", "endIndex", "style"],
+          required: ["documentId", "startIndex", "endIndex"],
         },
       },
       {
         name: "insertTable",
-        description: "Insert a table into a Google Document",
+        description: "Insert a table at a specific location in a Google Docs document",
         inputSchema: {
           type: "object",
           properties: {
             documentId: {
               type: "string",
-              description: "The Google Document ID",
+              description: "The ID of the Google Docs document",
             },
             rows: {
               type: "number",
-              description: "Number of rows",
-              minimum: 1,
-              maximum: 20,
+              description: "Number of rows in the table",
             },
             columns: {
               type: "number",
-              description: "Number of columns",
-              minimum: 1,
-              maximum: 20,
+              description: "Number of columns in the table",
             },
-            location: {
+            index: {
               type: "number",
-              description: "Index where to insert table (default: end of document)",
-              default: -1,
+              description: "The zero-based index where to insert the table",
+              default: 1,
             },
           },
           required: ["documentId", "rows", "columns"],
@@ -804,7 +930,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       },
       {
         name: "batchFileOperations",
-        description: "Perform multiple file operations in a single batch request",
+        description: "Perform batch operations on multiple files (create, update, delete, move)",
         inputSchema: {
           type: "object",
           properties: {
@@ -816,33 +942,32 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
                 properties: {
                   type: {
                     type: "string",
-                    enum: ["create", "update", "delete", "move", "copy"],
+                    enum: ["create", "update", "delete", "move"],
                     description: "Type of operation",
                   },
                   fileId: {
                     type: "string",
-                    description: "File ID (for update, delete, move, copy operations)",
+                    description: "File ID (required for update, delete, move)",
                   },
                   name: {
                     type: "string",
-                    description: "File name (for create, move operations)",
+                    description: "File name (required for create, optional for update)",
                   },
                   content: {
                     type: "string",
-                    description: "File content (for create, update operations)",
+                    description: "File content (required for create and update)",
                   },
                   mimeType: {
                     type: "string",
-                    description: "MIME type (for create operations)",
+                    description: "MIME type for create operation",
                   },
-                  parentFolderId: {
+                  parentId: {
                     type: "string",
-                    description: "Parent folder ID (for create, move operations)",
+                    description: "Parent folder ID (for create and move)",
                   },
                 },
                 required: ["type"],
               },
-              maxItems: 10,
             },
           },
           required: ["operations"],
@@ -852,1050 +977,994 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
   };
 });
 
+// Handle tool calls
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
-  if (request.params.name === "search") {
-    const endTimer = PerformanceMonitor.startTimer('search');
-    const userQuery = request.params.arguments?.query as string;
-    const cacheKey = `search:${userQuery}`;
-    
-    logger.info('Search operation started', { query: userQuery });
-    
-    // Try to get from cache first
-    const cachedResult = await cacheManager.get(cacheKey);
-    if (cachedResult) {
-      logger.info('Search cache hit', { query: userQuery });
-      endTimer();
-      return cachedResult;
-    }
-    
-    const escapedQuery = userQuery.replace(/\\/g, "\\\\").replace(/'/g, "\\'");
-    const formattedQuery = `fullText contains '${escapedQuery}'`;
-
-    const res = await drive.files.list({
-      q: formattedQuery,
-      pageSize: 10,
-      fields: "files(id, name, mimeType, modifiedTime, size)",
-    });
-
-    const fileList = res.data.files
-      ?.map((file: any) => `${file.name} (${file.mimeType}) - ID: ${file.id}`)
-      .join("\n");
-    
-    const result = {
-      content: [
-        {
-          type: "text",
-          text: `Found ${res.data.files?.length ?? 0} files:\n${fileList}`,
-        },
-      ],
-      isError: false,
-    };
-    
-    // Cache the search result for 5 minutes
-    await cacheManager.set(cacheKey, result, 300);
-    
-    logger.info('Search operation completed', { 
-      query: userQuery, 
-      resultCount: res.data.files?.length ?? 0 
-    });
-    endTimer();
-    
-    return result;
-  } else if (request.params.name === "read") {
-    const endTimer = PerformanceMonitor.startTimer('read');
-    const fileId = request.params.arguments?.fileId as string;
-    const cacheKey = `file:${fileId}`;
-    
-    logger.info('File read operation started', { fileId });
-    
-    // Try to get from cache first
-    const cachedResult = await cacheManager.get(cacheKey);
-    if (cachedResult) {
-      logger.info('File read cache hit', { fileId });
-      endTimer();
-      return cachedResult;
-    }
-    
-    // First get file metadata to check mime type
-    const file = await drive.files.get({
-      fileId,
-      fields: "mimeType,name",
-    });
-
-    // For Google Docs/Sheets/etc we need to export
-    if (file.data.mimeType?.startsWith("application/vnd.google-apps")) {
-      let exportMimeType: string;
-      switch (file.data.mimeType) {
-        case "application/vnd.google-apps.document":
-          exportMimeType = "text/markdown";
-          break;
-        case "application/vnd.google-apps.spreadsheet":
-          exportMimeType = "text/csv";
-          break;
-        case "application/vnd.google-apps.presentation":
-          exportMimeType = "text/plain";
-          break;
-        case "application/vnd.google-apps.drawing":
-          exportMimeType = "image/png";
-          break;
-        default:
-          exportMimeType = "text/plain";
-      }
-
-      const res = await drive.files.export(
-        { fileId, mimeType: exportMimeType },
-        { responseType: "text" },
-      );
-
-      return {
-        content: [
-          {
-            type: "text",
-            text: `Contents of ${file.data.name}:\n\n${res.data}`,
-          },
-        ],
-        isError: false,
-      };
+  const startTime = Date.now();
+  
+  try {
+    // Ensure we're authenticated
+    if (!authManager || authManager.getState() !== AuthState.AUTHENTICATED) {
+      throw new Error('Not authenticated. Please run with "auth" argument first.');
     }
 
-    // For regular files download content
-    const res = await drive.files.get(
-      { fileId, alt: "media" },
-      { responseType: "arraybuffer" },
-    );
-    const mimeType = file.data.mimeType || "application/octet-stream";
+    const { name, arguments: args } = request.params;
     
-    const result = mimeType.startsWith("text/") || mimeType === "application/json" 
-      ? {
-          content: [
-            {
-              type: "text",
-              text: `Contents of ${file.data.name}:\n\n${Buffer.from(res.data as ArrayBuffer).toString("utf-8")}`,
-            },
-          ],
-          isError: false,
+    logger.info('Tool called', { tool: name, args });
+
+    switch (name) {
+      case "search": {
+        const { searchTerms, filters } = parseNaturalLanguageQuery(args.query);
+        
+        // Build Google Drive query
+        let q = searchTerms ? `fullText contains '${searchTerms}'` : "";
+        
+        if (filters.mimeType) {
+          q += q ? " and " : "";
+          q += `mimeType = '${filters.mimeType}'`;
         }
-      : {
-          content: [
-            {
-              type: "text",
-              text: `Unable to display contents of ${file.data.name} - binary file of type ${mimeType}`,
-            },
-          ],
-          isError: false,
-        };
-    
-    // Cache file content for 10 minutes
-    await cacheManager.set(cacheKey, result, 600);
-    
-    logger.info('File read operation completed', { 
-      fileId, 
-      fileName: file.data.name,
-      mimeType: file.data.mimeType 
-    });
-    endTimer();
-    
-    return result;
-  } else if (request.params.name === "listSheets") {
-    const spreadsheetId = request.params.arguments?.spreadsheetId as string;
-    
-    try {
-      const response = await sheets.spreadsheets.get({
-        spreadsheetId,
-        fields: 'sheets.properties',
-      });
+        
+        if (filters.modifiedTime) {
+          q += q ? " and " : "";
+          q += `modifiedTime > '${filters.modifiedTime}'`;
+        }
+        
+        if (filters.createdTime) {
+          q += q ? " and " : "";
+          q += `createdTime > '${filters.createdTime}'`;
+        }
+        
+        if (filters.sharedWithMe) {
+          q += q ? " and " : "";
+          q += "sharedWithMe = true";
+        }
+        
+        if (filters.ownedByMe) {
+          q += q ? " and " : "";
+          q += "'me' in owners";
+        }
 
-      const sheetsList = response.data.sheets?.map(sheet => ({
-        name: sheet.properties?.title,
-        id: sheet.properties?.sheetId,
-      }));
+        const cacheKey = `search:${q}:${args.pageSize || 10}`;
+        const cached = await cacheManager.get(cacheKey);
+        if (cached) {
+          performanceMonitor.track('search', Date.now() - startTime);
+          return cached;
+        }
 
-      return {
-        content: [{
-          type: "text",
-          text: `Available sheets:\n${sheetsList?.map(sheet => 
-            `- ${sheet.name} (ID: ${sheet.id})`).join('\n')}`,
-        }],
-        isError: false,
-      };
-    } catch (error: any) {
-      return {
-        content: [{
-          type: "text",
-          text: `Error listing sheets: ${error.message}`,
-        }],
-        isError: true,
-      };
-    }
-  } else if (request.params.name === "readSheet") {
-    const { spreadsheetId, sheetName, range } = request.params.arguments as {
-      spreadsheetId: string;
-      sheetName: string;
-      range?: string;
-    };
-
-    try {
-      const rangeNotation = range ? `${sheetName}!${range}` : sheetName;
-      const response = await sheets.spreadsheets.values.get({
-        spreadsheetId,
-        range: rangeNotation,
-        valueRenderOption: 'UNFORMATTED_VALUE',
-        dateTimeRenderOption: 'FORMATTED_STRING',
-      });
-
-      const values = response.data.values || [];
-      
-      // Format as a table with aligned columns
-      const formattedTable = values.map(row => 
-        row.map(cell => String(cell).padEnd(20)).join(' | ')
-      ).join('\n');
-
-      return {
-        content: [{
-          type: "text",
-          text: `Contents of sheet "${sheetName}":\n\n${formattedTable}`,
-        }],
-        isError: false,
-      };
-    } catch (error: any) {
-      return {
-        content: [{
-          type: "text",
-          text: `Error reading sheet: ${error.message}`,
-        }],
-        isError: true,
-      };
-    }
-  } else if (request.params.name === "createFile") {
-    const { name, mimeType, content, parentFolderId } = request.params.arguments as {
-      name: string;
-      mimeType: string;
-      content: string;
-      parentFolderId?: string;
-    };
-
-    try {
-      const fileMetadata: any = {
-        name,
-        mimeType,
-      };
-      
-      if (parentFolderId) {
-        fileMetadata.parents = [parentFolderId];
-      }
-
-      const media = {
-        mimeType,
-        body: content,
-      };
-
-      const response = await drive.files.create({
-        requestBody: fileMetadata,
-        media: media,
-        fields: 'id, name, mimeType',
-      });
-
-      // Invalidate search cache since new file was created
-      await cacheManager.invalidate('search:*');
-
-      return {
-        content: [{
-          type: "text",
-          text: `File created successfully:\n- Name: ${response.data.name}\n- ID: ${response.data.id}\n- Type: ${response.data.mimeType}`,
-        }],
-        isError: false,
-      };
-    } catch (error: any) {
-      return {
-        content: [{
-          type: "text",
-          text: `Error creating file: ${error.message}`,
-        }],
-        isError: true,
-      };
-    }
-  } else if (request.params.name === "updateFile") {
-    const { fileId, content, mimeType } = request.params.arguments as {
-      fileId: string;
-      content: string;
-      mimeType?: string;
-    };
-
-    try {
-      // Get current file info if mimeType not provided
-      let fileMimeType = mimeType;
-      if (!fileMimeType) {
-        const fileInfo = await drive.files.get({
-          fileId,
-          fields: 'mimeType',
+        const response = await drive.files.list({
+          q: q || undefined,
+          pageSize: Math.min(args.pageSize || 10, 100),
+          fields: "files(id, name, mimeType, createdTime, modifiedTime, size, parents, webViewLink, iconLink, owners, permissions)",
+          orderBy: "modifiedTime desc",
         });
-        fileMimeType = fileInfo.data.mimeType || 'text/plain';
-      }
 
-      const media = {
-        mimeType: fileMimeType,
-        body: content,
-      };
-
-      const response = await drive.files.update({
-        fileId,
-        media: media,
-        fields: 'id, name, modifiedTime',
-      });
-
-      // Invalidate caches for the updated file
-      await cacheManager.invalidate(`file:${fileId}`);
-      await cacheManager.invalidate('search:*');
-
-      return {
-        content: [{
-          type: "text",
-          text: `File updated successfully:\n- Name: ${response.data.name}\n- ID: ${response.data.id}\n- Modified: ${response.data.modifiedTime}`,
-        }],
-        isError: false,
-      };
-    } catch (error: any) {
-      return {
-        content: [{
-          type: "text",
-          text: `Error updating file: ${error.message}`,
-        }],
-        isError: true,
-      };
-    }
-  } else if (request.params.name === "createFolder") {
-    const { name, parentFolderId } = request.params.arguments as {
-      name: string;
-      parentFolderId?: string;
-    };
-
-    try {
-      const fileMetadata: any = {
-        name,
-        mimeType: 'application/vnd.google-apps.folder',
-      };
-      
-      if (parentFolderId) {
-        fileMetadata.parents = [parentFolderId];
-      }
-
-      const response = await drive.files.create({
-        requestBody: fileMetadata,
-        fields: 'id, name',
-      });
-
-      return {
-        content: [{
-          type: "text",
-          text: `Folder created successfully:\n- Name: ${response.data.name}\n- ID: ${response.data.id}`,
-        }],
-        isError: false,
-      };
-    } catch (error: any) {
-      return {
-        content: [{
-          type: "text",
-          text: `Error creating folder: ${error.message}`,
-        }],
-        isError: true,
-      };
-    }
-  } else if (request.params.name === "updateCells") {
-    const { spreadsheetId, range, values, valueInputOption = "USER_ENTERED" } = request.params.arguments as {
-      spreadsheetId: string;
-      range: string;
-      values: any[][];
-      valueInputOption?: string;
-    };
-
-    try {
-      const response = await sheets.spreadsheets.values.update({
-        spreadsheetId,
-        range,
-        valueInputOption: valueInputOption as any,
-        requestBody: {
-          values,
-        },
-      });
-
-      return {
-        content: [{
-          type: "text",
-          text: `Updated ${response.data.updatedCells} cells in range ${response.data.updatedRange}`,
-        }],
-        isError: false,
-      };
-    } catch (error: any) {
-      return {
-        content: [{
-          type: "text",
-          text: `Error updating cells: ${error.message}`,
-        }],
-        isError: true,
-      };
-    }
-  } else if (request.params.name === "appendRows") {
-    const { spreadsheetId, range, values, valueInputOption = "USER_ENTERED" } = request.params.arguments as {
-      spreadsheetId: string;
-      range: string;
-      values: any[][];
-      valueInputOption?: string;
-    };
-
-    try {
-      const response = await sheets.spreadsheets.values.append({
-        spreadsheetId,
-        range,
-        valueInputOption: valueInputOption as any,
-        insertDataOption: "INSERT_ROWS",
-        requestBody: {
-          values,
-        },
-      });
-
-      return {
-        content: [{
-          type: "text",
-          text: `Appended ${response.data.updates?.updatedRows} rows to ${response.data.updates?.updatedRange}`,
-        }],
-        isError: false,
-      };
-    } catch (error: any) {
-      return {
-        content: [{
-          type: "text",
-          text: `Error appending rows: ${error.message}`,
-        }],
-        isError: true,
-      };
-    }
-  } else if (request.params.name === "createForm") {
-    const { title, description } = request.params.arguments as {
-      title: string;
-      description?: string;
-    };
-
-    try {
-      const formRequest = {
-        info: {
-          title,
-          ...(description && { description }),
-        },
-      };
-
-      const response = await forms.forms.create({
-        requestBody: formRequest,
-      });
-
-      return {
-        content: [{
-          type: "text",
-          text: `Form created successfully:\n- Title: ${response.data.info?.title}\n- Form ID: ${response.data.formId}\n- Edit URL: ${response.data.responderUri?.replace('/viewform', '/edit')}`,
-        }],
-        isError: false,
-      };
-    } catch (error: any) {
-      return {
-        content: [{
-          type: "text",
-          text: `Error creating form: ${error.message}`,
-        }],
-        isError: true,
-      };
-    }
-  } else if (request.params.name === "getForm") {
-    const { formId } = request.params.arguments as {
-      formId: string;
-    };
-
-    try {
-      const response = await forms.forms.get({
-        formId,
-      });
-
-      const form = response.data;
-      const questionCount = form.items?.length || 0;
-      
-      return {
-        content: [{
-          type: "text",
-          text: `Form Details:\n- Title: ${form.info?.title}\n- Description: ${form.info?.description || 'No description'}\n- Questions: ${questionCount}\n- Form ID: ${form.formId}\n- Published: ${form.linkedSheetId ? 'Yes (linked to sheet)' : 'Not linked to sheet'}`,
-        }],
-        isError: false,
-      };
-    } catch (error: any) {
-      return {
-        content: [{
-          type: "text",
-          text: `Error retrieving form: ${error.message}`,
-        }],
-        isError: true,
-      };
-    }
-  } else if (request.params.name === "addQuestion") {
-    const { formId, questionType, title, options, required = false } = request.params.arguments as {
-      formId: string;
-      questionType: string;
-      title: string;
-      options?: string[];
-      required?: boolean;
-    };
-
-    try {
-      const questionItem: any = {
-        title,
-        questionItem: {
-          question: {
-            required,
-          },
-        },
-      };
-
-      // Set question type based on the input
-      switch (questionType) {
-        case "TEXT":
-          questionItem.questionItem.question.textQuestion = {};
-          break;
-        case "PARAGRAPH_TEXT":
-          questionItem.questionItem.question.textQuestion = {
-            paragraph: true,
-          };
-          break;
-        case "MULTIPLE_CHOICE":
-          if (!options || options.length === 0) {
-            throw new Error("Multiple choice questions require options");
-          }
-          questionItem.questionItem.question.choiceQuestion = {
-            type: "RADIO",
-            options: options.map(option => ({ value: option })),
-          };
-          break;
-        case "CHECKBOX":
-          if (!options || options.length === 0) {
-            throw new Error("Checkbox questions require options");
-          }
-          questionItem.questionItem.question.choiceQuestion = {
-            type: "CHECKBOX",
-            options: options.map(option => ({ value: option })),
-          };
-          break;
-        case "DROPDOWN":
-          if (!options || options.length === 0) {
-            throw new Error("Dropdown questions require options");
-          }
-          questionItem.questionItem.question.choiceQuestion = {
-            type: "DROP_DOWN",
-            options: options.map(option => ({ value: option })),
-          };
-          break;
-        case "LINEAR_SCALE":
-          questionItem.questionItem.question.scaleQuestion = {
-            low: 1,
-            high: 5,
-            lowLabel: "Low",
-            highLabel: "High",
-          };
-          break;
-        case "DATE":
-          questionItem.questionItem.question.dateQuestion = {};
-          break;
-        case "TIME":
-          questionItem.questionItem.question.timeQuestion = {};
-          break;
-        case "FILE_UPLOAD":
-          questionItem.questionItem.question.fileUploadQuestion = {};
-          break;
-        default:
-          throw new Error(`Unsupported question type: ${questionType}`);
-      }
-
-      const response = await forms.forms.batchUpdate({
-        formId,
-        requestBody: {
-          requests: [{
-            createItem: {
-              item: questionItem,
-              location: {
-                index: 0,
-              },
-            },
-          }],
-        },
-      });
-
-      return {
-        content: [{
-          type: "text",
-          text: `Question added successfully:\n- Type: ${questionType}\n- Title: ${title}\n- Required: ${required}\n${options ? `- Options: ${options.join(', ')}` : ''}`,
-        }],
-        isError: false,
-      };
-    } catch (error: any) {
-      return {
-        content: [{
-          type: "text",
-          text: `Error adding question: ${error.message}`,
-        }],
-        isError: true,
-      };
-    }
-  } else if (request.params.name === "listResponses") {
-    const { formId, pageSize = 100 } = request.params.arguments as {
-      formId: string;
-      pageSize?: number;
-    };
-
-    try {
-      const response = await forms.forms.responses.list({
-        formId,
-        pageSize,
-      });
-
-      const responses = response.data.responses || [];
-      const responseCount = responses.length;
-
-      if (responseCount === 0) {
-        return {
+        const result = {
           content: [{
             type: "text",
-            text: `No responses found for form ${formId}`,
+            text: JSON.stringify(response.data.files || [], null, 2),
           }],
-          isError: false,
         };
+
+        await cacheManager.set(cacheKey, result);
+        performanceMonitor.track('search', Date.now() - startTime);
+        
+        return result;
       }
 
-      const responseInfo = responses.map((resp, index) => {
-        const timestamp = resp.createTime ? new Date(resp.createTime).toLocaleString() : 'Unknown';
-        const answersCount = Object.keys(resp.answers || {}).length;
-        return `${index + 1}. Response ID: ${resp.responseId}\n   Submitted: ${timestamp}\n   Answers: ${answersCount}`;
-      }).join('\n\n');
-
-      return {
-        content: [{
-          type: "text",
-          text: `Found ${responseCount} responses:\n\n${responseInfo}`,
-        }],
-        isError: false,
-      };
-    } catch (error: any) {
-      return {
-        content: [{
-          type: "text",
-          text: `Error listing responses: ${error.message}`,
-        }],
-        isError: true,
-      };
-    }
-  } else if (request.params.name === "enhancedSearch") {
-    const { query, maxResults = 10, filters } = request.params.arguments as {
-      query: string;
-      maxResults?: number;
-      filters?: {
-        mimeType?: string;
-        modifiedAfter?: string;
-        owner?: string;
-      };
-    };
-
-    try {
-      // Natural language query mappings
-      const queryMappings: { [key: string]: string } = {
-        "spreadsheets": "mimeType='application/vnd.google-apps.spreadsheet'",
-        "documents": "mimeType='application/vnd.google-apps.document'",
-        "forms": "mimeType='application/vnd.google-apps.form'",
-        "presentations": "mimeType='application/vnd.google-apps.presentation'",
-        "folders": "mimeType='application/vnd.google-apps.folder'",
-        "modified today": `modifiedTime > '${new Date(Date.now() - 24*60*60*1000).toISOString()}'`,
-        "modified this week": `modifiedTime > '${new Date(Date.now() - 7*24*60*60*1000).toISOString()}'`,
-        "modified this month": `modifiedTime > '${new Date(Date.now() - 30*24*60*60*1000).toISOString()}'`,
-        "shared with me": "sharedWithMe=true",
-        "owned by me": "owners='me'",
-      };
-
-      let searchQuery = '';
-      let hasTextSearch = false;
-
-      // Parse natural language elements
-      for (const [phrase, apiQuery] of Object.entries(queryMappings)) {
-        if (query.toLowerCase().includes(phrase)) {
-          if (searchQuery) searchQuery += ' and ';
-          searchQuery += apiQuery;
+      case "enhancedSearch": {
+        const { query, filters = {}, pageSize = 10, orderBy = "modifiedTime desc" } = args;
+        
+        // Build complex query
+        let q = "";
+        
+        if (query) {
+          q = `fullText contains '${query}'`;
         }
+        
+        // Add all filter conditions
+        const filterConditions = [];
+        
+        if (filters.mimeType) {
+          filterConditions.push(`mimeType = '${filters.mimeType}'`);
+        }
+        
+        if (filters.modifiedAfter) {
+          filterConditions.push(`modifiedTime > '${filters.modifiedAfter}'`);
+        }
+        
+        if (filters.modifiedBefore) {
+          filterConditions.push(`modifiedTime < '${filters.modifiedBefore}'`);
+        }
+        
+        if (filters.createdAfter) {
+          filterConditions.push(`createdTime > '${filters.createdAfter}'`);
+        }
+        
+        if (filters.createdBefore) {
+          filterConditions.push(`createdTime < '${filters.createdBefore}'`);
+        }
+        
+        if (filters.sharedWithMe) {
+          filterConditions.push("sharedWithMe = true");
+        }
+        
+        if (filters.ownedByMe) {
+          filterConditions.push("'me' in owners");
+        }
+        
+        if (filters.parents) {
+          filterConditions.push(`'${filters.parents}' in parents`);
+        }
+        
+        if (!filters.trashed) {
+          filterConditions.push("trashed = false");
+        }
+        
+        // Combine query and filters
+        if (filterConditions.length > 0) {
+          q = q ? `${q} and ${filterConditions.join(" and ")}` : filterConditions.join(" and ");
+        }
+
+        const cacheKey = `enhancedSearch:${q}:${pageSize}:${orderBy}`;
+        const cached = await cacheManager.get(cacheKey);
+        if (cached) {
+          performanceMonitor.track('enhancedSearch', Date.now() - startTime);
+          return cached;
+        }
+
+        const response = await drive.files.list({
+          q: q || undefined,
+          pageSize: Math.min(pageSize, 100),
+          fields: "files(id, name, mimeType, createdTime, modifiedTime, size, parents, webViewLink, iconLink, owners, permissions, description, starred)",
+          orderBy,
+        });
+
+        const result = {
+          content: [{
+            type: "text",
+            text: JSON.stringify({
+              query: q,
+              totalResults: response.data.files?.length || 0,
+              files: response.data.files || [],
+            }, null, 2),
+          }],
+        };
+
+        await cacheManager.set(cacheKey, result);
+        performanceMonitor.track('enhancedSearch', Date.now() - startTime);
+        
+        return result;
       }
 
-      // Add text search if query contains words not covered by mappings
-      const remainingText = query.toLowerCase()
-        .replace(/(spreadsheets|documents|forms|presentations|folders|modified today|modified this week|modified this month|shared with me|owned by me)/g, '')
-        .trim();
+      case "read": {
+        const { fileId } = args;
+        
+        const cacheKey = `read:${fileId}`;
+        const cached = await cacheManager.get(cacheKey);
+        if (cached) {
+          performanceMonitor.track('read', Date.now() - startTime);
+          return cached;
+        }
 
-      if (remainingText && !searchQuery) {
-        searchQuery = `fullText contains '${remainingText.replace(/'/g, "\\'")}'`;
-        hasTextSearch = true;
-      } else if (remainingText) {
-        searchQuery += ` and fullText contains '${remainingText.replace(/'/g, "\\'")}'`;
-        hasTextSearch = true;
+        const file = await drive.files.get({
+          fileId,
+          fields: "id, name, mimeType",
+        });
+
+        let text = "";
+        
+        if (file.data.mimeType?.startsWith("application/vnd.google-apps.")) {
+          // Export Google Workspace files
+          let exportMimeType = "text/plain";
+          
+          if (file.data.mimeType === "application/vnd.google-apps.document") {
+            exportMimeType = "text/markdown";
+          } else if (file.data.mimeType === "application/vnd.google-apps.spreadsheet") {
+            exportMimeType = "text/csv";
+          } else if (file.data.mimeType === "application/vnd.google-apps.presentation") {
+            exportMimeType = "text/plain";
+          }
+
+          const response = await drive.files.export({
+            fileId,
+            mimeType: exportMimeType,
+          });
+          
+          text = response.data as string;
+        } else if (file.data.mimeType?.startsWith("text/")) {
+          // Download text files
+          const response = await drive.files.get({
+            fileId,
+            alt: "media",
+          });
+          
+          text = response.data as string;
+        } else {
+          text = `Binary file (${file.data.mimeType}). Use the resource URI to access the full content.`;
+        }
+
+        const result = {
+          content: [{
+            type: "text",
+            text: text,
+          }],
+        };
+
+        await cacheManager.set(cacheKey, result);
+        performanceMonitor.track('read', Date.now() - startTime);
+        
+        return result;
       }
 
-      // Apply additional filters
-      if (filters?.mimeType) {
-        if (searchQuery) searchQuery += ' and ';
-        searchQuery += `mimeType='${filters.mimeType}'`;
-      }
-      if (filters?.modifiedAfter) {
-        if (searchQuery) searchQuery += ' and ';
-        searchQuery += `modifiedTime > '${filters.modifiedAfter}'`;
-      }
-      if (filters?.owner) {
-        if (searchQuery) searchQuery += ' and ';
-        searchQuery += `owners='${filters.owner}'`;
-      }
+      case "createFile": {
+        const { name, content, mimeType = "text/plain", parentId } = args;
+        
+        const fileMetadata: any = {
+          name,
+          mimeType,
+        };
+        
+        if (parentId) {
+          fileMetadata.parents = [parentId];
+        }
 
-      // Fallback to simple text search if no mappings found
-      if (!searchQuery) {
-        searchQuery = `fullText contains '${query.replace(/'/g, "\\'")}'`;
-      }
+        const media = {
+          mimeType,
+          body: content,
+        };
 
-      const response = await drive.files.list({
-        q: searchQuery,
-        pageSize: maxResults,
-        fields: "files(id, name, mimeType, modifiedTime, owners, shared, webViewLink)",
-        orderBy: "modifiedTime desc",
-      });
+        const response = await drive.files.create({
+          requestBody: fileMetadata,
+          media,
+          fields: "id, name, webViewLink",
+        });
 
-      const files = response.data.files || [];
-      
-      if (files.length === 0) {
+        // Invalidate cache
+        await cacheManager.invalidate('resources:*');
+        await cacheManager.invalidate('search:*');
+        
+        performanceMonitor.track('createFile', Date.now() - startTime);
+        logger.info('File created', { fileId: response.data.id, name });
+
         return {
           content: [{
             type: "text",
-            text: `No files found for query: "${query}"\nSearch query used: ${searchQuery}`,
+            text: `File created successfully!\nID: ${response.data.id}\nName: ${response.data.name}\nLink: ${response.data.webViewLink}`,
           }],
-          isError: false,
         };
       }
 
-      const fileList = files.map((file, index) => {
-        const modified = file.modifiedTime ? new Date(file.modifiedTime).toLocaleDateString() : 'Unknown';
-        const owner = file.owners?.[0]?.displayName || 'Unknown';
-        const shared = file.shared ? ' (Shared)' : '';
-        return `${index + 1}. ${file.name}${shared}\n   Type: ${file.mimeType}\n   Modified: ${modified} by ${owner}\n   ID: ${file.id}`;
-      }).join('\n\n');
+      case "updateFile": {
+        const { fileId, content } = args;
+        
+        const media = {
+          mimeType: "text/plain",
+          body: content,
+        };
 
-      return {
-        content: [{
-          type: "text",
-          text: `Enhanced search found ${files.length} results for: "${query}"\n\n${fileList}`,
-        }],
-        isError: false,
-      };
-    } catch (error: any) {
-      return {
-        content: [{
-          type: "text",
-          text: `Error in enhanced search: ${error.message}`,
-        }],
-        isError: true,
-      };
-    }
-  } else if (request.params.name === "createDocument") {
-    try {
-      const { title, content } = request.params.arguments as { title: string; content?: string };
-      
-      const response = await docs.documents.create({
-        requestBody: {
-          title,
-        },
-      });
+        await drive.files.update({
+          fileId,
+          media,
+        });
 
-      const documentId = response.data.documentId!;
+        // Invalidate cache
+        await cacheManager.invalidate(`read:${fileId}`);
+        await cacheManager.invalidate(`resource:${fileId}`);
+        
+        performanceMonitor.track('updateFile', Date.now() - startTime);
+        logger.info('File updated', { fileId });
 
-      // Add content if provided
-      if (content) {
+        return {
+          content: [{
+            type: "text",
+            text: `File ${fileId} updated successfully!`,
+          }],
+        };
+      }
+
+      case "createFolder": {
+        const { name, parentId } = args;
+        
+        const fileMetadata: any = {
+          name,
+          mimeType: "application/vnd.google-apps.folder",
+        };
+        
+        if (parentId) {
+          fileMetadata.parents = [parentId];
+        }
+
+        const response = await drive.files.create({
+          requestBody: fileMetadata,
+          fields: "id, name, webViewLink",
+        });
+
+        // Invalidate cache
+        await cacheManager.invalidate('resources:*');
+        await cacheManager.invalidate('search:*');
+        
+        performanceMonitor.track('createFolder', Date.now() - startTime);
+        logger.info('Folder created', { folderId: response.data.id, name });
+
+        return {
+          content: [{
+            type: "text",
+            text: `Folder created successfully!\nID: ${response.data.id}\nName: ${response.data.name}\nLink: ${response.data.webViewLink}`,
+          }],
+        };
+      }
+
+      case "listSheets": {
+        const { spreadsheetId } = args;
+        
+        const response = await sheets.spreadsheets.get({
+          spreadsheetId,
+        });
+
+        const sheetList = response.data.sheets?.map((sheet) => ({
+          sheetId: sheet.properties?.sheetId,
+          title: sheet.properties?.title,
+          index: sheet.properties?.index,
+          rowCount: sheet.properties?.gridProperties?.rowCount,
+          columnCount: sheet.properties?.gridProperties?.columnCount,
+        })) || [];
+
+        performanceMonitor.track('listSheets', Date.now() - startTime);
+        
+        return {
+          content: [{
+            type: "text",
+            text: JSON.stringify(sheetList, null, 2),
+          }],
+        };
+      }
+
+      case "readSheet": {
+        const { spreadsheetId, range = "Sheet1" } = args;
+        
+        const cacheKey = `sheet:${spreadsheetId}:${range}`;
+        const cached = await cacheManager.get(cacheKey);
+        if (cached) {
+          performanceMonitor.track('readSheet', Date.now() - startTime);
+          return cached;
+        }
+
+        const response = await sheets.spreadsheets.values.get({
+          spreadsheetId,
+          range,
+        });
+
+        const result = {
+          content: [{
+            type: "text",
+            text: JSON.stringify({
+              range: response.data.range,
+              values: response.data.values || [],
+            }, null, 2),
+          }],
+        };
+
+        await cacheManager.set(cacheKey, result);
+        performanceMonitor.track('readSheet', Date.now() - startTime);
+        
+        return result;
+      }
+
+      case "updateCells": {
+        const { spreadsheetId, range, values } = args;
+        
+        await sheets.spreadsheets.values.update({
+          spreadsheetId,
+          range,
+          valueInputOption: "USER_ENTERED",
+          requestBody: {
+            values,
+          },
+        });
+
+        // Invalidate cache
+        await cacheManager.invalidate(`sheet:${spreadsheetId}:*`);
+        
+        performanceMonitor.track('updateCells', Date.now() - startTime);
+        logger.info('Cells updated', { spreadsheetId, range });
+
+        return {
+          content: [{
+            type: "text",
+            text: `Successfully updated ${values.length} rows in range ${range}`,
+          }],
+        };
+      }
+
+      case "appendRows": {
+        const { spreadsheetId, sheetName = "Sheet1", values } = args;
+        
+        await sheets.spreadsheets.values.append({
+          spreadsheetId,
+          range: sheetName,
+          valueInputOption: "USER_ENTERED",
+          insertDataOption: "INSERT_ROWS",
+          requestBody: {
+            values,
+          },
+        });
+
+        // Invalidate cache
+        await cacheManager.invalidate(`sheet:${spreadsheetId}:*`);
+        
+        performanceMonitor.track('appendRows', Date.now() - startTime);
+        logger.info('Rows appended', { spreadsheetId, sheetName, rowCount: values.length });
+
+        return {
+          content: [{
+            type: "text",
+            text: `Successfully appended ${values.length} rows to ${sheetName}`,
+          }],
+        };
+      }
+
+      case "createForm": {
+        const { title, description } = args;
+        
+        const createResponse = await forms.forms.create({
+          requestBody: {
+            info: {
+              title,
+              documentTitle: title,
+            },
+          },
+        });
+
+        const formId = createResponse.data.formId;
+
+        // If description is provided, update the form
+        if (description && formId) {
+          await forms.forms.batchUpdate({
+            formId,
+            requestBody: {
+              requests: [{
+                updateFormInfo: {
+                  info: {
+                    description,
+                  },
+                  updateMask: "description",
+                },
+              }],
+            },
+          });
+        }
+
+        performanceMonitor.track('createForm', Date.now() - startTime);
+        logger.info('Form created', { formId, title });
+
+        return {
+          content: [{
+            type: "text",
+            text: `Form created successfully!\nForm ID: ${formId}\nTitle: ${title}\nEdit URL: https://docs.google.com/forms/d/${formId}/edit\nResponse URL: https://docs.google.com/forms/d/${formId}/viewform`,
+          }],
+        };
+      }
+
+      case "getForm": {
+        const { formId } = args;
+        
+        const response = await forms.forms.get({
+          formId,
+        });
+
+        const formData = {
+          formId: response.data.formId,
+          title: response.data.info?.title,
+          description: response.data.info?.description,
+          publishedUrl: response.data.responderUri,
+          editUrl: `https://docs.google.com/forms/d/${formId}/edit`,
+          questions: response.data.items?.map((item, index) => ({
+            itemId: item.itemId,
+            index,
+            title: item.title,
+            description: item.description,
+            type: item.questionItem?.question ? Object.keys(item.questionItem.question)[0] : 'unknown',
+            required: item.questionItem?.required || false,
+          })) || [],
+        };
+
+        performanceMonitor.track('getForm', Date.now() - startTime);
+        
+        return {
+          content: [{
+            type: "text",
+            text: JSON.stringify(formData, null, 2),
+          }],
+        };
+      }
+
+      case "addQuestion": {
+        const { 
+          formId, 
+          title, 
+          type, 
+          required = false, 
+          options,
+          scaleMin = 1,
+          scaleMax = 5,
+          scaleMinLabel,
+          scaleMaxLabel,
+        } = args;
+        
+        let questionItem: any = {
+          required,
+          question: {},
+        };
+
+        // Build the question based on type
+        switch (type) {
+          case "TEXT":
+            questionItem.question.textQuestion = {
+              paragraph: false,
+            };
+            break;
+            
+          case "PARAGRAPH_TEXT":
+            questionItem.question.textQuestion = {
+              paragraph: true,
+            };
+            break;
+            
+          case "MULTIPLE_CHOICE":
+            if (!options || options.length === 0) {
+              throw new Error("Options required for multiple choice questions");
+            }
+            questionItem.question.choiceQuestion = {
+              type: "RADIO",
+              options: options.map((option: string) => ({ value: option })),
+            };
+            break;
+            
+          case "CHECKBOX":
+            if (!options || options.length === 0) {
+              throw new Error("Options required for checkbox questions");
+            }
+            questionItem.question.choiceQuestion = {
+              type: "CHECKBOX",
+              options: options.map((option: string) => ({ value: option })),
+            };
+            break;
+            
+          case "DROPDOWN":
+            if (!options || options.length === 0) {
+              throw new Error("Options required for dropdown questions");
+            }
+            questionItem.question.choiceQuestion = {
+              type: "DROP_DOWN",
+              options: options.map((option: string) => ({ value: option })),
+            };
+            break;
+            
+          case "LINEAR_SCALE":
+            questionItem.question.scaleQuestion = {
+              low: scaleMin,
+              high: scaleMax,
+              lowLabel: scaleMinLabel,
+              highLabel: scaleMaxLabel,
+            };
+            break;
+            
+          case "DATE":
+            questionItem.question.dateQuestion = {
+              includeTime: false,
+              includeYear: true,
+            };
+            break;
+            
+          case "TIME":
+            questionItem.question.timeQuestion = {
+              duration: false,
+            };
+            break;
+            
+          default:
+            throw new Error(`Unsupported question type: ${type}`);
+        }
+
+        const response = await forms.forms.batchUpdate({
+          formId,
+          requestBody: {
+            requests: [{
+              createItem: {
+                item: {
+                  title,
+                  questionItem,
+                },
+                location: {
+                  index: 0,
+                },
+              },
+            }],
+          },
+        });
+
+        performanceMonitor.track('addQuestion', Date.now() - startTime);
+        logger.info('Question added to form', { formId, type, title });
+
+        return {
+          content: [{
+            type: "text",
+            text: `Question added successfully to form ${formId}`,
+          }],
+        };
+      }
+
+      case "listResponses": {
+        const { formId } = args;
+        
+        const response = await forms.forms.responses.list({
+          formId,
+        });
+
+        const responses = response.data.responses?.map((resp) => ({
+          responseId: resp.responseId,
+          createTime: resp.createTime,
+          lastSubmittedTime: resp.lastSubmittedTime,
+          respondentEmail: resp.respondentEmail,
+          answers: resp.answers ? Object.entries(resp.answers).map(([questionId, answer]) => ({
+            questionId,
+            answer: answer.textAnswers?.answers?.[0]?.value || 
+                   answer.choiceAnswers?.answers?.map((a: any) => a.value).join(", ") ||
+                   "No answer",
+          })) : [],
+        })) || [];
+
+        performanceMonitor.track('listResponses', Date.now() - startTime);
+        
+        return {
+          content: [{
+            type: "text",
+            text: JSON.stringify({
+              formId,
+              totalResponses: responses.length,
+              responses,
+            }, null, 2),
+          }],
+        };
+      }
+
+      case "createDocument": {
+        const { title, content, parentId } = args;
+        
+        // Create the document
+        const createResponse = await docs.documents.create({
+          requestBody: {
+            title,
+          },
+        });
+
+        const documentId = createResponse.data.documentId;
+
+        // If content is provided, insert it
+        if (content && documentId) {
+          await docs.documents.batchUpdate({
+            documentId,
+            requestBody: {
+              requests: [{
+                insertText: {
+                  location: { index: 1 },
+                  text: content,
+                },
+              }],
+            },
+          });
+        }
+
+        // If parentId is provided, move the document
+        if (parentId && documentId) {
+          await drive.files.update({
+            fileId: documentId,
+            addParents: parentId,
+          });
+        }
+
+        performanceMonitor.track('createDocument', Date.now() - startTime);
+        logger.info('Document created', { documentId, title });
+
+        return {
+          content: [{
+            type: "text",
+            text: `Document created successfully!\nDocument ID: ${documentId}\nTitle: ${title}\nURL: https://docs.google.com/document/d/${documentId}/edit`,
+          }],
+        };
+      }
+
+      case "insertText": {
+        const { documentId, text, index = 1 } = args;
+        
         await docs.documents.batchUpdate({
           documentId,
           requestBody: {
             requests: [{
               insertText: {
-                location: { index: 1 },
-                text: content,
+                location: { index },
+                text,
               },
             }],
           },
         });
+
+        performanceMonitor.track('insertText', Date.now() - startTime);
+        logger.info('Text inserted', { documentId, textLength: text.length });
+
+        return {
+          content: [{
+            type: "text",
+            text: `Text inserted successfully at index ${index}`,
+          }],
+        };
       }
 
-      return {
-        content: [{
-          type: "text",
-          text: `Document created successfully: ${response.data.title} (ID: ${documentId})`,
-        }],
-      };
-    } catch (error: any) {
-      return {
-        content: [{
-          type: "text",
-          text: `Error creating document: ${error.message}`,
-        }],
-        isError: true,
-      };
-    }
-  } else if (request.params.name === "insertText") {
-    try {
-      const { documentId, text, location } = request.params.arguments as { 
-        documentId: string; 
-        text: string; 
-        location: number 
-      };
-      
-      await docs.documents.batchUpdate({
-        documentId,
-        requestBody: {
-          requests: [{
-            insertText: {
-              location: { index: location },
-              text,
-            },
-          }],
-        },
-      });
-
-      return {
-        content: [{
-          type: "text",
-          text: `Text inserted successfully at position ${location}`,
-        }],
-      };
-    } catch (error: any) {
-      return {
-        content: [{
-          type: "text",
-          text: `Error inserting text: ${error.message}`,
-        }],
-        isError: true,
-      };
-    }
-  } else if (request.params.name === "replaceText") {
-    try {
-      const { documentId, find, replace, matchCase } = request.params.arguments as { 
-        documentId: string; 
-        find: string; 
-        replace: string; 
-        matchCase?: boolean 
-      };
-      
-      await docs.documents.batchUpdate({
-        documentId,
-        requestBody: {
-          requests: [{
-            replaceAllText: {
-              containsText: {
-                text: find,
-                matchCase: matchCase || false,
+      case "replaceText": {
+        const { documentId, searchText, replaceText, matchCase = false } = args;
+        
+        await docs.documents.batchUpdate({
+          documentId,
+          requestBody: {
+            requests: [{
+              replaceAllText: {
+                containsText: {
+                  text: searchText,
+                  matchCase,
+                },
+                replaceText,
               },
-              replaceText: replace,
-            },
-          }],
-        },
-      });
+            }],
+          },
+        });
 
-      return {
-        content: [{
-          type: "text",
-          text: `Text replaced successfully: "${find}" → "${replace}"`,
-        }],
-      };
-    } catch (error: any) {
-      return {
-        content: [{
-          type: "text",
-          text: `Error replacing text: ${error.message}`,
-        }],
-        isError: true,
-      };
-    }
-  } else if (request.params.name === "applyTextStyle") {
-    try {
-      const { documentId, startIndex, endIndex, style } = request.params.arguments as { 
-        documentId: string; 
-        startIndex: number; 
-        endIndex: number; 
-        style: any 
-      };
-      
-      await docs.documents.batchUpdate({
-        documentId,
-        requestBody: {
-          requests: [{
-            updateTextStyle: {
-              range: {
-                startIndex,
-                endIndex,
-              },
-              textStyle: style,
-              fields: Object.keys(style).join(','),
-            },
-          }],
-        },
-      });
+        performanceMonitor.track('replaceText', Date.now() - startTime);
+        logger.info('Text replaced', { documentId, searchText, replaceText });
 
-      return {
-        content: [{
-          type: "text",
-          text: `Text style applied successfully to range ${startIndex}-${endIndex}`,
-        }],
-      };
-    } catch (error: any) {
-      return {
-        content: [{
-          type: "text",
-          text: `Error applying text style: ${error.message}`,
-        }],
-        isError: true,
-      };
-    }
-  } else if (request.params.name === "insertTable") {
-    try {
-      const { documentId, rows, columns, location } = request.params.arguments as { 
-        documentId: string; 
-        rows: number; 
-        columns: number; 
-        location: number 
-      };
-      
-      await docs.documents.batchUpdate({
-        documentId,
-        requestBody: {
-          requests: [{
-            insertTable: {
-              location: { index: location },
-              rows,
-              columns,
-            },
+        return {
+          content: [{
+            type: "text",
+            text: `All occurrences of "${searchText}" replaced with "${replaceText}"`,
           }],
-        },
-      });
+        };
+      }
 
-      return {
-        content: [{
-          type: "text",
-          text: `Table inserted successfully: ${rows}x${columns} at position ${location}`,
-        }],
-      };
-    } catch (error: any) {
-      return {
-        content: [{
-          type: "text",
-          text: `Error inserting table: ${error.message}`,
-        }],
-        isError: true,
-      };
-    }
-  } else if (request.params.name === "batchFileOperations") {
-    try {
-      const { operations } = request.params.arguments as { 
-        operations: Array<{
-          type: 'create' | 'update' | 'delete' | 'move';
-          fileId?: string;
-          name?: string;
-          content?: string;
-          mimeType?: string;
-          parentFolderId?: string;
-          newParentId?: string;
-        }>
-      };
-      
-      const results = [];
-      
-      for (const operation of operations) {
-        try {
-          let result;
-          
-          switch (operation.type) {
-            case 'create':
-              const createResponse = await drive.files.create({
-                requestBody: {
-                  name: operation.name,
-                  parents: operation.parentFolderId ? [operation.parentFolderId] : undefined,
-                  mimeType: operation.mimeType,
-                },
-                media: operation.content ? {
-                  mimeType: operation.mimeType || 'text/plain',
-                  body: operation.content,
-                } : undefined,
-              });
-              result = `Created: ${operation.name} (${createResponse.data.id})`;
-              break;
-              
-            case 'update':
-              await drive.files.update({
-                fileId: operation.fileId!,
-                requestBody: {
-                  name: operation.name,
-                },
-                media: operation.content ? {
-                  mimeType: operation.mimeType || 'text/plain',
-                  body: operation.content,
-                } : undefined,
-              });
-              result = `Updated: ${operation.name || operation.fileId}`;
-              break;
-              
-            case 'delete':
-              await drive.files.delete({
-                fileId: operation.fileId!,
-              });
-              result = `Deleted: ${operation.fileId}`;
-              break;
-              
-            case 'move':
-              const file = await drive.files.get({
-                fileId: operation.fileId!,
-                fields: 'parents',
-              });
-              
-              const previousParents = file.data.parents?.join(',');
-              
-              await drive.files.update({
-                fileId: operation.fileId!,
-                addParents: operation.newParentId,
-                removeParents: previousParents,
-                requestBody: {
-                  name: operation.name,
-                },
-              });
-              result = `Moved: ${operation.name || operation.fileId}`;
-              break;
-              
-            default:
-              result = `Unknown operation type: ${operation.type}`;
-          }
-          
-          results.push(result);
-        } catch (opError: any) {
-          results.push(`Error in ${operation.type} operation: ${opError.message}`);
+      case "applyTextStyle": {
+        const { 
+          documentId, 
+          startIndex, 
+          endIndex, 
+          bold, 
+          italic, 
+          underline, 
+          fontSize,
+          foregroundColor,
+        } = args;
+        
+        const textStyle: any = {};
+        
+        if (bold !== undefined) textStyle.bold = bold;
+        if (italic !== undefined) textStyle.italic = italic;
+        if (underline !== undefined) textStyle.underline = underline;
+        if (fontSize !== undefined) {
+          textStyle.fontSize = {
+            magnitude: fontSize,
+            unit: "PT",
+          };
         }
+        if (foregroundColor) {
+          textStyle.foregroundColor = {
+            color: {
+              rgbColor: foregroundColor,
+            },
+          };
+        }
+
+        await docs.documents.batchUpdate({
+          documentId,
+          requestBody: {
+            requests: [{
+              updateTextStyle: {
+                range: {
+                  startIndex,
+                  endIndex,
+                },
+                textStyle,
+                fields: Object.keys(textStyle).join(","),
+              },
+            }],
+          },
+        });
+
+        performanceMonitor.track('applyTextStyle', Date.now() - startTime);
+        logger.info('Text style applied', { documentId, startIndex, endIndex });
+
+        return {
+          content: [{
+            type: "text",
+            text: `Text style applied successfully from index ${startIndex} to ${endIndex}`,
+          }],
+        };
       }
 
-      return {
-        content: [{
-          type: "text",
-          text: `Batch operations completed:\n${results.join('\n')}`,
-        }],
-      };
-    } catch (error: any) {
-      return {
-        content: [{
-          type: "text",
-          text: `Error in batch operations: ${error.message}`,
-        }],
-        isError: true,
-      };
-    }
-  }
+      case "insertTable": {
+        const { documentId, rows, columns, index = 1 } = args;
+        
+        await docs.documents.batchUpdate({
+          documentId,
+          requestBody: {
+            requests: [{
+              insertTable: {
+                location: { index },
+                rows,
+                columns,
+              },
+            }],
+          },
+        });
 
-  throw new Error("Tool not found");
+        performanceMonitor.track('insertTable', Date.now() - startTime);
+        logger.info('Table inserted', { documentId, rows, columns });
+
+        return {
+          content: [{
+            type: "text",
+            text: `Table with ${rows} rows and ${columns} columns inserted at index ${index}`,
+          }],
+        };
+      }
+
+      case "batchFileOperations": {
+        const { operations } = args;
+        const results = [];
+        const errors = [];
+
+        for (const op of operations) {
+          try {
+            switch (op.type) {
+              case "create": {
+                const fileMetadata: any = {
+                  name: op.name,
+                  mimeType: op.mimeType || "text/plain",
+                };
+                
+                if (op.parentId) {
+                  fileMetadata.parents = [op.parentId];
+                }
+
+                const response = await drive.files.create({
+                  requestBody: fileMetadata,
+                  media: {
+                    mimeType: op.mimeType || "text/plain",
+                    body: op.content,
+                  },
+                  fields: "id, name",
+                });
+
+                results.push({
+                  type: "create",
+                  success: true,
+                  fileId: response.data.id,
+                  name: response.data.name,
+                });
+                break;
+              }
+
+              case "update": {
+                await drive.files.update({
+                  fileId: op.fileId,
+                  requestBody: op.name ? { name: op.name } : undefined,
+                  media: op.content ? {
+                    mimeType: "text/plain",
+                    body: op.content,
+                  } : undefined,
+                });
+
+                results.push({
+                  type: "update",
+                  success: true,
+                  fileId: op.fileId,
+                });
+                break;
+              }
+
+              case "delete": {
+                await drive.files.delete({
+                  fileId: op.fileId,
+                });
+
+                results.push({
+                  type: "delete",
+                  success: true,
+                  fileId: op.fileId,
+                });
+                break;
+              }
+
+              case "move": {
+                // Get current parents
+                const file = await drive.files.get({
+                  fileId: op.fileId,
+                  fields: "parents",
+                });
+
+                const previousParents = file.data.parents?.join(",") || "";
+
+                await drive.files.update({
+                  fileId: op.fileId,
+                  addParents: op.parentId,
+                  removeParents: previousParents,
+                });
+
+                results.push({
+                  type: "move",
+                  success: true,
+                  fileId: op.fileId,
+                  newParentId: op.parentId,
+                });
+                break;
+              }
+
+              default:
+                errors.push({
+                  operation: op,
+                  error: `Unknown operation type: ${op.type}`,
+                });
+            }
+          } catch (error: any) {
+            errors.push({
+              operation: op,
+              error: error.message,
+            });
+          }
+        }
+
+        // Invalidate cache
+        await cacheManager.invalidate('resources:*');
+        await cacheManager.invalidate('search:*');
+        
+        performanceMonitor.track('batchFileOperations', Date.now() - startTime);
+        logger.info('Batch operations completed', { 
+          total: operations.length, 
+          successful: results.length, 
+          failed: errors.length 
+        });
+
+        return {
+          content: [{
+            type: "text",
+            text: JSON.stringify({
+              summary: {
+                total: operations.length,
+                successful: results.length,
+                failed: errors.length,
+              },
+              results,
+              errors,
+            }, null, 2),
+          }],
+        };
+      }
+
+      default:
+        throw new Error(`Unknown tool: ${name}`);
+    }
+  } catch (error) {
+    performanceMonitor.track(request.params.name, Date.now() - startTime, true);
+    logger.error('Tool execution failed', { 
+      tool: request.params.name, 
+      error: error instanceof Error ? error.message : 'Unknown error' 
+    });
+    throw error;
+  }
 });
 
+// OAuth key path handling
+const oauthPath = process.env.GDRIVE_OAUTH_PATH || path.join(
+  path.dirname(new URL(import.meta.url).pathname),
+  "../credentials/gcp-oauth.keys.json",
+);
+
+// Credentials path handling
 const credentialsPath = process.env.GDRIVE_CREDENTIALS_PATH || path.join(
   path.dirname(new URL(import.meta.url).pathname),
   "../credentials/.gdrive-server-credentials.json",
@@ -1903,11 +1972,16 @@ const credentialsPath = process.env.GDRIVE_CREDENTIALS_PATH || path.join(
 
 async function authenticateAndSaveCredentials() {
   logger.info("Launching auth flow…");
+  
+  // Ensure encryption key is set for token storage
+  if (!process.env.GDRIVE_TOKEN_ENCRYPTION_KEY) {
+    console.error("GDRIVE_TOKEN_ENCRYPTION_KEY environment variable is required for secure token storage.");
+    console.error("Generate a key with: openssl rand -base64 32");
+    process.exit(1);
+  }
+  
   const auth = await authenticate({
-    keyfilePath: process.env.GDRIVE_OAUTH_PATH || path.join(
-      path.dirname(new URL(import.meta.url).pathname),
-      "../credentials/gcp-oauth.keys.json",
-    ),
+    keyfilePath: oauthPath,
     scopes: [
       "https://www.googleapis.com/auth/drive",
       "https://www.googleapis.com/auth/spreadsheets",
@@ -1915,35 +1989,96 @@ async function authenticateAndSaveCredentials() {
       "https://www.googleapis.com/auth/forms"
     ],
   });
-  fs.writeFileSync(credentialsPath, JSON.stringify(auth.credentials));
-  logger.info(`Credentials saved to: ${credentialsPath}`);
+  
+  // Initialize token manager and save credentials
+  tokenManager = TokenManager.getInstance(logger);
+  
+  const tokenData = {
+    access_token: auth.credentials.access_token!,
+    refresh_token: auth.credentials.refresh_token!,
+    expiry_date: auth.credentials.expiry_date!,
+    token_type: auth.credentials.token_type!,
+    scope: auth.credentials.scope!,
+  };
+  
+  await tokenManager.saveTokens(tokenData);
+  
+  logger.info("Credentials saved securely with encryption.");
   logger.info("You can now run the server.");
-  process.exit(0); // Exit cleanly after saving credentials
+  process.exit(0);
 }
 
 async function loadCredentialsAndRunServer() {
-  if (!fs.existsSync(credentialsPath)) {
-    console.error(
-      "Credentials not found. Please run with 'auth' argument first.",
-    );
+  try {
+    // Ensure encryption key is set
+    if (!process.env.GDRIVE_TOKEN_ENCRYPTION_KEY) {
+      console.error("GDRIVE_TOKEN_ENCRYPTION_KEY environment variable is required.");
+      console.error("Generate a key with: openssl rand -base64 32");
+      process.exit(1);
+    }
+    
+    // Load OAuth keys
+    if (!fs.existsSync(oauthPath)) {
+      console.error(`OAuth keys not found at: ${oauthPath}`);
+      console.error("Please ensure gcp-oauth.keys.json is present.");
+      process.exit(1);
+    }
+    
+    const keysContent = fs.readFileSync(oauthPath, "utf-8");
+    const keys = JSON.parse(keysContent);
+    const oauthKeys = keys.web || keys.installed;
+    
+    if (!oauthKeys) {
+      console.error("Invalid OAuth keys format. Expected 'web' or 'installed' configuration.");
+      process.exit(1);
+    }
+    
+    // Initialize managers
+    tokenManager = TokenManager.getInstance(logger);
+    authManager = AuthManager.getInstance(oauthKeys, logger);
+    
+    // Initialize authentication
+    await authManager.initialize();
+    
+    // Check authentication state
+    if (authManager.getState() === AuthState.UNAUTHENTICATED) {
+      console.error("Authentication required. Please run with 'auth' argument first.");
+      process.exit(1);
+    }
+    
+    // Set up Google API authentication
+    const oauth2Client = authManager.getOAuth2Client();
+    google.options({ auth: oauth2Client });
+    
+    logger.info("Authentication initialized with automatic token refresh.");
+    
+    // Connect to Redis cache
+    await cacheManager.connect();
+    
+    // Start MCP server
+    const transport = new StdioServerTransport();
+    await server.connect(transport);
+    
+    logger.info("MCP server started successfully.");
+  } catch (error) {
+    logger.error("Failed to start server", { error });
+    console.error("Failed to start server:", error);
     process.exit(1);
   }
-
-  const credentials = JSON.parse(fs.readFileSync(credentialsPath, "utf-8"));
-  const auth = new google.auth.OAuth2();
-  auth.setCredentials(credentials);
-  google.options({ auth });
-
-  logger.info("Credentials loaded. Starting server.");
-  
-  // Connect to Redis cache
-  await cacheManager.connect();
-  
-  const transport = new StdioServerTransport();
-  await server.connect(transport);
 }
 
-if (process.argv[2] === "auth") {
+// Add health check endpoint handler
+if (process.argv[2] === "health") {
+  performHealthCheck()
+    .then((result) => {
+      console.log(JSON.stringify(result, null, 2));
+      process.exit(result.status === HealthStatus.HEALTHY ? 0 : 1);
+    })
+    .catch((error) => {
+      console.error("Health check failed:", error);
+      process.exit(2);
+    });
+} else if (process.argv[2] === "auth") {
   authenticateAndSaveCredentials().catch(console.error);
 } else {
   loadCredentialsAndRunServer().catch(console.error);

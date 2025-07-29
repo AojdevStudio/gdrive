@@ -25,17 +25,22 @@ RUN sed -i 's/opn(authorizeUrl, { wait: false }).then(cp => cp.unref());/process
 # Build TypeScript now that source files are available
 RUN npm run build
 
+# Create necessary directories
+RUN mkdir -p /credentials /app/logs
+
 # Create volume for credentials
 VOLUME ["/credentials"]
 
 # Environment variables
 ENV GDRIVE_CREDENTIALS_PATH=/credentials/.gdrive-server-credentials.json
 ENV GDRIVE_OAUTH_PATH=/credentials/gcp-oauth.keys.json
+ENV GDRIVE_TOKEN_STORAGE_PATH=/credentials/.gdrive-mcp-tokens.json
+ENV GDRIVE_TOKEN_AUDIT_LOG_PATH=/app/logs/gdrive-mcp-audit.log
 ENV NODE_ENV=production
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-  CMD node -e "console.log('healthy')" || exit 1
+# Health check - using the built-in health check functionality
+HEALTHCHECK --interval=5m --timeout=10s --start-period=30s --retries=3 \
+  CMD node dist/index.js health || exit 1
 
 # Run the MCP server
 CMD ["node", "dist/index.js"]

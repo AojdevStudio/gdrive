@@ -16,7 +16,14 @@
   "scripts": {
     "build": "tsc && shx chmod +x dist/*.js",
     "prepare": "npm run build",
-    "watch": "tsc --watch"
+    "watch": "tsc --watch",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage",
+    "test:integration": "jest --testMatch='**/__tests__/integration/**/*.test.ts'",
+    "test:e2e": "jest --testMatch='**/tests/e2e/**/*.test.ts'",
+    "lint": "eslint . --ext .ts",
+    "type-check": "tsc --noEmit"
   },
   "dependencies": {
     "@google-cloud/local-auth": "^3.0.1",
@@ -27,6 +34,10 @@
   },
   "devDependencies": {
     "@types/node": "^22",
+    "@types/jest": "^29.5.12",
+    "@jest/globals": "^29.7.0",
+    "jest": "^29.7.0",
+    "ts-jest": "^29.1.2",
     "shx": "^0.3.4",
     "typescript": "^5.6.2"
   }
