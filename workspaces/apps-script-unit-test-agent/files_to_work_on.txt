@@ -1,0 +1,2 @@
+tests/apps-script.test.ts - Create new test file
+package.json - Verify Jest configuration

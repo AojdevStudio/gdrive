@@ -1,0 +1,16 @@
+[ ] Apps Script API client imported (const script = google.script('v1'))
+[ ] getAppScript tool added to tools list
+[ ] Tool schema includes scriptId parameter
+[ ] Tool handler implemented in CallToolRequestSchema
+[ ] OAuth client passed to API calls
+[ ] API call to retrieve script content works
+[ ] Response parsing implemented correctly
+[ ] Error handling for invalid script ID (404)
+[ ] Error handling for permission denied (403)
+[ ] Error handling for rate limiting (429)
+[ ] Error handling for network errors
+[ ] Response format matches type definitions
+[ ] Performance monitoring added (PerformanceMonitor.startTimer)
+[ ] Logging added for debugging
+[ ] npm run build completes successfully
+[ ] No TypeScript errors

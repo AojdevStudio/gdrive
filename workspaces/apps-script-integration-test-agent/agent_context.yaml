@@ -1,0 +1,47 @@
+agent_id: apps-script-integration-test-agent
+task_id: apps-script-viewing-integration-tests
+agent_role: Integration Testing Specialist
+task_title: Create Integration Tests for Apps Script API
+priority: high
+estimated_time: 30 minutes
+dependencies: [apps-script-core-agent]
+
+task_description: |
+  Create integration tests that verify the Apps Script feature works
+  correctly with the Google APIs and authentication flow.
+
+acceptance_criteria:
+  - tests/integration/apps-script-api.test.ts created
+  - OAuth flow with new scope tested
+  - API interactions verified
+  - Rate limiting tested
+  - All tests pass reliably
+
+test_scenarios:
+  - OAuth authentication includes new scope
+  - API client initialization works
+  - Real API call simulation with mocks
+  - Rate limiting behavior verified
+  - Error propagation tested end-to-end
+
+technical_context:
+  test_location: "tests/integration/"
+  mock_strategy: "Mock HTTP responses, not client"
+  focus_areas:
+    - Authentication flow
+    - API client setup
+    - Request/response cycle
+    - Error handling chain
+
+implementation_notes:
+  - Test closer to real implementation
+  - Mock at HTTP level if needed
+  - Verify complete flow
+  - Test timeout scenarios
+
+validation_steps:
+  - Integration tests pass
+  - OAuth flow verified
+  - API calls properly mocked
+  - Error handling tested
+  - No external API calls made

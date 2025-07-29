@@ -1,0 +1,46 @@
+agent_id: apps-script-types-agent
+task_id: apps-script-viewing-types
+agent_role: TypeScript Type Definition Specialist
+task_title: Create Apps Script Type Definitions
+priority: high
+estimated_time: 20 minutes
+dependencies: []
+
+task_description: |
+  Create TypeScript interfaces and type definitions for Google Apps Script API responses.
+  These types will ensure type safety throughout the implementation.
+
+acceptance_criteria:
+  - AppsScriptFile interface created with proper fields
+  - AppsScriptContent interface created for API responses
+  - Error type definitions for Apps Script specific errors
+  - Types properly exported and importable
+
+technical_context:
+  api_reference: "https://developers.google.com/apps-script/api/reference/rest/v1/projects.files"
+  file_types: ["SERVER_JS", "HTML", "JSON"]
+  response_structure: |
+    {
+      "scriptId": "string",
+      "files": [
+        {
+          "name": "string",
+          "type": "SERVER_JS|HTML|JSON",
+          "source": "string",
+          "functionSet": {},
+          "lastModifyUser": {}
+        }
+      ]
+    }
+
+implementation_notes:
+  - Check if types.ts exists, otherwise add to index.ts
+  - Follow existing type definition patterns
+  - Include optional fields appropriately
+  - Consider error response types
+
+validation_steps:
+  - TypeScript compilation succeeds
+  - No type errors in implementation
+  - Types match actual API responses
+  - Proper intellisense in IDE

@@ -1,0 +1,59 @@
+agent_id: apps-script-documentation-agent
+task_id: apps-script-viewing-documentation
+agent_role: Documentation & PR Specialist
+task_title: Update Documentation and Prepare PR
+priority: medium
+estimated_time: 30 minutes
+dependencies: [all-previous-agents]
+
+task_description: |
+  Update all documentation to reflect the new Apps Script viewing capability.
+  Prepare comprehensive PR documentation for the feature.
+
+acceptance_criteria:
+  - README.md updated with tool documentation
+  - Usage examples provided
+  - OAuth scope requirement documented
+  - Inline code comments added
+  - PR description template filled
+
+documentation_sections:
+  readme_updates:
+    - Add to tools list
+    - Include getAppScript description
+    - Add usage example
+    - Document OAuth scope requirement
+    - Note re-authentication need
+  
+  code_comments:
+    - API integration explanation
+    - Error handling logic
+    - Cache strategy rationale
+    - Performance considerations
+
+pr_template:
+  title: "feat: add Google Apps Script viewing capability"
+  description: |
+    Add read-only Apps Script code viewing to gdrive MCP server
+    
+    Fixes #[issue-number]
+    
+    ## Changes
+    - Added OAuth scope for Apps Script read-only access
+    - Implemented gdrive:getAppScript tool
+    - Added comprehensive error handling
+    - Integrated Redis caching
+    - Created unit and integration tests
+    - Updated documentation
+    
+    ## Testing
+    - Unit tests: 80% coverage
+    - Integration tests pass
+    - Manual testing completed
+
+validation_steps:
+  - README clearly documents feature
+  - Examples are accurate
+  - Comments explain complex logic
+  - PR template complete
+  - All links work

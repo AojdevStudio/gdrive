@@ -1,0 +1,35 @@
+agent_id: apps-script-oauth-agent
+task_id: apps-script-viewing-oauth
+agent_role: OAuth & Authentication Specialist
+task_title: Add Apps Script OAuth Scope to Authentication Flow
+priority: high
+estimated_time: 30 minutes
+dependencies: []
+
+task_description: |
+  Update the OAuth authentication flow to include the Google Apps Script read-only scope.
+  This enables the gdrive MCP server to access Apps Script project content.
+
+acceptance_criteria:
+  - OAuth scope 'https://www.googleapis.com/auth/script.projects.readonly' added to SCOPES array
+  - Authentication flow tested and working with new scope
+  - No breaking changes to existing OAuth functionality
+  - Clear documentation of re-authentication requirements
+
+technical_context:
+  oauth_scope: "https://www.googleapis.com/auth/script.projects.readonly"
+  current_scopes_location: "index.ts line 1911-1916"
+  auth_function: "authenticate() at line 1906"
+  credentials_file: ".gdrive-server-credentials.json"
+
+implementation_notes:
+  - Add scope to the scopes array in authenticate() function
+  - Test full authentication flow
+  - Document that users will need to re-authenticate
+  - Verify scope doesn't conflict with existing permissions
+
+validation_steps:
+  - Run authentication with 'node dist/index.js auth'
+  - Verify new scope appears in OAuth consent screen
+  - Confirm credentials file contains new scope
+  - Test existing Drive/Sheets/Docs functionality still works

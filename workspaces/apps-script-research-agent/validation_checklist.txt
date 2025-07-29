@@ -1,0 +1,12 @@
+[ ] API endpoint documentation complete
+[ ] Authentication flow documented
+[ ] All error codes listed with meanings
+[ ] Error handling strategies defined
+[ ] Rate limiting guidelines documented
+[ ] Example API requests created
+[ ] Example API responses documented
+[ ] Container-bound script considerations noted
+[ ] Standalone script considerations noted
+[ ] Performance best practices documented
+[ ] Cache strategy recommendations provided
+[ ] Integration pattern examples created

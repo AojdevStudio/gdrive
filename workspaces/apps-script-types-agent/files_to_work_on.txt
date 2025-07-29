@@ -1,0 +1,2 @@
+types.ts - Create new file with Apps Script type definitions (if doesn't exist)
+index.ts - Add type definitions if types.ts doesn't exist

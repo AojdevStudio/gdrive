@@ -1,0 +1,1 @@
+index.ts - Add OAuth scope to authentication function (lines 1911-1916)

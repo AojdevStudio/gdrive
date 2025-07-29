@@ -1,0 +1,43 @@
+agent_id: apps-script-cache-agent
+task_id: apps-script-viewing-cache
+agent_role: Cache Integration Specialist
+task_title: Add Redis Caching for Apps Script Reads
+priority: medium
+estimated_time: 30 minutes
+dependencies: [apps-script-types-agent]
+
+task_description: |
+  Integrate Redis caching for Apps Script content to improve performance
+  and reduce API calls within rate limits.
+
+acceptance_criteria:
+  - Cache key strategy defined for scripts
+  - Cache integration in getAppScript handler
+  - Proper TTL configuration
+  - Cache hit/miss logging
+  - Graceful fallback when Redis unavailable
+
+technical_context:
+  cache_manager: "CacheManager class already exists"
+  ttl: "300 seconds (5 minutes)"
+  key_pattern: "apps-script:{scriptId}"
+  
+implementation_requirements:
+  - Design cache key format
+  - Add cache check before API call
+  - Cache successful responses
+  - Handle cache misses gracefully
+  - Add performance metrics
+
+cache_considerations:
+  - Script content rarely changes
+  - 5 minute TTL reasonable
+  - Key should include script ID
+  - Store entire response object
+  - Log cache hit/miss rates
+
+validation_steps:
+  - Cache hit on second request
+  - Performance improvement measured
+  - Fallback works without Redis
+  - Cache metrics logged properly

@@ -1,0 +1,3 @@
+index.ts - Add Apps Script API import
+index.ts - Add getAppScript tool to tools list (ListToolsRequestSchema handler)
+index.ts - Implement getAppScript handler in CallToolRequestSchema handler

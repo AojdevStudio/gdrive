@@ -1,0 +1,16 @@
+[ ] tests/integration/ directory exists
+[ ] apps-script-api.test.ts file created
+[ ] Test setup with proper imports
+[ ] OAuth scope integration tested
+[ ] API client initialization tested
+[ ] Mock HTTP responses configured
+[ ] Test API call with valid script ID
+[ ] Test API call with invalid script ID
+[ ] Test rate limiting scenario
+[ ] Test timeout handling
+[ ] Test complete error propagation
+[ ] Verify no real API calls made
+[ ] All tests have descriptive names
+[ ] npm run test:integration passes
+[ ] Tests run in reasonable time
+[ ] No test interdependencies

@@ -1,0 +1,16 @@
+[ ] README.md tools section updated
+[ ] getAppScript tool documented with parameters
+[ ] Usage example added to README
+[ ] OAuth scope requirement clearly stated
+[ ] Re-authentication instructions provided
+[ ] Code comments explain API integration
+[ ] Error handling logic documented
+[ ] Cache strategy explained in comments
+[ ] Performance considerations noted
+[ ] CLAUDE.md updated if needed
+[ ] PR description template created
+[ ] All changes summarized in PR
+[ ] Testing section complete in PR
+[ ] Issue linking included (Fixes #XXX)
+[ ] No spelling or grammar errors
+[ ] All code examples tested

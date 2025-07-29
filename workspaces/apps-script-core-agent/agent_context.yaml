@@ -1,0 +1,45 @@
+agent_id: apps-script-core-agent
+task_id: apps-script-viewing-core
+agent_role: Core Implementation Specialist
+task_title: Implement getAppScript Tool
+priority: critical
+estimated_time: 1.5 hours
+dependencies: [apps-script-oauth-agent, apps-script-types-agent, apps-script-research-agent]
+
+task_description: |
+  Implement the core getAppScript tool that retrieves Google Apps Script code.
+  This is the main functionality that enables viewing Apps Script projects.
+
+acceptance_criteria:
+  - getAppScript tool added to server tools list
+  - Tool successfully retrieves script content by ID
+  - Comprehensive error handling implemented
+  - Response properly formatted
+  - Performance within API quotas
+
+technical_context:
+  tool_name: "gdrive:getAppScript"
+  api_client: "google.script('v1')"
+  main_endpoint: "script.projects.get"
+  content_endpoint: "script.projects.getContent"
+  
+implementation_requirements:
+  - Import Apps Script API client
+  - Add tool definition with proper schema
+  - Implement handler with OAuth client
+  - Parse and format API response
+  - Handle all error scenarios
+
+error_scenarios:
+  - Invalid script ID (404)
+  - No permission (403)
+  - Rate limit exceeded (429)
+  - Network/timeout errors
+  - Malformed responses
+
+validation_steps:
+  - Tool appears in MCP tools list
+  - Successfully retrieves test script
+  - Error handling works for all scenarios
+  - Response format matches types
+  - Performance acceptable

@@ -1,0 +1,3 @@
+index.ts - Integrate caching in getAppScript handler
+index.ts - Add cache key generation logic
+index.ts - Add cache metrics logging

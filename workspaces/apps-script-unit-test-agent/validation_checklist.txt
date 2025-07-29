@@ -1,0 +1,16 @@
+[ ] tests/apps-script.test.ts file created
+[ ] Test imports and setup complete
+[ ] Mock googleapis Apps Script client
+[ ] Test successful script retrieval
+[ ] Test script with multiple files
+[ ] Test different file types (SERVER_JS, HTML, JSON)
+[ ] Test invalid script ID error (404)
+[ ] Test permission denied error (403)
+[ ] Test rate limit error (429)
+[ ] Test network timeout error
+[ ] Test malformed response handling
+[ ] Test response formatting
+[ ] All tests have clear descriptions
+[ ] npm run test passes
+[ ] Coverage report shows ≥80% coverage
+[ ] No console warnings in tests

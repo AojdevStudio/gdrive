@@ -1,0 +1,2 @@
+tests/integration/apps-script-api.test.ts - Create integration test file
+tests/integration/ - Create directory if needed

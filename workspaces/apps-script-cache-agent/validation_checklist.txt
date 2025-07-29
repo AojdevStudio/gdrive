@@ -1,0 +1,12 @@
+[ ] Cache key format defined (apps-script:{scriptId})
+[ ] Cache check added before API call
+[ ] Successful responses cached with TTL
+[ ] Cache hit returns cached data
+[ ] Cache miss falls back to API
+[ ] Performance timer includes cache lookup
+[ ] Cache hit/miss logged appropriately
+[ ] Works without Redis (graceful degradation)
+[ ] No errors when Redis unavailable
+[ ] Cache invalidation strategy documented
+[ ] Performance improvement verified
+[ ] Integration doesn't break core functionality

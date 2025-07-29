@@ -1,0 +1,33 @@
+# Apps Script Viewing Feature - Orchestration Tasks
+
+## Phase 1: Initial Setup & Analysis (Parallel - 30 min)
+- [ ] Execute OAuth Agent - Add Apps Script OAuth scope
+- [ ] Execute Types Agent - Create TypeScript interfaces  
+- [ ] Execute Research Agent - Document API requirements
+- [ ] Verify all Phase 1 agents complete
+- [ ] Merge Phase 1 agent work to main
+
+## Phase 2: Core Implementation (Parallel - 1.5 hours)
+- [ ] Execute Core Agent - Implement getAppScript tool
+- [ ] Execute Cache Agent - Add Redis caching
+- [ ] Verify core functionality works
+- [ ] Merge Phase 2 agent work to main
+
+## Phase 3: Testing (Parallel - 1 hour)
+- [ ] Execute Unit Test Agent - Create unit tests
+- [ ] Execute Integration Test Agent - Create integration tests
+- [ ] Verify 80% test coverage achieved
+- [ ] All tests passing
+- [ ] Merge Phase 3 agent work to main
+
+## Phase 4: Documentation (Sequential - 30 min)
+- [ ] Execute Documentation Agent - Update all docs
+- [ ] Create PR with complete description
+- [ ] Final review and validation
+- [ ] Merge to main branch
+
+## Post-Orchestration
+- [ ] Clean up all agent worktrees
+- [ ] Remove agent branches
+- [ ] Update issue status
+- [ ] Document lessons learned

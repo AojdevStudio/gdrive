@@ -1,0 +1,48 @@
+agent_id: apps-script-unit-test-agent
+task_id: apps-script-viewing-unit-tests
+agent_role: Unit Testing Specialist
+task_title: Create Unit Tests for Apps Script Feature
+priority: high
+estimated_time: 30 minutes
+dependencies: [apps-script-core-agent]
+
+task_description: |
+  Create comprehensive unit tests for the Apps Script viewing functionality.
+  Achieve minimum 80% code coverage with Jest framework.
+
+acceptance_criteria:
+  - tests/apps-script.test.ts created
+  - All success scenarios tested
+  - All error scenarios tested
+  - 80% code coverage achieved
+  - Tests pass consistently
+
+test_scenarios:
+  success_cases:
+    - Valid script ID returns content
+    - Multiple files in script handled
+    - Different file types parsed correctly
+  
+  error_cases:
+    - Invalid script ID (404)
+    - No permission (403)
+    - Rate limit exceeded (429)
+    - Network timeout
+    - Malformed response
+
+technical_context:
+  test_framework: "Jest"
+  mock_strategy: "Mock googleapis calls"
+  coverage_target: "80%"
+  
+implementation_notes:
+  - Follow existing test patterns
+  - Mock API responses appropriately
+  - Test edge cases thoroughly
+  - Verify error messages
+
+validation_steps:
+  - All tests pass
+  - Coverage meets target
+  - No flaky tests
+  - Clear test descriptions

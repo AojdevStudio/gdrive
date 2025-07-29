@@ -1,0 +1,11 @@
+[ ] OAuth scope added to SCOPES array in authenticate() function
+[ ] Build completes successfully with npm run build
+[ ] Authentication flow tested with node dist/index.js auth
+[ ] New scope appears in OAuth consent screen
+[ ] Credentials file contains new scope after authentication
+[ ] Existing Drive API functionality still works
+[ ] Existing Sheets API functionality still works
+[ ] Existing Docs API functionality still works
+[ ] Existing Forms API functionality still works
+[ ] No TypeScript compilation errors
+[ ] Documentation updated about re-authentication requirement

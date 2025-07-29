@@ -1,0 +1,4 @@
+README.md - Update with new tool documentation
+index.ts - Add inline comments for new code
+CLAUDE.md - Update if needed
+pr-description.md - Create PR template content

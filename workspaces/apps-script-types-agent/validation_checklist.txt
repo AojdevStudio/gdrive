@@ -1,0 +1,10 @@
+[ ] AppsScriptFile interface created with name, type, and source fields
+[ ] AppsScriptContent interface created with scriptId and files array
+[ ] FileType enum or union type for SERVER_JS, HTML, JSON
+[ ] Error type definitions for Apps Script API errors
+[ ] Types exported properly (if in separate file)
+[ ] No TypeScript compilation errors
+[ ] npm run build completes successfully
+[ ] Types match Google Apps Script API v1 documentation
+[ ] Optional fields marked with ? operator
+[ ] JSDoc comments added for clarity
