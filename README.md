@@ -4,7 +4,15 @@ A Model Context Protocol (MCP) server that provides comprehensive integration wi
 
 ## Features
 
-### Current Features (v0.6.2 - Phase 3)
+### Current Features (v0.6.3 - Phase 3+)
+- **Automatic OAuth Token Refresh** ✅ 🆕
+  - Eliminates manual re-authentication every hour
+  - Proactive token refresh 10 minutes before expiry
+  - Secure token persistence with AES-256-GCM encryption
+  - Comprehensive audit trail for all token operations
+  - Docker health checks for token status monitoring
+  - Graceful error handling with automatic retry logic
+
 - **Google Drive Integration**
   - List and search files/folders
   - Read file contents with automatic format conversion
@@ -215,7 +223,9 @@ The server provides access to Google Drive files:
     - Drawings → PNG
   - Other files are provided in their native format
 
-## Getting started
+## Getting Started
+
+### Prerequisites
 
 1. [Create a new Google Cloud project](https://console.cloud.google.com/projectcreate)
 2. Enable the following APIs in your Google Cloud project:
@@ -233,63 +243,161 @@ The server provides access to Google Drive files:
    - `https://www.googleapis.com/auth/script.projects.readonly`
 5. [Create an OAuth Client ID](https://console.cloud.google.com/apis/credentials/oauthclient) for application type "Desktop App"
 6. Download the JSON file of your client's OAuth keys
-7. Rename the key file to `gcp-oauth.keys.json` and place into the root of this repo (i.e. `servers/gcp-oauth.keys.json`)
+7. Rename the key file to `gcp-oauth.keys.json` and place into the credentials directory
 
-Make sure to build the server with either `npm run build` or `npm run watch`.
+### Setup
+
+1. Clone the repository and install dependencies:
+```bash
+npm install
+npm run build
+```
+
+2. Create a `.env` file based on `.env.example`:
+```bash
+# Generate a secure encryption key
+openssl rand -base64 32
+
+# Add the key to your .env file
+echo "GDRIVE_TOKEN_ENCRYPTION_KEY=<your-generated-key>" > .env
+```
 
 ### Authentication
 
-To authenticate and save credentials:
+With the new automatic token refresh feature, you only need to authenticate once:
 
-1. Run the server with the `auth` argument: `node ./dist auth`
-2. This will open an authentication flow in your system browser
-3. Complete the authentication process
-4. Credentials will be saved in the root of this repo (i.e. `servers/.gdrive-server-credentials.json`)
-
-### Usage with Desktop App
-
-To integrate this server with the desktop app, add the following to your app's server configuration:
-
-#### Docker
-
-Authentication:
-
-Assuming you have completed setting up the OAuth application on Google Cloud, you can now auth the server with the following command, replacing `/path/to/gcp-oauth.keys.json` with the path to your OAuth keys file:
-
+#### Local Development
 ```bash
-docker run -i --rm --mount type=bind,source=/path/to/gcp-oauth.keys.json,target=/gcp-oauth.keys.json -v mcp-gdrive:/gdrive-server -e GDRIVE_OAUTH_PATH=/gcp-oauth.keys.json -e "GDRIVE_CREDENTIALS_PATH=/gdrive-server/credentials.json" -p 3000:3000 mcp/gdrive auth
+# Set encryption key
+export GDRIVE_TOKEN_ENCRYPTION_KEY="your-base64-key"
+
+# Run initial authentication
+node ./dist/index.js auth
+
+# The server will now automatically refresh tokens as needed
+node ./dist/index.js
 ```
 
-The command will print the URL to open in your browser. Open this URL in your browser and complete the authentication process. The credentials will be saved in the `mcp-gdrive` volume.
+#### Docker
+```bash
+# Create credentials directory
+mkdir -p credentials
 
-Once authenticated, you can use the server in your app's server configuration:
+# Copy your OAuth keys
+cp /path/to/gcp-oauth.keys.json credentials/
 
+# Set encryption key in .env
+echo "GDRIVE_TOKEN_ENCRYPTION_KEY=$(openssl rand -base64 32)" > .env
+
+# Run authentication
+docker-compose run --rm gdrive-mcp-auth node dist/index.js auth
+
+# Start the server (tokens will auto-refresh)
+docker-compose up -d
+```
+
+### Health Monitoring
+
+The server includes health checks for monitoring token status:
+
+```bash
+# Check health status
+node ./dist/index.js health
+
+# With Docker
+docker-compose exec gdrive-mcp node dist/index.js health
+```
+
+Health states:
+- **HEALTHY**: Token valid and refresh capability available
+- **DEGRADED**: Token expiring soon but refresh in progress
+- **UNHEALTHY**: Token expired or no refresh capability
+
+### Usage with Claude Desktop
+
+Add the following to your Claude Desktop configuration:
+
+#### Local Installation
+```json
+{
+  "mcpServers": {
+    "gdrive": {
+      "command": "node",
+      "args": ["/path/to/gdrive-mcp/dist/index.js"],
+      "env": {
+        "GDRIVE_TOKEN_ENCRYPTION_KEY": "your-base64-key"
+      }
+    }
+  }
+}
+```
+
+#### Docker
 ```json
 {
   "mcpServers": {
     "gdrive": {
       "command": "docker",
-      "args": ["run", "-i", "--rm", "-v", "mcp-gdrive:/gdrive-server", "-e", "GDRIVE_CREDENTIALS_PATH=/gdrive-server/credentials.json", "mcp/gdrive"]
-    }
-  }
-}
-```
-
-#### NPX
-
-```json
-{
-  "mcpServers": {
-    "gdrive": {
-      "command": "npx",
       "args": [
-        "-y",
-        "@modelcontextprotocol/server-gdrive"
+        "run", "-i", "--rm",
+        "--env-file", "/path/to/.env",
+        "-v", "gdrive-credentials:/credentials:ro",
+        "gdrive-mcp-server"
       ]
     }
   }
 }
 ```
+
+## Security Features
+
+### Token Encryption
+- All tokens are encrypted at rest using AES-256-GCM
+- Encryption keys are stored separately from encrypted data
+- File permissions are set to 0600 (owner read/write only)
+
+### Audit Trail
+All token operations are logged for security forensics:
+- TOKEN_ACQUIRED - Initial authentication
+- TOKEN_REFRESHED - Successful refresh
+- TOKEN_REFRESH_FAILED - Failed refresh attempts
+- TOKEN_DELETED_INVALID_GRANT - Invalid token cleanup
+- TOKEN_ENCRYPTED/DECRYPTED - Encryption operations
+
+### Error Handling
+- Invalid grant errors trigger immediate token deletion
+- Automatic retry with exponential backoff for temporary failures
+- Clear user guidance for re-authentication when needed
+
+## Configuration
+
+See `.env.example` for all available configuration options:
+
+- `GDRIVE_TOKEN_ENCRYPTION_KEY` - **Required**: 32-byte base64 encryption key
+- `GDRIVE_TOKEN_REFRESH_INTERVAL` - Token check interval (default: 30 minutes)
+- `GDRIVE_TOKEN_PREEMPTIVE_REFRESH` - Refresh buffer time (default: 10 minutes)
+- `GDRIVE_TOKEN_MAX_RETRIES` - Max refresh retry attempts (default: 3)
+- `LOG_LEVEL` - Logging verbosity (error, warn, info, debug)
+- `REDIS_URL` - Redis connection URL for caching
+
+## Troubleshooting
+
+### Token Refresh Issues
+1. Check health status: `node dist/index.js health`
+2. Verify encryption key is set correctly
+3. Check audit logs for detailed error information
+4. Ensure OAuth app has offline access scope
+
+### Re-authentication Required
+If you see "invalid_grant" errors:
+1. Delete the token file
+2. Run `node dist/index.js auth` again
+3. Complete the OAuth flow
+
+### Docker Health Check Failures
+1. Check container logs: `docker-compose logs gdrive-mcp`
+2. Verify credentials are mounted correctly
+3. Ensure encryption key is passed via environment
 
 ## License
 
