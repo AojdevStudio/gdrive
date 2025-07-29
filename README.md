@@ -55,6 +55,13 @@ A Model Context Protocol (MCP) server that provides comprehensive integration wi
   - Performance monitoring with real-time statistics
   - Structured logging with Winston
 
+- **Google Apps Script Viewing** ✅
+  - View source code of Apps Script projects
+  - Read-only access to script contents
+  - Support for all script file types (JS, HTML, JSON)
+  - Automatic syntax highlighting in responses
+  - Redis caching for frequently accessed scripts
+
 ### Planned Features (Phase 4 - See [PLAN.md](./PLAN.md))
 - **Advanced Forms**: Quiz mode, validation rules, sections
 - **Permissions Management**: Share files and manage access
@@ -181,6 +188,20 @@ A Model Context Protocol (MCP) server that provides comprehensive integration wi
     - "documents shared with me"
   - Returns enhanced search results with detailed file information
 
+#### Apps Script Operations
+
+- **getAppScript**
+  - Retrieve Google Apps Script code by script ID
+  - Inputs:
+    - `scriptId` (string): The Google Apps Script project ID
+  - Returns formatted script content with all files and their source code
+  - Supports automatic syntax highlighting for JavaScript and HTML files
+  - Includes Redis caching for improved performance
+  - Error handling for:
+    - Script not found (404)
+    - Permission denied (403)
+    - API quota exceeded (429)
+
 ### Resources
 
 The server provides access to Google Drive files:
@@ -197,9 +218,19 @@ The server provides access to Google Drive files:
 ## Getting started
 
 1. [Create a new Google Cloud project](https://console.cloud.google.com/projectcreate)
-2. [Enable the Google Drive API](https://console.cloud.google.com/workspace-api/products)
+2. Enable the following APIs in your Google Cloud project:
+   - [Google Drive API](https://console.cloud.google.com/apis/library/drive.googleapis.com)
+   - [Google Sheets API](https://console.cloud.google.com/apis/library/sheets.googleapis.com)
+   - [Google Docs API](https://console.cloud.google.com/apis/library/docs.googleapis.com)
+   - [Google Forms API](https://console.cloud.google.com/apis/library/forms.googleapis.com)
+   - [Google Apps Script API](https://console.cloud.google.com/apis/library/script.googleapis.com)
 3. [Configure an OAuth consent screen](https://console.cloud.google.com/apis/credentials/consent) ("internal" is fine for testing)
-4. Add OAuth scope `https://www.googleapis.com/auth/drive.readonly`
+4. Add OAuth scopes:
+   - `https://www.googleapis.com/auth/drive`
+   - `https://www.googleapis.com/auth/spreadsheets`
+   - `https://www.googleapis.com/auth/documents`
+   - `https://www.googleapis.com/auth/forms`
+   - `https://www.googleapis.com/auth/script.projects.readonly`
 5. [Create an OAuth Client ID](https://console.cloud.google.com/apis/credentials/oauthclient) for application type "Desktop App"
 6. Download the JSON file of your client's OAuth keys
 7. Rename the key file to `gcp-oauth.keys.json` and place into the root of this repo (i.e. `servers/gcp-oauth.keys.json`)
