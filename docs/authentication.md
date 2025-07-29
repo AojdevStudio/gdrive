@@ -106,8 +106,9 @@ All token operations are logged in JSON format:
 ### Environment Variables
 
 ```bash
-# Required - 32-byte encryption key
-GDRIVE_TOKEN_ENCRYPTION_KEY=base64_encoded_32_byte_key
+# Required - Generate 32 random bytes (44-character base64 string)
+# Generate with: openssl rand -base64 32
+GDRIVE_TOKEN_ENCRYPTION_KEY=base64_encoded_32_byte_key_44_chars
 
 # Optional - Token refresh settings
 GDRIVE_TOKEN_REFRESH_INTERVAL=1800000  # 30 minutes

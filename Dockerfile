@@ -25,8 +25,10 @@ RUN sed -i 's/opn(authorizeUrl, { wait: false }).then(cp => cp.unref());/process
 # Build TypeScript now that source files are available
 RUN npm run build
 
-# Create necessary directories
-RUN mkdir -p /credentials /app/logs
+# Create necessary directories with appropriate permissions
+RUN mkdir -p /credentials /app/logs && \
+    chmod 700 /credentials && \
+    chmod 755 /app/logs
 
 # Create volume for credentials
 VOLUME ["/credentials"]
@@ -40,7 +42,7 @@ ENV NODE_ENV=production
 
 # Health check - using the built-in health check functionality
 HEALTHCHECK --interval=5m --timeout=10s --start-period=30s --retries=3 \
-  CMD node dist/index.js health || exit 1
+  CMD ["node", "dist/health-check.js"]
 
 # Run the MCP server
 CMD ["node", "dist/index.js"]
