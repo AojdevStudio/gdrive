@@ -20,6 +20,11 @@
   ],
   "exclude": [
     "node_modules",
-    "dist"
+    "dist",
+    "**/__tests__/**/*",
+    "**/tests/**/*",
+    "**/*.test.ts",
+    "jest.config.js",
+    "jest.setup.js"
   ]
 }

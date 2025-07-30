@@ -1025,6 +1025,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
     switch (name) {
       case "search": {
+        if (!args || typeof args.query !== 'string') {
+          throw new Error('Query parameter is required');
+        }
         const { searchTerms, filters } = parseNaturalLanguageQuery(args.query);
         
         // Build Google Drive query
@@ -1055,7 +1058,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           q += "'me' in owners";
         }
 
-        const cacheKey = `search:${q}:${args.pageSize || 10}`;
+        const pageSize = (typeof args.pageSize === 'number' ? args.pageSize : 10);
+        const cacheKey = `search:${q}:${pageSize}`;
         const cached = await cacheManager.get(cacheKey);
         if (cached) {
           performanceMonitor.track('search', Date.now() - startTime);
@@ -1064,7 +1068,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
         const response = await drive.files.list({
           q: q || undefined,
-          pageSize: Math.min(args.pageSize || 10, 100),
+          pageSize: Math.min(pageSize, 100),
           fields: "files(id, name, mimeType, createdTime, modifiedTime, size, parents, webViewLink, iconLink, owners, permissions)",
           orderBy: "modifiedTime desc",
         });
@@ -1083,7 +1087,13 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       case "enhancedSearch": {
-        const { query, filters = {}, pageSize = 10, orderBy = "modifiedTime desc" } = args;
+        if (!args) {
+          throw new Error('Arguments are required');
+        }
+        const query = args.query as string | undefined;
+        const filters = (args.filters || {}) as Record<string, any>;
+        const pageSize = (typeof args.pageSize === 'number' ? args.pageSize : 10);
+        const orderBy = (typeof args.orderBy === 'string' ? args.orderBy : "modifiedTime desc");
         
         // Build complex query
         let q = "";
@@ -1168,6 +1178,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       case "read": {
+        if (!args || typeof args.fileId !== 'string') {
+          throw new Error('fileId parameter is required');
+        }
         const { fileId } = args;
         
         const cacheKey = `read:${fileId}`;
@@ -1228,7 +1241,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       case "createFile": {
-        const { name, content, mimeType = "text/plain", parentId } = args;
+        if (!args || typeof args.name !== 'string' || typeof args.content !== 'string') {
+          throw new Error('name and content parameters are required');
+        }
+        const { name, content } = args;
+        const mimeType = (typeof args.mimeType === 'string' ? args.mimeType : "text/plain");
+        const parentId = args.parentId as string | undefined;
         
         const fileMetadata: any = {
           name,
@@ -1266,6 +1284,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       case "updateFile": {
+        if (!args || typeof args.fileId !== 'string' || typeof args.content !== 'string') {
+          throw new Error('fileId and content parameters are required');
+        }
         const { fileId, content } = args;
         
         const media = {
@@ -1294,7 +1315,11 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       case "createFolder": {
-        const { name, parentId } = args;
+        if (!args || typeof args.name !== 'string') {
+          throw new Error('name parameter is required');
+        }
+        const { name } = args;
+        const parentId = args.parentId as string | undefined;
         
         const fileMetadata: any = {
           name,
@@ -1326,6 +1351,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       case "listSheets": {
+        if (!args || typeof args.spreadsheetId !== 'string') {
+          throw new Error('spreadsheetId parameter is required');
+        }
         const { spreadsheetId } = args;
         
         const response = await sheets.spreadsheets.get({
@@ -1351,7 +1379,11 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       case "readSheet": {
-        const { spreadsheetId, range = "Sheet1" } = args;
+        if (!args || typeof args.spreadsheetId !== 'string') {
+          throw new Error('spreadsheetId parameter is required');
+        }
+        const { spreadsheetId } = args;
+        const range = (typeof args.range === 'string' ? args.range : "Sheet1");
         
         const cacheKey = `sheet:${spreadsheetId}:${range}`;
         const cached = await cacheManager.get(cacheKey);
@@ -1382,6 +1414,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       case "updateCells": {
+        if (!args || typeof args.spreadsheetId !== 'string' || typeof args.range !== 'string' || !Array.isArray(args.values)) {
+          throw new Error('spreadsheetId, range, and values parameters are required');
+        }
         const { spreadsheetId, range, values } = args;
         
         await sheets.spreadsheets.values.update({
@@ -1408,7 +1443,11 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       case "appendRows": {
-        const { spreadsheetId, sheetName = "Sheet1", values } = args;
+        if (!args || typeof args.spreadsheetId !== 'string' || !Array.isArray(args.values)) {
+          throw new Error('spreadsheetId and values parameters are required');
+        }
+        const { spreadsheetId, values } = args;
+        const sheetName = (typeof args.sheetName === 'string' ? args.sheetName : "Sheet1");
         
         await sheets.spreadsheets.values.append({
           spreadsheetId,
@@ -1435,7 +1474,11 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       case "createForm": {
-        const { title, description } = args;
+        if (!args || typeof args.title !== 'string') {
+          throw new Error('title parameter is required');
+        }
+        const { title } = args;
+        const description = args.description as string | undefined;
         
         const createResponse = await forms.forms.create({
           requestBody: {
@@ -1477,6 +1520,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       case "getForm": {
+        if (!args || typeof args.formId !== 'string') {
+          throw new Error('formId parameter is required');
+        }
         const { formId } = args;
         
         const response = await forms.forms.get({
@@ -1495,7 +1541,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             title: item.title,
             description: item.description,
             type: item.questionItem?.question ? Object.keys(item.questionItem.question)[0] : 'unknown',
-            required: item.questionItem?.required || false,
+            required: (item.questionItem as any)?.required || false,
           })) || [],
         };
 
@@ -1510,17 +1556,16 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       case "addQuestion": {
-        const { 
-          formId, 
-          title, 
-          type, 
-          required = false, 
-          options,
-          scaleMin = 1,
-          scaleMax = 5,
-          scaleMinLabel,
-          scaleMaxLabel,
-        } = args;
+        if (!args || typeof args.formId !== 'string' || typeof args.title !== 'string' || typeof args.type !== 'string') {
+          throw new Error('formId, title, and type parameters are required');
+        }
+        const { formId, title, type } = args;
+        const required = (typeof args.required === 'boolean' ? args.required : false);
+        const options = args.options as string[] | undefined;
+        const scaleMin = (typeof args.scaleMin === 'number' ? args.scaleMin : 1);
+        const scaleMax = (typeof args.scaleMax === 'number' ? args.scaleMax : 5);
+        const scaleMinLabel = args.scaleMinLabel as string | undefined;
+        const scaleMaxLabel = args.scaleMaxLabel as string | undefined;
         
         let questionItem: any = {
           required,
@@ -1626,6 +1671,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       case "listResponses": {
+        if (!args || typeof args.formId !== 'string') {
+          throw new Error('formId parameter is required');
+        }
         const { formId } = args;
         
         const response = await forms.forms.responses.list({
@@ -1640,7 +1688,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           answers: resp.answers ? Object.entries(resp.answers).map(([questionId, answer]) => ({
             questionId,
             answer: answer.textAnswers?.answers?.[0]?.value || 
-                   answer.choiceAnswers?.answers?.map((a: any) => a.value).join(", ") ||
+                   (answer as any).choiceAnswers?.answers?.map((a: any) => a.value).join(", ") ||
                    "No answer",
           })) : [],
         })) || [];
@@ -1660,7 +1708,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       case "createDocument": {
-        const { title, content, parentId } = args;
+        if (!args || typeof args.title !== 'string') {
+          throw new Error('title parameter is required');
+        }
+        const { title } = args;
+        const content = args.content as string | undefined;
+        const parentId = args.parentId as string | undefined;
         
         // Create the document
         const createResponse = await docs.documents.create({
@@ -1706,7 +1759,11 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       case "insertText": {
-        const { documentId, text, index = 1 } = args;
+        if (!args || typeof args.documentId !== 'string' || typeof args.text !== 'string') {
+          throw new Error('documentId and text parameters are required');
+        }
+        const { documentId, text } = args;
+        const index = (typeof args.index === 'number' ? args.index : 1);
         
         await docs.documents.batchUpdate({
           documentId,
@@ -1732,7 +1789,11 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       case "replaceText": {
-        const { documentId, searchText, replaceText, matchCase = false } = args;
+        if (!args || typeof args.documentId !== 'string' || typeof args.searchText !== 'string' || typeof args.replaceText !== 'string') {
+          throw new Error('documentId, searchText, and replaceText parameters are required');
+        }
+        const { documentId, searchText, replaceText } = args;
+        const matchCase = (typeof args.matchCase === 'boolean' ? args.matchCase : false);
         
         await docs.documents.batchUpdate({
           documentId,
@@ -1761,16 +1822,15 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       case "applyTextStyle": {
-        const { 
-          documentId, 
-          startIndex, 
-          endIndex, 
-          bold, 
-          italic, 
-          underline, 
-          fontSize,
-          foregroundColor,
-        } = args;
+        if (!args || typeof args.documentId !== 'string' || typeof args.startIndex !== 'number' || typeof args.endIndex !== 'number') {
+          throw new Error('documentId, startIndex, and endIndex parameters are required');
+        }
+        const { documentId, startIndex, endIndex } = args;
+        const bold = args.bold as boolean | undefined;
+        const italic = args.italic as boolean | undefined;
+        const underline = args.underline as boolean | undefined;
+        const fontSize = args.fontSize as number | undefined;
+        const foregroundColor = args.foregroundColor as any;
         
         const textStyle: any = {};
         
@@ -1819,7 +1879,11 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       case "insertTable": {
-        const { documentId, rows, columns, index = 1 } = args;
+        if (!args || typeof args.documentId !== 'string' || typeof args.rows !== 'number' || typeof args.columns !== 'number') {
+          throw new Error('documentId, rows, and columns parameters are required');
+        }
+        const { documentId, rows, columns } = args;
+        const index = (typeof args.index === 'number' ? args.index : 1);
         
         await docs.documents.batchUpdate({
           documentId,
@@ -1904,6 +1968,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       case "batchFileOperations": {
+        if (!args || !Array.isArray(args.operations)) {
+          throw new Error('operations parameter must be an array');
+        }
         const { operations } = args;
         const results = [];
         const errors = [];
