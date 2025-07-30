@@ -19,6 +19,24 @@ const drive = google.drive("v3");
 const sheets = google.sheets("v4");
 const forms = google.forms("v1");
 const docs = google.docs("v1");
+const script = google.script("v1");
+
+// Apps Script type definitions
+interface AppsScriptFile {
+  name: string;
+  type: 'SERVER_JS' | 'HTML' | 'JSON';
+  source: string;
+  functionSet?: {
+    values?: Array<{
+      name: string;
+    }>;
+  };
+}
+
+interface AppsScriptContent {
+  scriptId: string;
+  files: AppsScriptFile[];
+}
 
 // Structured logging with Winston
 const logger = winston.createLogger({
@@ -846,6 +864,20 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             },
           },
           required: ["operations"],
+        },
+      },
+      {
+        name: "getAppScript",
+        description: "Get Google Apps Script code by script ID",
+        inputSchema: {
+          type: "object",
+          properties: {
+            scriptId: {
+              type: "string",
+              description: "The Google Apps Script project ID",
+            },
+          },
+          required: ["scriptId"],
         },
       },
     ],
@@ -1891,6 +1923,100 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         isError: true,
       };
     }
+  } else if (request.params.name === "getAppScript") {
+    const endTimer = PerformanceMonitor.startTimer('getAppScript');
+    try {
+      const { scriptId } = request.params.arguments as { scriptId: string };
+      
+      // Check cache first
+      const cached = await cacheManager.get(`script:${scriptId}`);
+      if (cached) {
+        endTimer();
+        logger.info('getAppScript cache hit', { scriptId });
+        
+        // Format the cached response
+        const filesText = cached.files.map((file: AppsScriptFile) => {
+          let fileInfo = `File: ${file.name} (${file.type})\n`;
+          fileInfo += '```' + (file.type === 'HTML' ? 'html' : 'javascript') + '\n';
+          fileInfo += file.source;
+          fileInfo += '\n```';
+          return fileInfo;
+        }).join('\n\n');
+        
+        return {
+          content: [{
+            type: "text",
+            text: `Apps Script Project (ID: ${scriptId})\n\n${filesText}`,
+          }],
+        };
+      }
+      
+      // Get script content from API
+      const response = await script.projects.getContent({
+        scriptId: scriptId,
+      });
+      
+      const content = response.data;
+      
+      // Cache the result
+      await cacheManager.set(`script:${scriptId}`, content, 600); // 10 minutes cache
+      
+      // Format the response
+      const filesText = content.files!.map((file: any) => {
+        let fileInfo = `File: ${file.name} (${file.type})\n`;
+        fileInfo += '```' + (file.type === 'HTML' ? 'html' : 'javascript') + '\n';
+        fileInfo += file.source;
+        fileInfo += '\n```';
+        return fileInfo;
+      }).join('\n\n');
+      
+      endTimer();
+      
+      return {
+        content: [{
+          type: "text",
+          text: `Apps Script Project (ID: ${scriptId})\n\n${filesText}`,
+        }],
+      };
+    } catch (error: any) {
+      endTimer();
+      logger.error('getAppScript error', { scriptId: (request.params.arguments as any)?.scriptId, error: error.message });
+      
+      // Handle specific error types
+      if (error.code === 404) {
+        return {
+          content: [{
+            type: "text",
+            text: `Apps Script project not found: ${(request.params.arguments as any)?.scriptId}`,
+          }],
+          isError: true,
+        };
+      } else if (error.code === 403) {
+        return {
+          content: [{
+            type: "text",
+            text: `Permission denied. Make sure you have access to the Apps Script project and have enabled the Apps Script API.`,
+          }],
+          isError: true,
+        };
+      } else if (error.code === 429) {
+        return {
+          content: [{
+            type: "text",
+            text: `API quota exceeded. Please try again later.`,
+          }],
+          isError: true,
+        };
+      }
+      
+      return {
+        content: [{
+          type: "text",
+          text: `Error getting Apps Script content: ${error.message}`,
+        }],
+        isError: true,
+      };
+    }
   }
 
   throw new Error("Tool not found");
@@ -1912,7 +2038,8 @@ async function authenticateAndSaveCredentials() {
       "https://www.googleapis.com/auth/drive",
       "https://www.googleapis.com/auth/spreadsheets",
       "https://www.googleapis.com/auth/documents",
-      "https://www.googleapis.com/auth/forms"
+      "https://www.googleapis.com/auth/forms",
+      "https://www.googleapis.com/auth/script.projects.readonly"
     ],
   });
   fs.writeFileSync(credentialsPath, JSON.stringify(auth.credentials));
