@@ -226,7 +226,8 @@ export class AuthManager {
         this.logger.debug(`Token refresh attempt ${attempt}/${maxRetries}`);
         
         // Force token refresh
-        const { credentials } = await this.oauth2Client!.getAccessToken();
+        const response = await this.oauth2Client!.getAccessToken();
+        const credentials = response.res?.data || response.token ? { access_token: response.token } : null;
         
         if (credentials) {
           this.oauth2Client!.setCredentials(credentials);

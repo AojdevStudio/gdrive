@@ -30,6 +30,7 @@ export interface HealthCheckResult {
   metrics?: {
     uptime: number;
     memoryUsage: NodeJS.MemoryUsage;
+    executionTimeMs?: number;
   };
 }
 
