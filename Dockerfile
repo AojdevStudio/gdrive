@@ -19,9 +19,6 @@ RUN npm ci --ignore-scripts
 # Copy source code
 COPY . .
 
-# Fix auth flow for Docker environment (replace automatic browser opening with URL printing)
-RUN sed -i 's/opn(authorizeUrl, { wait: false }).then(cp => cp.unref());/process.stderr.write(`Open this URL in your browser: ${authorizeUrl}\\n`);/' node_modules/@google-cloud/local-auth/build/src/index.js
-
 # Build TypeScript now that source files are available
 RUN npm run build
 

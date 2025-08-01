@@ -8,7 +8,7 @@ services:
       - ./logs:/app/logs
     environment:
       - NODE_ENV=production
-      - LOG_LEVEL=info
+      - LOG_LEVEL=silent
       - REDIS_URL=redis://redis:6379
       - GDRIVE_CREDENTIALS_PATH=/credentials/.gdrive-server-credentials.json
       - GDRIVE_OAUTH_PATH=/credentials/gcp-oauth.keys.json
@@ -34,26 +34,28 @@ services:
       retries: 3
       start_period: 30s
 
-  gdrive-mcp-auth:
-    build: .
-    container_name: gdrive-mcp-auth
-    volumes:
-      - ./credentials:/credentials
-      - ./data:/data
-      - ./logs:/app/logs
-    environment:
-      - NODE_ENV=development
-      - LOG_LEVEL=info
-      - GDRIVE_CREDENTIALS_PATH=/credentials/.gdrive-server-credentials.json
-      - GDRIVE_OAUTH_PATH=/credentials/gcp-oauth.keys.json
-      - GDRIVE_TOKEN_STORAGE_PATH=/credentials/.gdrive-mcp-tokens.json
-      - GDRIVE_TOKEN_AUDIT_LOG_PATH=/app/logs/gdrive-mcp-audit.log
-      - GDRIVE_TOKEN_ENCRYPTION_KEY=${GDRIVE_TOKEN_ENCRYPTION_KEY}
-    network_mode: host
-    stdin_open: true
-    tty: true
-    profiles:
-      - auth
+  # Authentication service (kept for reference but not used)
+  # Authentication should be done on the host using ./auth.sh
+  # gdrive-mcp-auth:
+  #   build: .
+  #   container_name: gdrive-mcp-auth
+  #   volumes:
+  #     - ./credentials:/credentials
+  #     - ./data:/data
+  #     - ./logs:/app/logs
+  #   environment:
+  #     - NODE_ENV=development
+  #     - LOG_LEVEL=info
+  #     - GDRIVE_CREDENTIALS_PATH=/credentials/.gdrive-server-credentials.json
+  #     - GDRIVE_OAUTH_PATH=/credentials/gcp-oauth.keys.json
+  #     - GDRIVE_TOKEN_STORAGE_PATH=/credentials/.gdrive-mcp-tokens.json
+  #     - GDRIVE_TOKEN_AUDIT_LOG_PATH=/app/logs/gdrive-mcp-audit.log
+  #     - GDRIVE_TOKEN_ENCRYPTION_KEY=${GDRIVE_TOKEN_ENCRYPTION_KEY}
+  #   network_mode: host
+  #   stdin_open: true
+  #   tty: true
+  #   profiles:
+  #     - auth
 
   redis:
     image: redis:7-alpine
