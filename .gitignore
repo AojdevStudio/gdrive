@@ -36,3 +36,6 @@ coverage/
 
 # Redis dump
 dump.rdb
+
+# Claude Desktop configuration files
+claude-config-*.json
