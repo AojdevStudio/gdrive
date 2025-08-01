@@ -77,19 +77,35 @@ This is a Model Context Protocol (MCP) server for Google Drive integration. It p
 
 ## Docker Usage
 
+### Authentication Setup (Required First)
+Authentication must be performed on the host machine before running Docker:
+
+```bash
+# 1. Ensure OAuth keys are in place
+cp /path/to/gcp-oauth.keys.json credentials/
+
+# 2. Run authentication on host (opens browser)
+./auth.sh
+
+# 3. Verify credentials were created
+ls -la credentials/
+# Should see: .gdrive-server-credentials.json and .gdrive-mcp-tokens.json
+```
+
 ### Building and Running with Docker
 ```bash
 # Build the Docker image
 docker build -t gdrive-mcp-server .
 
-# Run with Docker Compose (includes Redis)
+# Run with Docker Compose (includes Redis) - RECOMMENDED
 docker-compose up -d
 
 # Run standalone with Docker (without Redis caching)
 docker run -i --rm \
-  -v ${HOME}/.gdrive:/credentials:ro \
+  -v ${PWD}/credentials:/credentials:ro \
   -v ${PWD}/data:/data \
   -v ${PWD}/logs:/app/logs \
+  --env-file .env \
   gdrive-mcp-server
 ```
 
@@ -102,9 +118,10 @@ Add to your Claude Desktop configuration:
       "command": "docker",
       "args": [
         "run", "-i", "--rm", "--init",
-        "-v", "${HOME}/.gdrive:/credentials:ro",
-        "-v", "${PWD}/data:/data",
-        "-v", "${PWD}/logs:/app/logs",
+        "-v", "/path/to/gdrive-mcp/credentials:/credentials:ro",
+        "-v", "/path/to/gdrive-mcp/data:/data",
+        "-v", "/path/to/gdrive-mcp/logs:/app/logs",
+        "--env-file", "/path/to/gdrive-mcp/.env",
         "gdrive-mcp-server"
       ]
     }

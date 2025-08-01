@@ -279,22 +279,32 @@ node ./dist/index.js
 ```
 
 #### Docker
-```bash
-# Create credentials directory
-mkdir -p credentials
 
-# Copy your OAuth keys
+Authentication must be performed on the host machine before running the Docker container:
+
+```bash
+# 1. Copy your OAuth keys to the credentials directory
+mkdir -p credentials
 cp /path/to/gcp-oauth.keys.json credentials/
 
-# Set encryption key in .env
-echo "GDRIVE_TOKEN_ENCRYPTION_KEY=$(openssl rand -base64 32)" > .env
+Build the docker image
 
-# Run authentication
-docker-compose run --rm gdrive-mcp-auth node dist/index.js auth
+- Run: docker-compose build --no-cache gdrive-mcp
 
-# Start the server (tokens will auto-refresh)
+# 2. Run authentication on the host
+./auth.sh
+
+# This will:
+# - Check for required files
+# - Create .env with encryption key if needed
+# - Open a browser for Google OAuth
+# - Save credentials to the credentials/ directory
+
+# 3. Start the server with Docker (tokens will auto-refresh)
 docker-compose up -d
 ```
+
+The `auth.sh` script handles all authentication setup outside of Docker, ensuring proper browser access for the OAuth flow.
 
 ### Health Monitoring
 
