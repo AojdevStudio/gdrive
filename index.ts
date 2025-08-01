@@ -1911,6 +1911,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       case "getAppScript": {
         const startTime = Date.now();
+        if (!args || typeof args.scriptId !== 'string') {
+          throw new Error('scriptId parameter is required');
+        }
         const { scriptId } = args;
         
         // Check cache first
@@ -1946,7 +1949,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const content = response.data;
         
         // Cache the result
-        await cacheManager.set(`script:${scriptId}`, content, 600); // 10 minutes cache
+        await cacheManager.set(`script:${scriptId}`, content);
         
         // Format the response
         const filesText = content.files!.map((file: any) => {
