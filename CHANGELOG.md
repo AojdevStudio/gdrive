@@ -12,6 +12,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Comprehensive documentation for token refresh solutions
 - Implementation strategy for eliminating manual token renewal
 
+## [0.7.0] - 2025-08-02
+
+### Added
+- MIT license for open source compliance
+- Comprehensive documentation structure in docs/ directory:
+  - Business-Processes/: Workflow and process documentation with team collaboration patterns
+  - Examples/: Usage examples including enhanced search and natural language patterns
+  - Guides/: Complete user and developer guides (setup, authentication, Docker, Redis, Claude Desktop integration)
+  - Troubleshooting/: Common issues and solutions for authentication, Docker, Redis, and API problems
+- Structured scripts directory for better organization and maintenance
+- Authentication script (auth.sh) for simplified OAuth setup outside Docker
+- Development testing script (test-server.sh) for streamlined testing
+- Claude agents configuration with organized agent definitions
+- Automated changelog generation tools with Python utilities
+
+### Changed
+- Reorganized project structure for better maintainability
+- Moved scripts from root directory to organized scripts/ structure
+- Improved Docker configuration and authentication flow documentation
+- Enhanced architecture documentation with current project structure
+- Updated Claude Desktop configuration files organization
+- Reorganized Claude agents into structured .claude/agents/ directory
+
+### Fixed
+- Parameter validation for getAppScript tool to prevent errors
+- Project file organization and reduced root directory clutter
+- Script discoverability and maintenance workflows
+
+### Removed
+- Old script files from root directory (auth.sh, mcp-wrapper.sh, replace_open.sh, test-server.sh)
+- Obsolete configuration files and documentation
+
 ## [0.6.2] - 2025-01-25
 
 ### Added
@@ -57,6 +89,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Development environment configuration
 - Project documentation foundation
 
-[unreleased]: https://github.com/modelcontextprotocol/servers/compare/v0.6.2...HEAD
+[unreleased]: https://github.com/modelcontextprotocol/servers/compare/v0.7.0...HEAD
+[0.7.0]: https://github.com/modelcontextprotocol/servers/compare/v0.6.2...v0.7.0
 [0.6.2]: https://github.com/modelcontextprotocol/servers/compare/v0.1.0...v0.6.2
 [0.1.0]: https://github.com/modelcontextprotocol/servers/releases/tag/v0.1.0

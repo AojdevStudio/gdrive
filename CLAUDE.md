@@ -170,3 +170,6 @@ docker-compose up -d
 - Executable shebang added to compiled files via shx
 - Build requirements: Node.js 18+ for ES2022 support
 - Redis optional but recommended for optimal performance
+
+## Project Management
+- When issues are completed, IMPORTANT you MUST mark them DONE! Using the linear MCP
