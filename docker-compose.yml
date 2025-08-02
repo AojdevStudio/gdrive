@@ -35,7 +35,7 @@ services:
       start_period: 30s
 
   # Authentication service (kept for reference but not used)
-  # Authentication should be done on the host using ./auth.sh
+  # Authentication should be done on the host using ./scripts/auth.sh
   # gdrive-mcp-auth:
   #   build: .
   #   container_name: gdrive-mcp-auth

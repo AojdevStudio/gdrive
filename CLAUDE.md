@@ -35,6 +35,9 @@ This is a Model Context Protocol (MCP) server for Google Drive integration. It p
 - `node ./dist/index.js` - Start the MCP server (requires authentication first)
 - Server runs on stdio transport for MCP communication
 
+### Changelog
+- `./scripts/changelog/update-changelog.py --auto` - update change log by running script to analyze git commits. 
+
 ## Architecture
 
 ### Core Components
@@ -85,7 +88,7 @@ Authentication must be performed on the host machine before running Docker:
 cp /path/to/gcp-oauth.keys.json credentials/
 
 # 2. Run authentication on host (opens browser)
-./auth.sh
+./scripts/auth.sh
 
 # 3. Verify credentials were created
 ls -la credentials/

@@ -1,414 +1,389 @@
 # Google Drive MCP Server
 
-A Model Context Protocol (MCP) server that provides comprehensive integration with Google Drive, Sheets, Docs, and Forms. This server enables AI assistants to interact with Google Workspace through a standardized interface.
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![TypeScript](https://img.shields.io/badge/TypeScript-007ACC?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+[![Docker](https://img.shields.io/badge/Docker-2496ED?logo=docker&logoColor=white)](https://www.docker.com/)
+[![Redis](https://img.shields.io/badge/Redis-DC382D?logo=redis&logoColor=white)](https://redis.io/)
 
-## Features
+A powerful **Model Context Protocol (MCP) server** that provides comprehensive integration with **Google Workspace** (Drive, Sheets, Docs, Forms, and Apps Script). This server enables AI assistants and applications to seamlessly interact with Google services through a standardized, secure interface.
 
-### Current Features (v0.6.3 - Phase 3+)
-- **Automatic OAuth Token Refresh** ✅ 🆕
-  - Eliminates manual re-authentication every hour
-  - Proactive token refresh 10 minutes before expiry
-  - Secure token persistence with AES-256-GCM encryption
-  - Comprehensive audit trail for all token operations
-  - Docker health checks for token status monitoring
-  - Graceful error handling with automatic retry logic
+## 🚀 Key Features
 
-- **Google Drive Integration**
-  - List and search files/folders
-  - Read file contents with automatic format conversion
-  - Create new files and folders
-  - Update existing file contents
-  - Export Google Workspace files to readable formats
-  
-- **Google Sheets Support**
-  - List sheets within spreadsheets
-  - Read sheet contents with range support
-  - Update cell values with A1 notation
-  - Append rows to existing sheets
-  - Export sheets as CSV
+### 🔐 **Enterprise-Grade Security**
+- **Automatic OAuth Token Refresh** - Eliminates manual re-authentication
+- **AES-256-GCM Encryption** - Secure token storage at rest
+- **Comprehensive Audit Trail** - Full logging of all authentication events
+- **Health Monitoring** - Real-time token status and system health checks
 
-- **Google Forms Integration**
-  - Create new forms with titles and descriptions
-  - Add questions with multiple types (text, multiple choice, checkbox, etc.)
-  - Retrieve form structure and metadata
-  - List and analyze form responses
-  - Support for various question types and validation
+### 📁 **Google Drive Operations**
+- **File Management** - Create, read, update, delete files and folders
+- **Advanced Search** - Natural language queries with intelligent filtering
+- **Batch Operations** - Process multiple files efficiently in single operations
+- **Format Conversion** - Automatic export of Google Workspace files to readable formats
 
-- **Enhanced Search**
-  - Natural language query parsing
-  - Smart query mappings (e.g., "spreadsheets modified this week")
-  - Advanced filtering by MIME type, modification date, owner
-  - Improved search result ranking and display
+### 📊 **Google Sheets Integration**
+- **Data Access** - Read and write sheet data with A1 notation support
+- **Sheet Management** - List sheets, update cells, append rows
+- **CSV Export** - Automatic conversion for data analysis
 
-- **Docker Support**
-  - Containerized deployment with Docker
-  - Docker Compose configuration
-  - Health checks and volume management
+### 📝 **Google Docs Manipulation**
+- **Document Creation** - Create documents with content and formatting
+- **Text Operations** - Insert, replace, and style text at specific positions
+- **Table Management** - Insert tables with custom dimensions
+- **Rich Formatting** - Apply bold, italic, underline, colors, and font sizes
 
-- **Google Docs Integration** ✅
-  - Create new documents with title and content
-  - Insert text at specific positions
-  - Find and replace text content
-  - Apply text formatting and styles
-  - Insert tables with custom dimensions
+### 📋 **Google Forms Builder**
+- **Form Creation** - Build forms with titles, descriptions, and various question types
+- **Question Types** - Text, multiple choice, checkboxes, linear scales, dates, and more
+- **Response Management** - Retrieve and analyze form responses
+- **Validation Support** - Required fields and input validation
 
-- **Batch Operations** ✅
-  - Process multiple files in single operations
-  - Support for create, update, delete, and move operations
-  - Efficient API usage with comprehensive error handling
+### 🔧 **Google Apps Script Access**
+- **Script Viewing** - Read-only access to Apps Script project source code
+- **Multi-File Support** - Handle JavaScript, HTML, and JSON files
+- **Syntax Highlighting** - Automatic code formatting in responses
 
-- **Redis Caching & Performance** ✅
-  - High-performance Redis caching for search results and file reads
-  - Automatic cache invalidation on write operations
-  - Performance monitoring with real-time statistics
-  - Structured logging with Winston
+### ⚡ **Performance & Scalability**
+- **Redis Caching** - High-performance caching with automatic invalidation
+- **Performance Monitoring** - Real-time metrics and statistics tracking
+- **Structured Logging** - Winston-based logging with file rotation
+- **Docker Support** - Containerized deployment with Docker Compose
 
-- **Google Apps Script Viewing** ✅
-  - View source code of Apps Script projects
-  - Read-only access to script contents
-  - Support for all script file types (JS, HTML, JSON)
-  - Automatic syntax highlighting in responses
-  - Redis caching for frequently accessed scripts
+## 🏗️ Architecture Overview
 
-### Planned Features (Phase 4 - See [PLAN.md](./PLAN.md))
-- **Advanced Forms**: Quiz mode, validation rules, sections
-- **Permissions Management**: Share files and manage access
-- **Push Notifications**: Real-time updates for form responses
-
-## Components
-
-### Tools
-
-#### Read Operations
-
-- **search**
-  - Search for files in Google Drive
-  - Input: `query` (string): Search query
-  - Returns file names and MIME types of matching files
-
-- **read**
-  - Read contents of a file from Google Drive
-  - Input: `fileId` (string): The Google Drive file ID
-  - Returns file contents in appropriate format
-
-- **listSheets**
-  - List all sheets within a Google Spreadsheet
-  - Input: `spreadsheetId` (string): The spreadsheet ID
-  - Returns list of sheet names and IDs
-
-- **readSheet**
-  - Read contents of a specific sheet
-  - Inputs:
-    - `spreadsheetId` (string): The spreadsheet ID
-    - `sheetName` (string): Name of the sheet
-    - `range` (string, optional): A1 notation range (e.g., 'A1:D10')
-  - Returns formatted table of sheet contents
-
-#### Write Operations
-
-- **createFile**
-  - Create a new file in Google Drive
-  - Inputs:
-    - `name` (string): Name of the file
-    - `mimeType` (string): MIME type (e.g., 'text/plain')
-    - `content` (string): File content
-    - `parentFolderId` (string, optional): Parent folder ID
-  - Returns created file ID and details
-
-- **updateFile**
-  - Update content of an existing file
-  - Inputs:
-    - `fileId` (string): ID of file to update
-    - `content` (string): New content
-    - `mimeType` (string, optional): Content MIME type
-  - Returns update confirmation
-
-- **createFolder**
-  - Create a new folder in Google Drive
-  - Inputs:
-    - `name` (string): Folder name
-    - `parentFolderId` (string, optional): Parent folder ID
-  - Returns created folder ID
-
-#### Sheets Operations
-
-- **updateCells**
-  - Update cells in a spreadsheet
-  - Inputs:
-    - `spreadsheetId` (string): Spreadsheet ID
-    - `range` (string): A1 notation range (e.g., 'Sheet1!A1:B2')
-    - `values` (array): 2D array of values
-    - `valueInputOption` (string): 'RAW' or 'USER_ENTERED' (default)
-  - Returns number of cells updated
-
-- **appendRows**
-  - Append rows to a spreadsheet
-  - Inputs:
-    - `spreadsheetId` (string): Spreadsheet ID
-    - `range` (string): Sheet name or range to append to
-    - `values` (array): 2D array of values
-    - `valueInputOption` (string): 'RAW' or 'USER_ENTERED' (default)
-  - Returns number of rows appended
-
-#### Forms Operations
-
-- **createForm**
-  - Create a new Google Form
-  - Inputs:
-    - `title` (string): Title of the form
-    - `description` (string, optional): Description of the form
-  - Returns form ID and edit URL
-
-- **getForm**
-  - Retrieve form structure and metadata
-  - Inputs:
-    - `formId` (string): The Google Form ID
-  - Returns form details including title, description, and question count
-
-- **addQuestion**
-  - Add a question to a Google Form
-  - Inputs:
-    - `formId` (string): The Google Form ID
-    - `questionType` (string): Question type (TEXT, PARAGRAPH_TEXT, MULTIPLE_CHOICE, CHECKBOX, DROPDOWN, LINEAR_SCALE, DATE, TIME, FILE_UPLOAD)
-    - `title` (string): Question text
-    - `options` (array, optional): Options for choice questions
-    - `required` (boolean, optional): Whether question is required
-  - Returns confirmation with question details
-
-- **listResponses**
-  - List responses for a Google Form
-  - Inputs:
-    - `formId` (string): The Google Form ID
-    - `pageSize` (number, optional): Max responses to return (1-5000, default 100)
-  - Returns list of responses with timestamps and answer counts
-
-#### Enhanced Search
-
-- **enhancedSearch**
-  - Natural language search with intelligent parsing
-  - Inputs:
-    - `query` (string): Natural language search query
-    - `maxResults` (number, optional): Max results to return (1-100, default 10)
-    - `filters` (object, optional): Additional filters for mimeType, modifiedAfter, owner
-  - Supports queries like:
-    - "spreadsheets modified this week"
-    - "forms about customer feedback"
-    - "documents shared with me"
-  - Returns enhanced search results with detailed file information
-
-#### Apps Script Operations
-
-- **getAppScript**
-  - Retrieve Google Apps Script code by script ID
-  - Inputs:
-    - `scriptId` (string): The Google Apps Script project ID
-  - Returns formatted script content with all files and their source code
-  - Supports automatic syntax highlighting for JavaScript and HTML files
-  - Includes Redis caching for improved performance
-  - Error handling for:
-    - Script not found (404)
-    - Permission denied (403)
-    - API quota exceeded (429)
-
-### Resources
-
-The server provides access to Google Drive files:
-
-- **Files** (`gdrive:///<file_id>`)
-  - Supports all file types
-  - Google Workspace files are automatically exported:
-    - Docs → Markdown
-    - Sheets → CSV
-    - Presentations → Plain text
-    - Drawings → PNG
-  - Other files are provided in their native format
-
-## Getting Started
-
-### Prerequisites
-
-1. [Create a new Google Cloud project](https://console.cloud.google.com/projectcreate)
-2. Enable the following APIs in your Google Cloud project:
-   - [Google Drive API](https://console.cloud.google.com/apis/library/drive.googleapis.com)
-   - [Google Sheets API](https://console.cloud.google.com/apis/library/sheets.googleapis.com)
-   - [Google Docs API](https://console.cloud.google.com/apis/library/docs.googleapis.com)
-   - [Google Forms API](https://console.cloud.google.com/apis/library/forms.googleapis.com)
-   - [Google Apps Script API](https://console.cloud.google.com/apis/library/script.googleapis.com)
-3. [Configure an OAuth consent screen](https://console.cloud.google.com/apis/credentials/consent) ("internal" is fine for testing)
-4. Add OAuth scopes:
-   - `https://www.googleapis.com/auth/drive`
-   - `https://www.googleapis.com/auth/spreadsheets`
-   - `https://www.googleapis.com/auth/documents`
-   - `https://www.googleapis.com/auth/forms`
-   - `https://www.googleapis.com/auth/script.projects.readonly`
-5. [Create an OAuth Client ID](https://console.cloud.google.com/apis/credentials/oauthclient) for application type "Desktop App"
-6. Download the JSON file of your client's OAuth keys
-7. Rename the key file to `gcp-oauth.keys.json` and place into the credentials directory
-
-### Setup
-
-1. Clone the repository and install dependencies:
-```bash
-npm install
-npm run build
+```mermaid
+graph TB
+    A[MCP Client] --> B[MCP Server]
+    B --> C[Auth Manager]
+    B --> D[Token Manager]  
+    B --> E[Cache Manager]
+    B --> F[Performance Monitor]
+    
+    C --> G[Google OAuth 2.0]
+    D --> H[Encrypted Token Storage]
+    E --> I[Redis Cache]
+    
+    B --> J[Google Drive API]
+    B --> K[Google Sheets API]
+    B --> L[Google Docs API]
+    B --> M[Google Forms API]
+    B --> N[Google Apps Script API]
+    
+    F --> O[Winston Logger]
+    
+    style B fill:#e1f5fe
+    style C fill:#f3e5f5
+    style D fill:#f3e5f5
+    style E fill:#e8f5e8
+    style F fill:#fff3e0
 ```
 
-2. Create a `.env` file based on `.env.example`:
+### Core Components
+
+- **index.ts** - Main MCP server implementation with comprehensive tool handlers
+- **AuthManager** - OAuth 2.0 authentication with automatic token refresh
+- **TokenManager** - Secure encrypted token storage and lifecycle management
+- **CacheManager** - Redis-based caching with intelligent invalidation
+- **PerformanceMonitor** - Real-time performance tracking and metrics collection
+
+## 📚 API Reference
+
+### 📖 Available Tools
+
+The server provides **22 comprehensive tools** for Google Workspace integration across **6 categories**:
+
+- **🔍 Search & Read** (6 tools): search, enhancedSearch, read, listSheets, readSheet, getAppScript
+- **📁 File & Folder** (4 tools): createFile, updateFile, createFolder, batchFileOperations
+- **📊 Sheets** (2 tools): updateCells, appendRows
+- **📋 Forms** (4 tools): createForm, getForm, addQuestion, listResponses
+- **📝 Docs** (5 tools): createDocument, insertText, replaceText, applyTextStyle, insertTable
+- **📂 Resources**: MCP resource access via `gdrive:///<file_id>` URIs
+
+**📖 [Complete API Documentation →](./docs/Developer-Guidelines/API.md)**
+
+### 🎯 Key Capabilities Summary
+
+- **Advanced Search**: Natural language queries with intelligent filtering
+- **Batch Operations**: Process multiple files efficiently in single operations
+- **Format Conversion**: Automatic export (Docs→Markdown, Sheets→CSV, etc.)
+- **Rich Text Editing**: Full document formatting with styles, tables, and positioning
+- **Form Builder**: Complete form creation with 8+ question types and validation
+- **Apps Script**: Read-only access to Google Apps Script project source code
+
+## 🚀 Quick Start
+
+### 📋 Prerequisites
+
+You'll need a Google account and Node.js 18+ installed.
+
+**📖 [Complete Setup Guide →](./docs/Guides/README.md)**
+
+### ⚡ Fast Track Setup
+
+1. **Google Cloud Setup**
+   - Create project at [Google Cloud Console](https://console.cloud.google.com/projectcreate)
+   - Enable APIs: Drive, Sheets, Docs, Forms, Apps Script
+   - Create OAuth credentials and download as `gcp-oauth.keys.json`
+   
+   **📖 [Detailed Google Cloud Setup →](./docs/Guides/01-initial-setup.md)**
+
+2. **Installation & Authentication**
+   ```bash
+   # Clone and install
+   git clone <repository-url>
+   cd gdrive-mcp-server
+   npm install && npm run build
+   
+   # Set up credentials
+   mkdir -p credentials
+   cp /path/to/gcp-oauth.keys.json credentials/
+   
+   # Generate encryption key and authenticate
+   export GDRIVE_TOKEN_ENCRYPTION_KEY=$(openssl rand -base64 32)
+   node ./dist/index.js auth
+   ```
+   
+   **📖 [Complete Authentication Guide →](./docs/Guides/02-authentication-flow.md)**
+
+3. **Start Server**
+   ```bash
+   node ./dist/index.js
+   ```
+
+### 🐳 Docker Setup (Recommended)
+
 ```bash
-# Generate a secure encryption key
-openssl rand -base64 32
-
-# Add the key to your .env file
-echo "GDRIVE_TOKEN_ENCRYPTION_KEY=<your-generated-key>" > .env
-```
-
-### Authentication
-
-With the new automatic token refresh feature, you only need to authenticate once:
-
-#### Local Development
-```bash
-# Set encryption key
-export GDRIVE_TOKEN_ENCRYPTION_KEY="your-base64-key"
-
-# Run initial authentication
-node ./dist/index.js auth
-
-# The server will now automatically refresh tokens as needed
-node ./dist/index.js
-```
-
-#### Docker
-
-Authentication must be performed on the host machine before running the Docker container:
-
-```bash
-# 1. Copy your OAuth keys to the credentials directory
+# Prepare credentials and authenticate
 mkdir -p credentials
 cp /path/to/gcp-oauth.keys.json credentials/
+./scripts/auth.sh
 
-Build the docker image
-
-- Run: docker-compose build --no-cache gdrive-mcp
-
-# 2. Run authentication on the host
-./auth.sh
-
-# This will:
-# - Check for required files
-# - Create .env with encryption key if needed
-# - Open a browser for Google OAuth
-# - Save credentials to the credentials/ directory
-
-# 3. Start the server with Docker (tokens will auto-refresh)
+# Start with Docker Compose (includes Redis)
 docker-compose up -d
 ```
 
-The `auth.sh` script handles all authentication setup outside of Docker, ensuring proper browser access for the OAuth flow.
+**📖 [Complete Docker Guide →](./docs/Deployment/DOCKER.md)**
 
-### Health Monitoring
+## 🔐 Authentication
 
-The server includes health checks for monitoring token status:
+The server features **automatic OAuth token refresh** with enterprise-grade encryption - authenticate once, works forever.
+
+### ⚡ Quick Authentication
+
+```bash
+# Local setup
+export GDRIVE_TOKEN_ENCRYPTION_KEY=$(openssl rand -base64 32)
+node ./dist/index.js auth
+
+# Docker setup
+./scripts/auth.sh
+```
+
+**📖 [Complete Authentication Guide →](./docs/Guides/02-authentication-flow.md)**
+
+### 🔒 Security Features
+- **AES-256-GCM Encryption** - All tokens encrypted at rest
+- **Automatic Token Refresh** - No manual re-authentication needed
+- **Comprehensive Audit Trail** - Full logging of authentication events
+- **Health Monitoring** - Real-time token status checks
+
+**📖 [Security Documentation →](./docs/Architecture/ARCHITECTURE.md#security)**
+
+## 🏥 Health Monitoring
 
 ```bash
 # Check health status
 node ./dist/index.js health
-
-# With Docker
-docker-compose exec gdrive-mcp node dist/index.js health
 ```
 
-Health states:
-- **HEALTHY**: Token valid and refresh capability available
-- **DEGRADED**: Token expiring soon but refresh in progress
-- **UNHEALTHY**: Token expired or no refresh capability
+**Health States:** 🟢 HEALTHY | 🟡 DEGRADED | 🔴 UNHEALTHY
 
-### Usage with Claude Desktop
+**📖 [Health Monitoring Guide →](./docs/Troubleshooting/README.md#health-monitoring)**
 
-Add the following to your Claude Desktop configuration:
+## 💡 Usage Examples
 
-#### Local Installation
+### 🔍 Quick Examples
+
+```javascript
+// Natural language search
+await callTool("search", { query: "spreadsheets modified last week" });
+
+// Create document with formatting
+await callTool("createDocument", {
+  title: "Project Report",
+  content: "# Project Overview\n\nThis document outlines..."
+});
+
+// Batch file operations
+await callTool("batchFileOperations", {
+  operations: [
+    { type: "create", name: "report.txt", content: "..." },
+    { type: "update", fileId: "1xyz...", content: "..." }
+  ]
+});
+```
+
+**📖 [Complete Examples & Code Samples →](./docs/Examples/README.md)**
+
+## 🔗 Claude Desktop Integration
+
+### ⚡ Quick Integration
+
+**Local Setup:**
 ```json
 {
   "mcpServers": {
     "gdrive": {
       "command": "node",
-      "args": ["/path/to/gdrive-mcp/dist/index.js"],
-      "env": {
-        "GDRIVE_TOKEN_ENCRYPTION_KEY": "your-base64-key"
-      }
+      "args": ["/absolute/path/to/gdrive-mcp/dist/index.js"],
+      "env": { "GDRIVE_TOKEN_ENCRYPTION_KEY": "your-key" }
     }
   }
 }
 ```
 
-#### Docker
+**Docker Setup (Recommended):**
 ```json
 {
   "mcpServers": {
     "gdrive": {
       "command": "docker",
-      "args": [
-        "run", "-i", "--rm",
-        "--env-file", "/path/to/.env",
-        "-v", "gdrive-credentials:/credentials:ro",
-        "gdrive-mcp-server"
-      ]
+      "args": ["exec", "-i", "gdrive-mcp-server", "node", "dist/index.js"]
     }
   }
 }
 ```
 
-## Security Features
+**📖 [Complete Integration Guide →](./docs/Guides/05-claude-desktop-integration.md)**
 
-### Token Encryption
-- All tokens are encrypted at rest using AES-256-GCM
-- Encryption keys are stored separately from encrypted data
-- File permissions are set to 0600 (owner read/write only)
+## 🛡️ Security Features
 
-### Audit Trail
-All token operations are logged for security forensics:
-- TOKEN_ACQUIRED - Initial authentication
-- TOKEN_REFRESHED - Successful refresh
-- TOKEN_REFRESH_FAILED - Failed refresh attempts
-- TOKEN_DELETED_INVALID_GRANT - Invalid token cleanup
-- TOKEN_ENCRYPTED/DECRYPTED - Encryption operations
+### 🔐 Enterprise-Grade Protection
+- **AES-256-GCM Encryption** - All tokens encrypted at rest
+- **Automatic Token Refresh** - Eliminates re-authentication
+- **Comprehensive Audit Trail** - Full security event logging
+- **Robust Error Handling** - Circuit breaker and graceful degradation
 
-### Error Handling
-- Invalid grant errors trigger immediate token deletion
-- Automatic retry with exponential backoff for temporary failures
-- Clear user guidance for re-authentication when needed
+**📖 [Complete Security Documentation →](./docs/Architecture/ARCHITECTURE.md#security)**
 
-## Configuration
+## ⚙️ Configuration
 
-See `.env.example` for all available configuration options:
+### 📝 Key Environment Variables
 
-- `GDRIVE_TOKEN_ENCRYPTION_KEY` - **Required**: 32-byte base64 encryption key
-- `GDRIVE_TOKEN_REFRESH_INTERVAL` - Token check interval (default: 30 minutes)
-- `GDRIVE_TOKEN_PREEMPTIVE_REFRESH` - Refresh buffer time (default: 10 minutes)
-- `GDRIVE_TOKEN_MAX_RETRIES` - Max refresh retry attempts (default: 3)
-- `LOG_LEVEL` - Logging verbosity (error, warn, info, debug)
-- `REDIS_URL` - Redis connection URL for caching
+| Variable | Description | Required |
+|----------|-------------|----------|
+| `GDRIVE_TOKEN_ENCRYPTION_KEY` | 32-byte base64 encryption key | ✅ |
+| `REDIS_URL` | Redis cache connection URL | ❌ |
+| `LOG_LEVEL` | Winston logging level (info/debug) | ❌ |
 
-## Troubleshooting
+### 📋 Sample .env File
+```bash
+GDRIVE_TOKEN_ENCRYPTION_KEY=your-32-byte-base64-key
+REDIS_URL=redis://localhost:6379
+LOG_LEVEL=info
+```
 
-### Token Refresh Issues
-1. Check health status: `node dist/index.js health`
-2. Verify encryption key is set correctly
-3. Check audit logs for detailed error information
-4. Ensure OAuth app has offline access scope
+**📖 [Complete Configuration Guide →](./docs/Guides/06-environment-variables.md)**
 
-### Re-authentication Required
-If you see "invalid_grant" errors:
-1. Delete the token file
-2. Run `node dist/index.js auth` again
-3. Complete the OAuth flow
+## 🔧 Troubleshooting
 
-### Docker Health Check Failures
-1. Check container logs: `docker-compose logs gdrive-mcp`
-2. Verify credentials are mounted correctly
-3. Ensure encryption key is passed via environment
+### 🚨 Quick Fixes
 
-## License
+**Token Issues:**
+```bash
+# Check health and re-authenticate if needed
+node dist/index.js health
+./scripts/auth.sh
+```
 
-This MCP server is licensed under the MIT License. This means you are free to use, modify, and distribute the software, subject to the terms and conditions of the MIT License. For more details, please see the LICENSE file in the project repository.
+**Docker Issues:**
+```bash
+# Check logs and verify mounts
+docker-compose logs gdrive-mcp
+docker-compose exec gdrive-mcp ls -la /credentials/
+```
+
+**Performance Issues:**
+```bash
+# Check Redis and system resources
+redis-cli ping
+docker stats gdrive-mcp-server
+```
+
+**📖 [Complete Troubleshooting Guide →](./docs/Troubleshooting/README.md)**
+
+## 🛠️ Development
+
+### 🔧 Development Setup
+
+```bash
+# Clone and install
+git clone <repository-url>
+cd gdrive-mcp-server
+npm install
+
+# Set up environment
+cp .env.example .env  # Add your encryption key
+npm run build
+
+# Development with auto-rebuild
+npm run watch
+```
+
+### 📦 Available Commands
+- `npm run build` - Compile TypeScript
+- `npm run watch` - Auto-rebuild on changes
+- `npm test` - Run test suite
+- `npm run lint` - Code quality checks
+
+**📖 [Complete Development Guide →](./docs/Developer-Guidelines/README.md)**
+
+## 🤝 Contributing
+
+We welcome contributions! Areas where you can help:
+
+- 🐛 **Bug Fixes** - Improve stability
+- ✨ **Features** - New Google Workspace integrations
+- 📚 **Documentation** - Enhance guides and examples
+- 🔧 **Performance** - Optimize caching and API usage
+- 🧪 **Testing** - Increase test coverage
+
+### 📋 Quick Process
+1. Fork repository and create feature branch
+2. Follow TypeScript/ESLint standards
+3. Add tests and update documentation
+4. Run `npm run lint && npm test && npm run build`
+5. Submit pull request with clear description
+
+**📖 [Complete Contributing Guide →](./CONTRIBUTING.md)**
+
+## 📚 Complete Documentation
+
+### 📖 Documentation Index
+- **[📚 Documentation Hub](./docs/index.md)** - Complete documentation structure
+- **[🚀 Setup Guides](./docs/Guides/README.md)** - Step-by-step installation and setup
+- **[📋 API Reference](./docs/Developer-Guidelines/API.md)** - Complete tool documentation
+- **[🏗️ Architecture](./docs/Architecture/ARCHITECTURE.md)** - System design and technical details
+- **[🐳 Docker Deployment](./docs/Deployment/DOCKER.md)** - Container deployment guide
+- **[🔧 Troubleshooting](./docs/Troubleshooting/README.md)** - Common issues and solutions
+- **[💼 Business Workflows](./docs/Business-Processes/README.md)** - Business process integration
+- **[🧪 Examples](./docs/Examples/README.md)** - Code examples and usage patterns
+
+### 📞 Support
+- 🐛 **Issues** - Report bugs via GitHub Issues
+- 💬 **Discussions** - Join community discussions
+- 📖 **Documentation** - Comprehensive guides available
+
+## 📄 License
+
+This project is licensed under the **MIT License**.
+
+---
+
+<div align="center">
+
+**Built with ❤️ for the MCP ecosystem**
+
+[⭐ Star this repo](https://github.com/modelcontextprotocol/servers) | [🐛 Report Bug](https://github.com/modelcontextprotocol/servers/issues) | [💡 Request Feature](https://github.com/modelcontextprotocol/servers/issues)
+
+</div>
