@@ -1,0 +1,129 @@
+# .coderabbit.yaml - Configuration to focus on code files only
+
+# Global review configuration
+reviews:
+  # Path-based instructions to exclude documentation files
+  path_instructions:
+    # Exclude markdown files from review
+    - path: "**/*.md"
+      instructions: |
+        Skip reviewing this markdown file as it contains documentation only.
+        
+    # Exclude YAML configuration files from review  
+    - path: "**/*.yml"
+      instructions: |
+        Skip reviewing this YAML configuration file.
+        
+    - path: "**/*.yaml" 
+      instructions: |
+        Skip reviewing this YAML configuration file.
+        
+    # Exclude text files from review
+    - path: "**/*.txt"
+      instructions: |
+        Skip reviewing this text file.
+        
+    # Exclude other common documentation formats
+    - path: "**/*.rst"
+      instructions: |
+        Skip reviewing this reStructuredText documentation file.
+        
+    - path: "**/*.adoc"
+      instructions: |
+        Skip reviewing this AsciiDoc documentation file.
+        
+    # Focus on actual code files with detailed review
+    - path: "**/*.js"
+      instructions: |
+        Review the JavaScript code for:
+        - Code quality and best practices
+        - Performance issues
+        - Security vulnerabilities
+        - Logic errors
+        - Adherence to coding standards
+        
+    - path: "**/*.ts"
+      instructions: |
+        Review the TypeScript code for:
+        - Type safety and correctness
+        - Code quality and best practices
+        - Performance issues
+        - Security vulnerabilities
+        - Logic errors
+        
+    - path: "**/*.jsx"
+      instructions: |
+        Review the React JSX code for:
+        - Component structure and patterns
+        - Performance optimizations
+        - Accessibility compliance
+        - Code quality and best practices
+        
+    - path: "**/*.tsx"
+      instructions: |
+        Review the React TypeScript code for:
+        - Type safety in React components
+        - Component patterns and architecture
+        - Performance optimizations
+        - Code quality and best practices
+        
+    - path: "**/*.py"
+      instructions: |
+        Review the Python code for:
+        - PEP 8 compliance
+        - Code quality and pythonic patterns
+        - Performance issues
+        - Security vulnerabilities
+        - Logic errors
+        
+    - path: "**/*.java"
+      instructions: |
+        Review the Java code for:
+        - Code quality and best practices
+        - Performance issues
+        - Security vulnerabilities
+        - Design patterns usage
+        - Logic errors
+        
+    - path: "**/*.go"
+      instructions: |
+        Review the Go code for:
+        - Go idioms and best practices
+        - Error handling patterns
+        - Performance considerations
+        - Code quality
+        - Logic errors
+        
+    - path: "**/*.rs"
+      instructions: |
+        Review the Rust code for:
+        - Memory safety and ownership
+        - Performance optimizations
+        - Error handling with Result types
+        - Code quality and idiomatic Rust
+        - Logic errors
+
+# Tools configuration - enable code analysis tools
+  tools:
+    # Enable AST-grep for advanced code pattern matching
+    ast-grep:
+      essential_rules: true
+      rule_dirs:
+        - "lint-rules"
+      packages:
+        - "coderabbitai/essential-rules"
+
+# Code generation settings (if using docstring generation)
+code_generation:
+  docstrings:
+    path_instructions:
+      # Only generate docstrings for code files
+      - path: "**/*.py"
+        instructions: |
+          Generate comprehensive docstrings following Google style.
+          Include parameter types, return types, and examples where appropriate.
+          
+      - path: "**/*.ts"
+        instructions: |
+          Generate TSDoc compatible documentation.
+          Include @param and @returns annotations.
