@@ -3,6 +3,8 @@ import * as crypto from 'crypto';
 import * as path from 'path';
 import * as os from 'os';
 import { Logger } from 'winston';
+import { KeyRotationManager } from './KeyRotationManager.js';
+import { KeyDerivation } from './KeyDerivation.js';
 
 export interface TokenData {
   access_token: string;
@@ -12,6 +14,19 @@ export interface TokenData {
   scope: string;
 }
 
+export interface VersionedTokenStorage {
+  version: string;
+  algorithm: string;
+  keyDerivation: {
+    method: 'pbkdf2';
+    iterations: number;
+    salt: string;
+  };
+  data: string;
+  createdAt: string;
+  keyId: string;
+}
+
 export type AuditEvent = 
   | 'TOKEN_ACQUIRED'
   | 'TOKEN_REFRESHED'
@@ -19,7 +34,11 @@ export type AuditEvent =
   | 'TOKEN_REVOKED_BY_USER'
   | 'TOKEN_DELETED_INVALID_GRANT'
   | 'TOKEN_ENCRYPTED'
-  | 'TOKEN_DECRYPTED';
+  | 'TOKEN_DECRYPTED'
+  | 'KEY_REGISTERED'
+  | 'KEY_VERSION_CHANGED'
+  | 'KEY_ROTATION_INITIATED'
+  | 'KEY_ROTATION_COMPLETED';
 
 interface AuditLog {
   timestamp: string;
@@ -35,8 +54,7 @@ export class TokenManager {
   private readonly logger: Logger;
   private readonly tokenPath: string;
   private readonly auditPath: string;
-  private readonly encryptionKey: Buffer;
-  private invalidGrantEncountered: boolean = false;
+  private readonly keyRotationManager: KeyRotationManager;
 
   private constructor(logger: Logger) {
     this.logger = logger;
@@ -48,21 +66,86 @@ export class TokenManager {
     this.auditPath = process.env.GDRIVE_TOKEN_AUDIT_LOG_PATH || 
       path.join(os.homedir(), '.gdrive-mcp-audit.log');
     
-    // Validate and load encryption key
-    const keyBase64 = process.env.GDRIVE_TOKEN_ENCRYPTION_KEY;
-    if (!keyBase64) {
-      throw new Error('GDRIVE_TOKEN_ENCRYPTION_KEY environment variable is required');
-    }
+    // Initialize key rotation manager
+    this.keyRotationManager = KeyRotationManager.getInstance(logger);
     
-    this.encryptionKey = Buffer.from(keyBase64, 'base64');
-    if (this.encryptionKey.length !== 32) {
-      throw new Error('Invalid encryption key. Must be 32-byte base64-encoded key.');
-    }
+    // Load and register keys from environment
+    this.loadKeysFromEnvironment();
     
     this.logger.debug('TokenManager initialized', {
       tokenPath: this.tokenPath,
       auditPath: this.auditPath,
     });
+  }
+
+  private loadKeysFromEnvironment(): void {
+    // Load v1 key (current key)
+    const keyBase64 = process.env.GDRIVE_TOKEN_ENCRYPTION_KEY;
+    if (!keyBase64) {
+      throw new Error('GDRIVE_TOKEN_ENCRYPTION_KEY environment variable is required');
+    }
+    
+    const keyBuffer = Buffer.from(keyBase64, 'base64');
+    if (keyBuffer.length !== 32) {
+      throw new Error('Invalid encryption key. Must be 32-byte base64-encoded key.');
+    }
+
+    // Generate salt for v1 key
+    const salt = KeyDerivation.generateSalt();
+    const derivedKey = KeyDerivation.deriveKey(keyBuffer, salt);
+    
+    // Register v1 key
+    this.keyRotationManager.registerKey('v1', derivedKey.key, {
+      version: 'v1',
+      algorithm: 'aes-256-gcm',
+      createdAt: new Date().toISOString(),
+      iterations: derivedKey.iterations,
+      salt: derivedKey.salt.toString('base64')
+    });
+    
+    // Log audit event
+    this.logAuditEvent('KEY_REGISTERED', true, {
+      keyVersion: 'v1',
+      algorithm: 'aes-256-gcm',
+      iterations: derivedKey.iterations
+    }).catch(err => this.logger.error('Failed to log audit event', { error: err }));
+    
+    // Load additional keys if present (v2, v3, etc.)
+    for (let i = 2; i <= 10; i++) {
+      const envKey = `GDRIVE_TOKEN_ENCRYPTION_KEY_V${i}`;
+      const keyBase64 = process.env[envKey];
+      if (keyBase64) {
+        const keyBuffer = Buffer.from(keyBase64, 'base64');
+        if (keyBuffer.length === 32) {
+          const salt = KeyDerivation.generateSalt();
+          const derivedKey = KeyDerivation.deriveKey(keyBuffer, salt);
+          this.keyRotationManager.registerKey(`v${i}`, derivedKey.key, {
+            version: `v${i}`,
+            algorithm: 'aes-256-gcm',
+            createdAt: new Date().toISOString(),
+            iterations: derivedKey.iterations,
+            salt: derivedKey.salt.toString('base64')
+          });
+          
+          // Log audit event
+          this.logAuditEvent('KEY_REGISTERED', true, {
+            keyVersion: `v${i}`,
+            algorithm: 'aes-256-gcm',
+            iterations: derivedKey.iterations
+          }).catch(err => this.logger.error('Failed to log audit event', { error: err }));
+        }
+      }
+    }
+
+    // Set current version from environment or default to v1
+    const currentVersion = process.env.GDRIVE_TOKEN_CURRENT_KEY_VERSION || 'v1';
+    this.keyRotationManager.setCurrentVersion(currentVersion);
+    
+    // Log audit event
+    this.logAuditEvent('KEY_VERSION_CHANGED', true, {
+      newVersion: currentVersion,
+      source: 'environment_config'
+    }).catch(err => this.logger.error('Failed to log audit event', { error: err }));
   }
 
   public static getInstance(logger: Logger): TokenManager {
@@ -84,16 +167,17 @@ export class TokenManager {
         throw new Error('Invalid token data');
       }
       
-      // Encrypt tokens
+      // Encrypt tokens with versioned format
       const encrypted = await this.encrypt(JSON.stringify(tokens));
       
       // Write to file with secure permissions
-      await fs.writeFile(this.tokenPath, encrypted, { encoding: 'utf8' });
+      await fs.writeFile(this.tokenPath, JSON.stringify(encrypted, null, 2), { encoding: 'utf8' });
       await fs.chmod(this.tokenPath, 0o600);
       
       // Log audit event
       await this.logAuditEvent('TOKEN_ENCRYPTED', true, {
         tokenId: this.hashTokenId(tokens.access_token),
+        keyVersion: encrypted.version,
       });
       
       this.logger.info('Tokens saved successfully');
@@ -110,13 +194,30 @@ export class TokenManager {
     try {
       this.logger.debug('Loading tokens from persistent storage');
       
-      const encrypted = await fs.readFile(this.tokenPath, 'utf8');
-      const decrypted = await this.decrypt(encrypted);
+      const fileContent = await fs.readFile(this.tokenPath, 'utf8');
+      
+      // Check if it's the new versioned format
+      let decrypted: string;
+      try {
+        const versionedData = JSON.parse(fileContent) as VersionedTokenStorage;
+        if (versionedData.version && versionedData.algorithm) {
+          // New versioned format
+          decrypted = await this.decrypt(versionedData);
+        } else {
+          // Not versioned format, return error
+          throw new Error('Legacy token format detected. Please migrate tokens using the migration tool.');
+        }
+      } catch (parseError) {
+        // Legacy format detected
+        throw new Error('Legacy token format detected. Please migrate tokens using the migration tool.');
+      }
+      
       const tokens = JSON.parse(decrypted);
       
       // Log audit event
       await this.logAuditEvent('TOKEN_DECRYPTED', true, {
         tokenId: this.hashTokenId(tokens.access_token),
+        keyVersion: typeof fileContent === 'string' ? 'unknown' : (JSON.parse(fileContent) as VersionedTokenStorage).version,
       });
       
       this.logger.info('Tokens loaded successfully');
@@ -138,7 +239,6 @@ export class TokenManager {
   public async deleteTokensOnInvalidGrant(): Promise<void> {
     try {
       await fs.unlink(this.tokenPath);
-      this.invalidGrantEncountered = true;
       
       await this.logAuditEvent('TOKEN_DELETED_INVALID_GRANT', true, {
         reason: 'invalid_grant error from Google OAuth',
@@ -181,11 +281,12 @@ export class TokenManager {
   }
 
   /**
-   * Encrypt data using AES-256-GCM
+   * Encrypt data using AES-256-GCM with versioned format
    */
-  private async encrypt(data: string): Promise<string> {
+  private async encrypt(data: string): Promise<VersionedTokenStorage> {
+    const currentKey = this.keyRotationManager.getCurrentKey();
     const iv = crypto.randomBytes(16);
-    const cipher = crypto.createCipheriv('aes-256-gcm', this.encryptionKey, iv);
+    const cipher = crypto.createCipheriv('aes-256-gcm', currentKey.key, iv);
     
     let encrypted = cipher.update(data, 'utf8', 'hex');
     encrypted += cipher.final('hex');
@@ -194,17 +295,35 @@ export class TokenManager {
     
     // Clear sensitive data from memory
     const dataBuffer = Buffer.from(data);
-    await this.clearMemory(dataBuffer);
+    KeyDerivation.clearSensitiveData(dataBuffer);
     
-    // Return format: iv:authTag:encryptedData
-    return `${iv.toString('hex')}:${authTag.toString('hex')}:${encrypted}`;
+    // Return versioned format
+    return {
+      version: currentKey.version,
+      algorithm: currentKey.metadata.algorithm,
+      keyDerivation: {
+        method: 'pbkdf2',
+        iterations: currentKey.metadata.iterations,
+        salt: currentKey.metadata.salt
+      },
+      data: `${iv.toString('hex')}:${authTag.toString('hex')}:${encrypted}`,
+      createdAt: new Date().toISOString(),
+      keyId: currentKey.version
+    };
   }
 
   /**
-   * Decrypt data using AES-256-GCM
+   * Decrypt data using AES-256-GCM with version support
    */
-  private async decrypt(encrypted: string): Promise<string> {
-    const parts = encrypted.split(':');
+  private async decrypt(versionedData: VersionedTokenStorage): Promise<string> {
+    // Get the appropriate key for this version
+    const key = this.keyRotationManager.getKey(versionedData.version);
+    if (!key) {
+      throw new Error(`Key version ${versionedData.version} not found`);
+    }
+
+    // Parse the encrypted data
+    const parts = versionedData.data.split(':');
     if (parts.length !== 3) {
       throw new Error('Invalid encrypted data format');
     }
@@ -213,7 +332,7 @@ export class TokenManager {
     const authTag = Buffer.from(parts[1], 'hex');
     const encryptedData = parts[2];
     
-    const decipher = crypto.createDecipheriv('aes-256-gcm', this.encryptionKey, iv);
+    const decipher = crypto.createDecipheriv('aes-256-gcm', key.key, iv);
     decipher.setAuthTag(authTag);
     
     let decrypted = decipher.update(encryptedData, 'hex', 'utf8');
@@ -222,12 +341,7 @@ export class TokenManager {
     return decrypted;
   }
 
-  /**
-   * Clear sensitive data from memory
-   */
-  private async clearMemory(buffer: Buffer): Promise<void> {
-    buffer.fill(0);
-  }
+
 
   /**
    * Hash token ID for logging (SHA256)
