@@ -85,23 +85,38 @@ export class TokenManager {
       throw new Error('GDRIVE_TOKEN_ENCRYPTION_KEY environment variable is required');
     }
     
-    const keyBuffer = Buffer.from(keyBase64, 'base64');
+    let keyBuffer: Buffer;
+    try {
+      keyBuffer = Buffer.from(keyBase64, 'base64');
+    } catch (error) {
+      throw new Error('Invalid base64 encoding for GDRIVE_TOKEN_ENCRYPTION_KEY');
+    }
+    
     if (keyBuffer.length !== 32) {
-      throw new Error('Invalid encryption key. Must be 32-byte base64-encoded key.');
+      throw new Error(`Invalid encryption key length: ${keyBuffer.length} bytes. Must be 32-byte base64-encoded key.`);
     }
 
     // Generate salt for v1 key
     const salt = KeyDerivation.generateSalt();
     const derivedKey = KeyDerivation.deriveKey(keyBuffer, salt);
     
+    // Clear original key buffer for security
+    keyBuffer.fill(0);
+    
     // Register v1 key
-    this.keyRotationManager.registerKey('v1', derivedKey.key, {
-      version: 'v1',
-      algorithm: 'aes-256-gcm',
-      createdAt: new Date().toISOString(),
-      iterations: derivedKey.iterations,
-      salt: derivedKey.salt.toString('base64')
-    });
+    try {
+      this.keyRotationManager.registerKey('v1', derivedKey.key, {
+        version: 'v1',
+        algorithm: 'aes-256-gcm',
+        createdAt: new Date().toISOString(),
+        iterations: derivedKey.iterations,
+        salt: derivedKey.salt.toString('base64')
+      });
+    } catch (error) {
+      // Clear derived key on error
+      derivedKey.key.fill(0);
+      throw error;
+    }
     
     // Log audit event
     this.logAuditEvent('KEY_REGISTERED', true, {
@@ -115,10 +130,27 @@ export class TokenManager {
       const envKey = `GDRIVE_TOKEN_ENCRYPTION_KEY_V${i}`;
       const keyBase64 = process.env[envKey];
       if (keyBase64) {
-        const keyBuffer = Buffer.from(keyBase64, 'base64');
-        if (keyBuffer.length === 32) {
-          const salt = KeyDerivation.generateSalt();
-          const derivedKey = KeyDerivation.deriveKey(keyBuffer, salt);
+        let keyBuffer: Buffer;
+        try {
+          keyBuffer = Buffer.from(keyBase64, 'base64');
+        } catch (error) {
+          this.logger.warn(`Invalid base64 encoding for ${envKey}, skipping`);
+          continue;
+        }
+        
+        if (keyBuffer.length !== 32) {
+          this.logger.warn(`Invalid key length for ${envKey}: ${keyBuffer.length} bytes, skipping`);
+          keyBuffer.fill(0);
+          continue;
+        }
+        
+        const salt = KeyDerivation.generateSalt();
+        const derivedKey = KeyDerivation.deriveKey(keyBuffer, salt);
+        
+        // Clear original key buffer for security
+        keyBuffer.fill(0);
+        
+        try {
           this.keyRotationManager.registerKey(`v${i}`, derivedKey.key, {
             version: `v${i}`,
             algorithm: 'aes-256-gcm',
@@ -133,6 +165,10 @@ export class TokenManager {
             algorithm: 'aes-256-gcm',
             iterations: derivedKey.iterations
           }).catch(err => this.logger.error('Failed to log audit event', { error: err }));
+        } catch (error) {
+          // Clear derived key on error
+          derivedKey.key.fill(0);
+          this.logger.error(`Failed to register key ${envKey}`, { error });
         }
       }
     }
@@ -208,8 +244,16 @@ export class TokenManager {
           throw new Error('Legacy token format detected. Please migrate tokens using the migration tool.');
         }
       } catch (parseError) {
-        // Legacy format detected
-        throw new Error('Legacy token format detected. Please migrate tokens using the migration tool.');
+        // Check if it's legacy format (colon-separated)
+        if (fileContent.includes(':') && fileContent.split(':').length === 3) {
+          // Legacy format detected
+          this.logger.error('Legacy token format detected');
+          const error = new Error('LEGACY_TOKEN_FORMAT');
+          (error as any).isLegacyFormat = true;
+          throw error;
+        }
+        // Other parse error
+        throw parseError;
       }
       
       const tokens = JSON.parse(decrypted);

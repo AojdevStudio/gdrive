@@ -6,15 +6,90 @@ The Google Drive MCP Server implements the Model Context Protocol to provide sta
 
 ## Authentication
 
-The server uses OAuth 2.0 for authentication with Google APIs. Required scopes:
-- `https://www.googleapis.com/auth/drive.readonly` (current)
-- `https://www.googleapis.com/auth/spreadsheets.readonly` (current)
+The server uses OAuth 2.0 for authentication with Google APIs, featuring **enterprise-grade token security** with versioned encryption and automatic key rotation.
 
-### Planned Scopes
-- `https://www.googleapis.com/auth/drive.file`
-- `https://www.googleapis.com/auth/spreadsheets`
-- `https://www.googleapis.com/auth/documents`
-- `https://www.googleapis.com/auth/forms`
+### Required Scopes
+- `https://www.googleapis.com/auth/drive.file` - Full Drive access
+- `https://www.googleapis.com/auth/spreadsheets` - Sheets read/write
+- `https://www.googleapis.com/auth/documents` - Docs read/write  
+- `https://www.googleapis.com/auth/forms` - Forms creation/management
+- `https://www.googleapis.com/auth/script.projects.readonly` - Apps Script access
+
+### Token Security Architecture
+
+#### TokenManager Interface
+The `TokenManager` class provides secure, versioned token storage with the following key methods:
+
+```typescript
+export interface TokenData {
+  access_token: string;
+  refresh_token: string;
+  expiry_date: number;
+  token_type: string;
+  scope: string;
+}
+
+export interface VersionedTokenStorage {
+  version: string;           // Key version (v1, v2, etc.)
+  algorithm: string;         // Encryption algorithm (aes-256-gcm)
+  keyDerivation: {
+    method: 'pbkdf2';
+    iterations: number;      // Min 100,000 iterations
+    salt: string;           // Unique salt per token
+  };
+  data: string;             // Encrypted token data
+  createdAt: string;        // ISO timestamp
+  keyId: string;           // Key identifier
+}
+
+// Main TokenManager methods
+class TokenManager {
+  static getInstance(logger: Logger): TokenManager
+  async getTokens(): Promise<TokenData | null>
+  async storeTokens(tokens: TokenData): Promise<void>
+  async deleteTokens(): Promise<void>
+  async rotateEncryptionKey(): Promise<void>
+}
+```
+
+#### KeyRotationManager Interface
+The `KeyRotationManager` handles encryption key lifecycle:
+
+```typescript
+export interface KeyMetadata {
+  version: string;          // Key version identifier
+  algorithm: string;        // Always 'aes-256-gcm'
+  createdAt: string;       // ISO timestamp
+  iterations: number;      // PBKDF2 iterations (min 100,000)
+  salt: string;           // Base64 salt for key derivation
+}
+
+export interface RegisteredKey {
+  version: string;
+  key: Buffer;             // 32-byte encryption key
+  metadata: KeyMetadata;
+}
+
+// Main KeyRotationManager methods
+class KeyRotationManager {
+  static getInstance(logger: Logger): KeyRotationManager
+  registerKey(version: string, key: Buffer, metadata: KeyMetadata): void
+  getKey(version: string): RegisteredKey | undefined
+  getCurrentKey(): RegisteredKey
+  setCurrentVersion(version: string): void
+  getVersions(): string[]
+  getKeyMetadata(version: string): KeyMetadata | undefined
+  hasVersion(version: string): boolean
+  clearKeys(): void
+}
+```
+
+### Security Features
+- **AES-256-GCM Encryption**: All tokens encrypted with authenticated encryption
+- **PBKDF2 Key Derivation**: Minimum 100,000 iterations for key strengthening
+- **Versioned Keys**: Support for key rotation without data loss
+- **Memory Protection**: Automatic key clearing and secure disposal
+- **Audit Trail**: Comprehensive logging of all authentication events
 
 ## MCP Protocol Implementation
 
@@ -298,8 +373,27 @@ const sheetData = await callTool({
 
 ## Security Considerations
 
-- OAuth tokens are stored locally and never transmitted
-- All API calls use HTTPS
-- File access respects Google Drive permissions
-- No caching of sensitive file contents
-- Audit logging for all operations (planned)
+### Token Security
+- **AES-256-GCM Encryption**: All OAuth tokens encrypted at rest with authenticated encryption
+- **PBKDF2 Key Derivation**: Keys strengthened with minimum 100,000 iterations
+- **Versioned Encryption**: Support for seamless key rotation without data loss
+- **Memory Protection**: Encryption keys automatically cleared from memory
+- **Local Storage Only**: Tokens never transmitted over network
+
+### API Security
+- All API calls use HTTPS with certificate validation
+- File access strictly respects Google Drive permissions and sharing settings
+- No caching of sensitive file contents in persistent storage
+- Rate limiting and quota management to prevent API abuse
+
+### Audit & Monitoring
+- **Comprehensive Audit Trail**: All authentication events logged with timestamps
+- **Health Monitoring**: Real-time token validity and system health checks
+- **Security Events**: Key rotation, token refresh, and failure events tracked
+- **Structured Logging**: Winston-based logging with configurable levels
+
+### Data Protection
+- **Zero Knowledge**: Server cannot decrypt tokens without proper environment keys
+- **Backup Security**: Token backups encrypted with same security standards
+- **Graceful Degradation**: System continues operating if Redis cache unavailable
+- **Automatic Cleanup**: Temporary files and sensitive data automatically purged

@@ -70,7 +70,21 @@ export class AuthManager {
         this.state = AuthState.UNAUTHENTICATED;
         this.logger.info('No saved tokens found. Authentication required.');
       }
-    } catch (error) {
+    } catch (error: any) {
+      // Check for legacy token format error
+      if (error.isLegacyFormat || error.message === 'LEGACY_TOKEN_FORMAT') {
+        this.logger.error('Legacy token format detected during initialization');
+        console.error('\n❌ Legacy Token Format Detected\n');
+        console.error('Your tokens are in the old format and need to be migrated.');
+        console.error('\nTo fix this issue:');
+        console.error('1. Run the migration tool:');
+        console.error('   node dist/index.js migrate-tokens\n');
+        console.error('2. After migration, run:');
+        console.error('   node dist/index.js verify-keys\n');
+        console.error('3. Then restart the server normally\n');
+        process.exit(1);
+      }
+      
       this.logger.error('Failed to initialize AuthManager', { error });
       this.state = AuthState.UNAUTHENTICATED;
     }

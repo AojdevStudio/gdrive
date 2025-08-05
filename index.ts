@@ -16,6 +16,8 @@ import { createClient } from "redis";
 import winston from "winston";
 import { AuthManager, AuthState } from "./src/auth/AuthManager.js";
 import { TokenManager } from "./src/auth/TokenManager.js";
+import { KeyRotationManager } from "./src/auth/KeyRotationManager.js";
+import { KeyDerivation } from "./src/auth/KeyDerivation.js";
 import { performHealthCheck, HealthStatus } from "./src/health-check.js";
 
 const drive = google.drive("v3");
@@ -2228,6 +2230,129 @@ async function loadCredentialsAndRunServer() {
   }
 }
 
+// CLI command implementations
+async function rotateKey(): Promise<void> {
+  try {
+    console.log('🔄 Google Drive MCP Key Rotation Tool');
+    console.log('====================================\n');
+
+    // Initialize logger and managers
+    const tokenManager = TokenManager.getInstance(logger);
+    const keyRotationManager = KeyRotationManager.getInstance(logger);
+
+    // Get current key version
+    const currentKey = keyRotationManager.getCurrentKey();
+    const currentVersionNum = parseInt(currentKey.version.substring(1));
+    const newVersionNum = currentVersionNum + 1;
+    const newVersion = `v${newVersionNum}`;
+
+    console.log(`📍 Current key version: ${currentKey.version}`);
+    console.log(`🔑 Generating new key version: ${newVersion}`);
+
+    // Check if new key already exists in environment
+    const newKeyEnv = newVersionNum === 2 ? 'GDRIVE_TOKEN_ENCRYPTION_KEY_V2' : `GDRIVE_TOKEN_ENCRYPTION_KEY_V${newVersionNum}`;
+    const existingNewKey = process.env[newKeyEnv];
+    
+    if (!existingNewKey) {
+      console.error(`❌ Error: ${newKeyEnv} environment variable not found`);
+      console.log('\n💡 To rotate keys:');
+      console.log(`   1. Generate a new 32-byte key: openssl rand -base64 32`);
+      console.log(`   2. Set environment variable: export ${newKeyEnv}="<your-new-key>"`);
+      console.log(`   3. Run this command again`);
+      process.exit(1);
+    }
+
+    // Load tokens
+    console.log('📖 Loading current tokens...');
+    const tokens = await tokenManager.loadTokens();
+    if (!tokens) {
+      console.log('ℹ️  No tokens found to rotate');
+      return;
+    }
+
+    // The TokenManager will automatically use the new key if we update the current version
+    console.log(`🔐 Setting current key version to ${newVersion}...`);
+    process.env.GDRIVE_TOKEN_CURRENT_KEY_VERSION = newVersion;
+    
+    // Re-save tokens with new key
+    console.log('💾 Re-encrypting tokens with new key...');
+    await tokenManager.saveTokens(tokens);
+
+    console.log(`\n✅ Key rotation complete!`);
+    console.log(`📊 Summary:`);
+    console.log(`   - Previous key version: ${currentKey.version}`);
+    console.log(`   - New key version: ${newVersion}`);
+    console.log(`   - Tokens re-encrypted successfully`);
+    console.log(`\n💡 Next steps:`);
+    console.log(`   1. Update GDRIVE_TOKEN_CURRENT_KEY_VERSION=${newVersion} in your environment`);
+    console.log(`   2. Test the application to ensure tokens work correctly`);
+    console.log(`   3. Keep the old key (${currentKey.version}) until you're certain the rotation succeeded`);
+
+  } catch (error) {
+    console.error('❌ Key rotation failed:', error instanceof Error ? error.message : error);
+    process.exit(1);
+  }
+}
+
+async function migrateTokens(): Promise<void> {
+  try {
+    // Dynamically import the migration script
+    const { migrateTokens: runMigration } = await import('./scripts/migrate-tokens.js');
+    await runMigration();
+  } catch (error) {
+    console.error('❌ Migration failed:', error instanceof Error ? error.message : error);
+    process.exit(1);
+  }
+}
+
+async function verifyKeys(): Promise<void> {
+  try {
+    console.log('🔍 Google Drive MCP Key Verification Tool');
+    console.log('========================================\n');
+
+    // Initialize managers
+    const tokenManager = TokenManager.getInstance(logger);
+    const keyRotationManager = KeyRotationManager.getInstance(logger);
+
+    // Get current key info
+    const currentKey = keyRotationManager.getCurrentKey();
+    console.log(`📍 Current key version: ${currentKey.version}`);
+    console.log(`🔑 Registered key versions: ${keyRotationManager.getVersions().join(', ')}`);
+
+    // Try to load and decrypt tokens
+    console.log('\n🔓 Attempting to decrypt tokens...');
+    const tokens = await tokenManager.loadTokens();
+    
+    if (!tokens) {
+      console.log('❌ No tokens found or unable to decrypt');
+      process.exit(1);
+    }
+
+    // Verify token structure
+    console.log('✓ Tokens successfully decrypted');
+    console.log('📋 Token validation:');
+    console.log(`   - Access token: ${tokens.access_token ? '✓ Present' : '❌ Missing'}`);
+    console.log(`   - Refresh token: ${tokens.refresh_token ? '✓ Present' : '❌ Missing'}`);
+    console.log(`   - Expiry date: ${tokens.expiry_date ? '✓ Present' : '❌ Missing'}`);
+    console.log(`   - Token type: ${tokens.token_type ? '✓ Present' : '❌ Missing'}`);
+    console.log(`   - Scope: ${tokens.scope ? '✓ Present' : '❌ Missing'}`);
+
+    // Check token expiry
+    if (tokens.expiry_date) {
+      const isExpired = tokenManager.isTokenExpired(tokens);
+      const expiryDate = new Date(tokens.expiry_date);
+      console.log(`\n⏰ Token expiry: ${expiryDate.toISOString()}`);
+      console.log(`   Status: ${isExpired ? '❌ Expired' : '✓ Valid'}`);
+    }
+
+    console.log('\n✅ All tokens successfully verified with current key');
+    
+  } catch (error) {
+    console.error('❌ Verification failed:', error instanceof Error ? error.message : error);
+    process.exit(1);
+  }
+}
+
 // Add health check endpoint handler
 if (process.argv[2] === "health") {
   performHealthCheck()
@@ -2241,6 +2366,12 @@ if (process.argv[2] === "health") {
     });
 } else if (process.argv[2] === "auth") {
   authenticateAndSaveCredentials().catch(console.error);
+} else if (process.argv[2] === "rotate-key") {
+  rotateKey().catch(console.error);
+} else if (process.argv[2] === "migrate-tokens") {
+  migrateTokens().catch(console.error);
+} else if (process.argv[2] === "verify-keys") {
+  verifyKeys().catch(console.error);
 } else {
   loadCredentialsAndRunServer().catch(console.error);
 }

@@ -1,6 +1,5 @@
 // Jest setup file for test environment configuration
-import { jest } from '@jest/globals';
-import crypto from 'crypto';
+const crypto = require('crypto');
 
 // Set test environment variables
 process.env.NODE_ENV = 'test';

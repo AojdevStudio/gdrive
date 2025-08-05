@@ -39,12 +39,39 @@ export class KeyRotationManager {
    * Register a new key version
    */
   public registerKey(version: string, key: Buffer, metadata: KeyMetadata): void {
+    // Validate version format
+    if (!version || typeof version !== 'string' || !version.match(/^v\d+$/)) {
+      throw new Error('Version must be in format "v1", "v2", etc.');
+    }
+
     if (this.registeredKeys.has(version)) {
       throw new Error(`Key version ${version} already registered`);
     }
 
+    // Validate key
+    if (!Buffer.isBuffer(key)) {
+      throw new Error('Key must be a Buffer');
+    }
+
     if (key.length !== 32) {
       throw new Error('Key must be 32 bytes for AES-256');
+    }
+
+    // Validate metadata
+    if (!metadata || typeof metadata !== 'object') {
+      throw new Error('Invalid metadata object');
+    }
+
+    if (metadata.version !== version) {
+      throw new Error('Metadata version must match registration version');
+    }
+
+    if (!metadata.algorithm || metadata.algorithm !== 'aes-256-gcm') {
+      throw new Error('Only aes-256-gcm algorithm is supported');
+    }
+
+    if (!metadata.iterations || metadata.iterations < 100000) {
+      throw new Error('Iterations must be at least 100000');
     }
 
     this.registeredKeys.set(version, {
