@@ -1,30 +1,13 @@
 import { describe, it, expect, beforeEach, afterEach, jest } from '@jest/globals';
 import * as path from 'path';
+import * as fs from 'fs/promises';
+import * as crypto from 'crypto';
+import { homedir } from 'os';
 
-// Create mocked modules
-const mockFs = {
-  access: jest.fn(),
-  mkdir: jest.fn(),
-  writeFile: jest.fn(),
-  rename: jest.fn(),
-  readFile: jest.fn(),
-  unlink: jest.fn(),
-  appendFile: jest.fn(),
-};
-
-const mockCrypto = {
-  randomBytes: jest.fn(),
-  pbkdf2Sync: jest.fn(),
-  createCipheriv: jest.fn(),
-  createDecipheriv: jest.fn(),
-};
-
-const mockHomedir = jest.fn();
-
-// Mock modules
-jest.mock('fs/promises', () => mockFs);
-jest.mock('os', () => ({ homedir: mockHomedir }));
-jest.mock('crypto', () => mockCrypto);
+// Mock modules - using standard mocking approach with proper type imports for better IDE support
+jest.mock('fs/promises');
+jest.mock('os');
+jest.mock('crypto');
 
 describe('Comprehensive Migration Integration Tests', () => {
   const mockHomePath = '/mock/home';
@@ -34,34 +17,34 @@ describe('Comprehensive Migration Integration Tests', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    mockHomedir.mockReturnValue(mockHomePath);
+    (homedir as jest.Mock).mockReturnValue(mockHomePath);
     process.env.GDRIVE_TOKEN_ENCRYPTION_KEY = mockKey;
     
-    // Setup comprehensive mocks
-    mockFs.access.mockResolvedValue(undefined);
-    mockFs.mkdir.mockResolvedValue(undefined);
-    mockFs.writeFile.mockResolvedValue(undefined);
-    mockFs.rename.mockResolvedValue(undefined);
-    mockFs.readFile.mockResolvedValue('test-content');
-    mockFs.unlink.mockResolvedValue(undefined);
-    mockFs.appendFile.mockResolvedValue(undefined);
+    // Setup comprehensive fs mocks - using any to bypass strict typing for test mocks
+    (fs.access as any).mockResolvedValue(undefined);
+    (fs.mkdir as any).mockResolvedValue(undefined);
+    (fs.writeFile as any).mockResolvedValue(undefined);
+    (fs.rename as any).mockResolvedValue(undefined);
+    (fs.readFile as any).mockResolvedValue('test-content');
+    (fs.unlink as any).mockResolvedValue(undefined);
+    (fs.appendFile as any).mockResolvedValue(undefined);
     
-    // Mock crypto functions for consistent testing
-    mockCrypto.randomBytes.mockImplementation((size: number) => {
+    // Mock crypto functions for consistent testing - using any to bypass strict typing
+    (crypto.randomBytes as any).mockImplementation((size: number) => {
       return Buffer.alloc(size, 1);
     });
     
-    mockCrypto.pbkdf2Sync.mockImplementation(() => {
+    (crypto.pbkdf2Sync as any).mockImplementation(() => {
       return Buffer.alloc(32, 2);
     });
     
-    mockCrypto.createCipheriv.mockReturnValue({
+    (crypto.createCipheriv as any).mockReturnValue({
       update: jest.fn().mockReturnValue('encrypted'),
       final: jest.fn().mockReturnValue('data'),
       getAuthTag: jest.fn().mockReturnValue(Buffer.alloc(16, 3))
     });
     
-    mockCrypto.createDecipheriv.mockReturnValue({
+    (crypto.createDecipheriv as any).mockReturnValue({
       setAuthTag: jest.fn(),
       update: jest.fn().mockReturnValue(JSON.stringify({
         access_token: 'test-token',
@@ -81,7 +64,7 @@ describe('Comprehensive Migration Integration Tests', () => {
   describe('Migration with Various Token Counts', () => {
     it('should handle migration with single token', async () => {
       const singleTokenData = 'iv:authTag:encryptedSingleToken';
-      (fs.readFile as jest.Mock).mockResolvedValue(singleTokenData);
+      (fs.readFile as any).mockResolvedValue(singleTokenData);
 
       // Simulate the migration process
       const migrationResult = await simulateMigration(singleTokenData);
@@ -103,7 +86,7 @@ describe('Comprehensive Migration Integration Tests', () => {
         'iv3:authTag3:encryptedToken3'
       ]);
       
-      (fs.readFile as jest.Mock).mockResolvedValue(multipleTokensData);
+      (fs.readFile as any).mockResolvedValue(multipleTokensData);
 
       const migrationResult = await simulateMigration(multipleTokensData);
       
@@ -118,7 +101,7 @@ describe('Comprehensive Migration Integration Tests', () => {
       );
       const largeTokenData = JSON.stringify(largeTokenArray);
       
-      (fs.readFile as jest.Mock).mockResolvedValue(largeTokenData);
+      (fs.readFile as any).mockResolvedValue(largeTokenData);
 
       const migrationResult = await simulateMigration(largeTokenData);
       
@@ -128,7 +111,7 @@ describe('Comprehensive Migration Integration Tests', () => {
     });
 
     it('should handle empty token file gracefully', async () => {
-      (fs.readFile as jest.Mock).mockResolvedValue('');
+      (fs.readFile as any).mockResolvedValue('');
 
       const migrationResult = await simulateMigration('');
       
@@ -139,7 +122,7 @@ describe('Comprehensive Migration Integration Tests', () => {
 
   describe('Atomic Failure Scenarios', () => {
     it('should rollback on backup creation failure', async () => {
-      (fs.mkdir as jest.Mock).mockRejectedValue(new Error('Backup dir creation failed'));
+      (fs.mkdir as any).mockRejectedValue(new Error('Backup dir creation failed'));
       
       const migrationResult = await simulateMigration('iv:authTag:encrypted');
       
@@ -165,7 +148,7 @@ describe('Comprehensive Migration Integration Tests', () => {
     });
 
     it('should cleanup temp files on write failure', async () => {
-      (fs.writeFile as jest.Mock).mockRejectedValue(new Error('Write failed'));
+      (fs.writeFile as any).mockRejectedValue(new Error('Write failed'));
       
       const migrationResult = await simulateMigration('iv:authTag:encrypted');
       
@@ -176,7 +159,7 @@ describe('Comprehensive Migration Integration Tests', () => {
     });
 
     it('should rollback on atomic rename failure', async () => {
-      (fs.rename as jest.Mock).mockRejectedValue(new Error('Rename failed'));
+      (fs.rename as any).mockRejectedValue(new Error('Rename failed'));
       
       const migrationResult = await simulateMigration('iv:authTag:encrypted');
       
@@ -188,7 +171,7 @@ describe('Comprehensive Migration Integration Tests', () => {
 
     it('should handle partial disk space scenarios', async () => {
       // Simulate disk space issues during backup
-      (fs.writeFile as jest.Mock).mockImplementation((path: string) => {
+      (fs.writeFile as any).mockImplementation((path: string) => {
         if (path.includes('.backup')) {
           return Promise.reject(new Error('ENOSPC: no space left on device'));
         }
@@ -205,12 +188,12 @@ describe('Comprehensive Migration Integration Tests', () => {
   describe('Backup and Restore Functionality', () => {
     it('should create timestamped backup with correct format', async () => {
       const testData = 'iv:authTag:encrypted';
-      (fs.readFile as jest.Mock).mockResolvedValue(testData);
+      (fs.readFile as any).mockResolvedValue(testData);
       
       await simulateBackupCreation(testData);
       
       // Verify timestamp format in backup filename
-      const backupCall = (fs.writeFile as jest.Mock).mock.calls.find(call => 
+      const backupCall = (fs.writeFile as any).mock.calls.find((call: any) => 
         call[0].includes('.backup')
       );
       expect(backupCall).toBeDefined();
@@ -219,11 +202,11 @@ describe('Comprehensive Migration Integration Tests', () => {
 
     it('should preserve exact backup content for restore capability', async () => {
       const originalData = 'iv123:authTag456:encryptedData789';
-      (fs.readFile as jest.Mock).mockResolvedValue(originalData);
+      (fs.readFile as any).mockResolvedValue(originalData);
       
       await simulateBackupCreation(originalData);
       
-      const backupCall = (fs.writeFile as jest.Mock).mock.calls.find(call => 
+      const backupCall = (fs.writeFile as any).mock.calls.find((call: any) => 
         call[0].includes('.backup')
       );
       expect(backupCall[1]).toBe(originalData);
@@ -237,7 +220,7 @@ describe('Comprehensive Migration Integration Tests', () => {
 
     it('should validate backup integrity before proceeding', async () => {
       const testData = 'test-backup-data';
-      (fs.readFile as jest.Mock).mockResolvedValue(testData);
+      (fs.readFile as any).mockResolvedValue(testData);
       
       // Simulate backup validation
       const backupResult = await simulateBackupValidation(testData);
@@ -248,8 +231,8 @@ describe('Comprehensive Migration Integration Tests', () => {
 
     it('should handle corrupted backup scenarios', async () => {
       // Simulate backup file corruption
-      (fs.readFile as jest.Mock).mockResolvedValueOnce('original-data');
-      (fs.readFile as jest.Mock).mockResolvedValueOnce('corrupted-data');
+      (fs.readFile as any).mockResolvedValueOnce('original-data');
+      (fs.readFile as any).mockResolvedValueOnce('corrupted-data');
       
       const backupResult = await simulateBackupValidation('original-data');
       
@@ -335,7 +318,7 @@ describe('Comprehensive Migration Integration Tests', () => {
   describe('Server Startup Prevention', () => {
     it('should detect legacy tokens on startup', async () => {
       // Mock legacy token existence
-      (fs.access as jest.Mock).mockImplementation((path: string) => {
+      (fs.access as any).mockImplementation((path: string) => {
         if (path.includes('.gdrive-mcp-tokens.json')) {
           return Promise.resolve(); // Legacy file exists
         }
@@ -360,7 +343,7 @@ describe('Comprehensive Migration Integration Tests', () => {
 
     it('should allow normal startup with versioned tokens', async () => {
       // Mock versioned token format detection
-      (fs.readFile as jest.Mock).mockResolvedValue(JSON.stringify({
+      (fs.readFile as any).mockResolvedValue(JSON.stringify({
         version: 'v1',
         algorithm: 'aes-256-gcm',
         data: 'iv:authTag:encrypted'
@@ -373,7 +356,7 @@ describe('Comprehensive Migration Integration Tests', () => {
     });
 
     it('should handle missing token files gracefully', async () => {
-      (fs.access as jest.Mock).mockRejectedValue(new Error('ENOENT: no such file'));
+      (fs.access as any).mockRejectedValue(new Error('ENOENT: no such file'));
       
       const startupCheck = await simulateServerStartupCheck();
       
