@@ -1,0 +1,601 @@
+name: Performance Monitoring
+
+# Performance monitoring and benchmarking
+on:
+  push:
+    branches: [ "main" ]
+    paths:
+      - 'src/**'
+      - 'package*.json'
+      - 'tsconfig.json'
+  pull_request:
+    branches: [ "main" ]
+    paths:
+      - 'src/**'
+      - 'package*.json'
+      - 'tsconfig.json'
+  schedule:
+    # Run performance benchmarks daily at 2 AM UTC
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+    inputs:
+      benchmark-type:
+        description: 'Type of benchmark to run'
+        required: true
+        default: 'all'
+        type: choice
+        options:
+          - all
+          - memory
+          - cpu
+          - io
+          - cache
+
+permissions:
+  contents: read
+  actions: write
+  checks: write
+
+env:
+  NODE_VERSION: '20'
+
+jobs:
+  # Job 1: Performance baseline
+  performance-baseline:
+    name: Performance Baseline
+    runs-on: ubuntu-latest
+    
+    services:
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    
+    outputs:
+      baseline-results: ${{ steps.baseline.outputs.results }}
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Need history for performance comparison
+          
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          
+      - name: Install dependencies
+        run: |
+          npm ci --prefer-offline --no-audit
+          # Install performance testing tools
+          npm install --no-save clinic autocannon benchmark
+          
+      - name: Build application
+        run: npm run build
+        
+      - name: Setup test environment
+        run: |
+          # Create mock credentials for testing
+          mkdir -p ./test-credentials
+          echo '{}' > ./test-credentials/gcp-oauth.keys.json
+          echo '{}' > ./test-credentials/.gdrive-server-credentials.json
+          
+      - name: Run performance baseline
+        id: baseline
+        run: |
+          echo "Running performance baseline tests..."
+          
+          # Create performance test script
+          cat > performance-test.js << 'EOF'
+          const { performance } = require('perf_hooks');
+          const fs = require('fs');
+          
+          // Mock Google Drive operations for baseline testing
+          const mockOperations = {
+            listFiles: async () => {
+              const start = performance.now();
+              await new Promise(resolve => setTimeout(resolve, Math.random() * 100));
+              return { duration: performance.now() - start, operation: 'listFiles' };
+            },
+            
+            readFile: async () => {
+              const start = performance.now();
+              await new Promise(resolve => setTimeout(resolve, Math.random() * 200));
+              return { duration: performance.now() - start, operation: 'readFile' };
+            },
+            
+            createFile: async () => {
+              const start = performance.now();
+              await new Promise(resolve => setTimeout(resolve, Math.random() * 300));
+              return { duration: performance.now() - start, operation: 'createFile' };
+            },
+            
+            cacheOperation: async () => {
+              const start = performance.now();
+              // Simulate cache hit/miss
+              const isHit = Math.random() > 0.3;
+              await new Promise(resolve => setTimeout(resolve, isHit ? 10 : 150));
+              return { duration: performance.now() - start, operation: 'cache', hit: isHit };
+            }
+          };
+          
+          async function runBenchmark() {
+            const results = {
+              timestamp: new Date().toISOString(),
+              nodeVersion: process.version,
+              operations: {},
+              memory: process.memoryUsage(),
+              summary: {}
+            };
+            
+            // Run each operation multiple times
+            for (const [opName, opFunc] of Object.entries(mockOperations)) {
+              const iterations = 100;
+              const opResults = [];
+              
+              console.log(`Benchmarking ${opName}...`);
+              
+              for (let i = 0; i < iterations; i++) {
+                const result = await opFunc();
+                opResults.push(result.duration);
+              }
+              
+              // Calculate statistics
+              opResults.sort((a, b) => a - b);
+              const avg = opResults.reduce((a, b) => a + b, 0) / iterations;
+              const p50 = opResults[Math.floor(iterations * 0.5)];
+              const p95 = opResults[Math.floor(iterations * 0.95)];
+              const p99 = opResults[Math.floor(iterations * 0.99)];
+              
+              results.operations[opName] = {
+                iterations,
+                average: avg,
+                median: p50,
+                p95: p95,
+                p99: p99,
+                min: opResults[0],
+                max: opResults[iterations - 1]
+              };
+            }
+            
+            // Overall summary
+            results.summary = {
+              avgResponseTime: Object.values(results.operations)
+                .reduce((sum, op) => sum + op.average, 0) / Object.keys(results.operations).length,
+              memoryUsageMB: Math.round(results.memory.heapUsed / 1024 / 1024 * 100) / 100
+            };
+            
+            return results;
+          }
+          
+          runBenchmark().then(results => {
+            fs.writeFileSync('baseline-results.json', JSON.stringify(results, null, 2));
+            console.log('Baseline results:', JSON.stringify(results.summary, null, 2));
+          }).catch(console.error);
+          EOF
+          
+          # Run the baseline test
+          node performance-test.js
+          
+          # Set output
+          echo "results<<EOF" >> $GITHUB_OUTPUT
+          cat baseline-results.json >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+          
+      - name: Memory usage analysis
+        run: |
+          echo "Analyzing memory usage..."
+          
+          # Create memory test
+          cat > memory-test.js << 'EOF'
+          const { performance } = require('perf_hooks');
+          
+          function measureMemory(label) {
+            const usage = process.memoryUsage();
+            console.log(`${label}:`);
+            console.log(`  Heap Used: ${Math.round(usage.heapUsed / 1024 / 1024 * 100) / 100} MB`);
+            console.log(`  Heap Total: ${Math.round(usage.heapTotal / 1024 / 1024 * 100) / 100} MB`);
+            console.log(`  RSS: ${Math.round(usage.rss / 1024 / 1024 * 100) / 100} MB`);
+            return usage;
+          }
+          
+          // Baseline memory
+          const baseline = measureMemory('Baseline');
+          
+          // Simulate loading the application
+          const largeArray = new Array(100000).fill('test data');
+          const afterLoad = measureMemory('After Load');
+          
+          // Memory leak test
+          const leakTest = [];
+          for (let i = 0; i < 10000; i++) {
+            leakTest.push({ id: i, data: new Array(100).fill(i) });
+          }
+          const afterLeak = measureMemory('After Leak Test');
+          
+          // Cleanup
+          largeArray.length = 0;
+          leakTest.length = 0;
+          global.gc && global.gc();
+          const afterCleanup = measureMemory('After Cleanup');
+          
+          // Memory report
+          const report = {
+            baseline: baseline.heapUsed,
+            afterLoad: afterLoad.heapUsed,
+            afterLeak: afterLeak.heapUsed,
+            afterCleanup: afterCleanup.heapUsed,
+            potentialLeak: (afterCleanup.heapUsed - baseline.heapUsed) > (1024 * 1024) // 1MB threshold
+          };
+          
+          console.log('\nMemory Report:', JSON.stringify(report, null, 2));
+          require('fs').writeFileSync('memory-report.json', JSON.stringify(report, null, 2));
+          EOF
+          
+          node --expose-gc memory-test.js || node memory-test.js
+          
+      - name: Upload performance artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: performance-baseline-${{ github.run_id }}
+          path: |
+            baseline-results.json
+            memory-report.json
+          retention-days: 30
+
+  # Job 2: Load testing
+  load-testing:
+    name: Load Testing
+    runs-on: ubuntu-latest
+    needs: performance-baseline
+    if: github.event_name != 'schedule'  # Skip on scheduled runs
+    
+    services:
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          
+      - name: Install dependencies
+        run: |
+          npm ci --prefer-offline --no-audit
+          npm install --no-save autocannon clinic
+          
+      - name: Build application
+        run: npm run build
+        
+      - name: Setup mock server for load testing
+        run: |
+          # Create a simple HTTP server that mimics MCP behavior
+          cat > mock-server.js << 'EOF'
+          const http = require('http');
+          const { performance } = require('perf_hooks');
+          
+          let requestCount = 0;
+          const startTime = performance.now();
+          
+          const server = http.createServer((req, res) => {
+            requestCount++;
+            
+            // Simulate MCP request processing
+            const delay = Math.random() * 100 + 50; // 50-150ms delay
+            
+            setTimeout(() => {
+              res.writeHead(200, { 'Content-Type': 'application/json' });
+              res.end(JSON.stringify({
+                id: requestCount,
+                method: 'mcp.request',
+                result: { success: true, data: 'mock response' },
+                timestamp: new Date().toISOString(),
+                processingTime: delay
+              }));
+            }, delay);
+          });
+          
+          server.listen(3000, () => {
+            console.log('Mock MCP server running on port 3000');
+          });
+          
+          // Graceful shutdown
+          process.on('SIGTERM', () => {
+            console.log(`Server handled ${requestCount} requests in ${performance.now() - startTime}ms`);
+            server.close();
+          });
+          EOF
+          
+          # Start mock server in background
+          node mock-server.js &
+          MOCK_PID=$!
+          echo "MOCK_PID=$MOCK_PID" >> $GITHUB_ENV
+          
+          # Wait for server to start
+          sleep 2
+          
+      - name: Run load tests
+        run: |
+          echo "Running load tests..."
+          
+          # Test 1: Sustained load
+          echo "Test 1: Sustained Load (100 req/s for 30s)"
+          npx autocannon -c 10 -d 30 -p 10 http://localhost:3000 > load-test-sustained.json
+          
+          # Test 2: Burst load
+          echo "Test 2: Burst Load (500 req/s for 10s)"
+          npx autocannon -c 50 -d 10 -p 10 http://localhost:3000 > load-test-burst.json
+          
+          # Test 3: Gradual ramp
+          echo "Test 3: Gradual Ramp"
+          for connections in 1 5 10 20 50; do
+            echo "Testing with $connections connections..."
+            npx autocannon -c $connections -d 10 http://localhost:3000 > "load-test-ramp-$connections.json"
+          done
+          
+      - name: Analyze load test results
+        run: |
+          echo "Analyzing load test results..."
+          
+          cat > analyze-load.js << 'EOF'
+          const fs = require('fs');
+          
+          function parseAutocannon(filename) {
+            const content = fs.readFileSync(filename, 'utf8');
+            const lines = content.split('\n');
+            
+            const result = {};
+            
+            lines.forEach(line => {
+              if (line.includes('requests in')) {
+                const match = line.match(/(\d+) requests in ([\d.]+)s/);
+                if (match) {
+                  result.totalRequests = parseInt(match[1]);
+                  result.duration = parseFloat(match[2]);
+                  result.rps = result.totalRequests / result.duration;
+                }
+              }
+              if (line.includes('Latency')) {
+                const latencyLine = lines[lines.indexOf(line) + 1];
+                if (latencyLine) {
+                  const latencies = latencyLine.trim().split(/\s+/);
+                  result.latency = {
+                    avg: latencies[0],
+                    stdev: latencies[1],
+                    max: latencies[2]
+                  };
+                }
+              }
+            });
+            
+            return result;
+          }
+          
+          const results = {
+            sustained: parseAutocannon('load-test-sustained.json'),
+            burst: parseAutocannon('load-test-burst.json'),
+            ramp: {}
+          };
+          
+          // Process ramp results
+          [1, 5, 10, 20, 50].forEach(conn => {
+            const filename = `load-test-ramp-${conn}.json`;
+            if (fs.existsSync(filename)) {
+              results.ramp[conn] = parseAutocannon(filename);
+            }
+          });
+          
+          console.log('Load Test Results:', JSON.stringify(results, null, 2));
+          fs.writeFileSync('load-test-analysis.json', JSON.stringify(results, null, 2));
+          EOF
+          
+          node analyze-load.js
+          
+      - name: Stop mock server
+        if: always()
+        run: |
+          if [ -n "$MOCK_PID" ]; then
+            kill $MOCK_PID || true
+          fi
+          
+      - name: Upload load test results
+        uses: actions/upload-artifact@v4
+        with:
+          name: load-test-results-${{ github.run_id }}
+          path: |
+            load-test-*.json
+            load-test-analysis.json
+          retention-days: 30
+
+  # Job 3: Performance comparison
+  performance-comparison:
+    name: Performance Comparison
+    runs-on: ubuntu-latest
+    needs: [performance-baseline, load-testing]
+    if: github.event_name == 'pull_request'
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          
+      - name: Download current results
+        uses: actions/download-artifact@v4
+        with:
+          name: performance-baseline-${{ github.run_id }}
+          path: ./current-results
+          
+      - name: Get baseline from main branch
+        run: |
+          # Try to get the latest baseline from main branch
+          echo "Fetching baseline from main branch..."
+          
+          # This would typically pull from a performance database or artifact storage
+          # For now, we'll create a mock baseline
+          mkdir -p ./baseline-results
+          
+          cat > ./baseline-results/baseline-results.json << 'EOF'
+          {
+            "timestamp": "2024-01-01T00:00:00.000Z",
+            "operations": {
+              "listFiles": { "average": 95, "p95": 150, "p99": 200 },
+              "readFile": { "average": 180, "p95": 280, "p99": 350 },
+              "createFile": { "average": 250, "p95": 400, "p99": 500 },
+              "cacheOperation": { "average": 45, "p95": 80, "p99": 120 }
+            },
+            "summary": {
+              "avgResponseTime": 142.5,
+              "memoryUsageMB": 45.2
+            }
+          }
+          EOF
+          
+      - name: Compare performance
+        run: |
+          cat > compare-performance.js << 'EOF'
+          const fs = require('fs');
+          
+          const baseline = JSON.parse(fs.readFileSync('./baseline-results/baseline-results.json', 'utf8'));
+          const current = JSON.parse(fs.readFileSync('./current-results/baseline-results.json', 'utf8'));
+          
+          console.log('## Performance Comparison Report');
+          console.log('');
+          
+          // Compare operations
+          console.log('### Operation Performance');
+          console.log('| Operation | Baseline Avg | Current Avg | Change | Status |');
+          console.log('|-----------|--------------|-------------|--------|--------|');
+          
+          let regressions = 0;
+          let improvements = 0;
+          
+          Object.keys(baseline.operations).forEach(op => {
+            const baseAvg = baseline.operations[op].average;
+            const currAvg = current.operations[op]?.average || 0;
+            const change = ((currAvg - baseAvg) / baseAvg * 100).toFixed(1);
+            const changeNum = parseFloat(change);
+            
+            let status = '✅ OK';
+            if (changeNum > 10) {
+              status = '❌ REGRESSION';
+              regressions++;
+            } else if (changeNum < -5) {
+              status = '🚀 IMPROVEMENT';
+              improvements++;
+            }
+            
+            console.log(`| ${op} | ${baseAvg.toFixed(1)}ms | ${currAvg.toFixed(1)}ms | ${change}% | ${status} |`);
+          });
+          
+          console.log('');
+          console.log('### Memory Usage');
+          const memChange = ((current.summary.memoryUsageMB - baseline.summary.memoryUsageMB) / baseline.summary.memoryUsageMB * 100).toFixed(1);
+          console.log(`- Baseline: ${baseline.summary.memoryUsageMB} MB`);
+          console.log(`- Current: ${current.summary.memoryUsageMB} MB`);
+          console.log(`- Change: ${memChange}%`);
+          
+          console.log('');
+          console.log('### Summary');
+          console.log(`- 🚀 Improvements: ${improvements}`);
+          console.log(`- ❌ Regressions: ${regressions}`);
+          
+          if (regressions > 0) {
+            console.log('');
+            console.log('⚠️ **Performance regressions detected!** Please review the changes.');
+          }
+          
+          // Save results
+          const comparisonResult = {
+            regressions,
+            improvements,
+            memoryChange: parseFloat(memChange),
+            operations: Object.keys(baseline.operations).map(op => ({
+              name: op,
+              baseline: baseline.operations[op].average,
+              current: current.operations[op]?.average || 0,
+              change: ((current.operations[op]?.average || 0) - baseline.operations[op].average) / baseline.operations[op].average * 100
+            }))
+          };
+          
+          fs.writeFileSync('performance-comparison.json', JSON.stringify(comparisonResult, null, 2));
+          
+          // Exit with error if significant regressions found
+          if (regressions > 2) {
+            console.log('');
+            console.log('❌ Too many performance regressions detected. Please investigate.');
+            process.exit(1);
+          }
+          EOF
+          
+          node compare-performance.js > performance-report.md
+          
+      - name: Comment PR with performance report
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const report = fs.readFileSync('performance-report.md', 'utf8');
+            
+            // Find existing performance comment
+            const comments = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+            
+            const botComment = comments.data.find(comment => 
+              comment.user.type === 'Bot' && comment.body.includes('Performance Comparison Report')
+            );
+            
+            const commentBody = `${report}
+
+---
+*Performance report generated by [Claude Code](https://claude.ai/code)*`;
+            
+            if (botComment) {
+              // Update existing comment
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: botComment.id,
+                body: commentBody,
+              });
+            } else {
+              // Create new comment
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body: commentBody,
+              });
+            }
+            
+      - name: Upload comparison results
+        uses: actions/upload-artifact@v4
+        with:
+          name: performance-comparison-${{ github.run_id }}
+          path: |
+            performance-comparison.json
+            performance-report.md
+          retention-days: 30

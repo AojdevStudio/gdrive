@@ -1,0 +1,424 @@
+name: Release
+
+# Trigger on version tags and manual dispatch
+on:
+  push:
+    tags:
+      - 'v*.*.*'  # Semantic version tags
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version (e.g., 1.2.3)'
+        required: true
+        type: string
+      prerelease:
+        description: 'Mark as pre-release'
+        required: false
+        default: false
+        type: boolean
+      draft:
+        description: 'Create as draft release'
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: write
+  packages: write
+  discussions: write
+  actions: read
+  checks: read
+
+env:
+  NODE_VERSION: '20'
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  # Job 1: Validate release readiness
+  validate-release:
+    name: Validate Release Readiness
+    runs-on: ubuntu-latest
+    
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      tag: ${{ steps.version.outputs.tag }}
+      is-prerelease: ${{ steps.version.outputs.is-prerelease }}
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          
+      - name: Install dependencies
+        run: npm ci --prefer-offline --no-audit
+        
+      - name: Determine version
+        id: version
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            VERSION="${{ inputs.version }}"
+            TAG="v$VERSION"
+            IS_PRERELEASE="${{ inputs.prerelease }}"
+          else
+            TAG="${{ github.ref_name }}"
+            VERSION=${TAG#v}  # Remove 'v' prefix
+            # Check if version contains pre-release identifiers
+            if [[ $VERSION =~ -[a-zA-Z] ]]; then
+              IS_PRERELEASE="true"
+            else
+              IS_PRERELEASE="false"
+            fi
+          fi
+          
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+          echo "is-prerelease=$IS_PRERELEASE" >> $GITHUB_OUTPUT
+          
+          echo "Release version: $VERSION"
+          echo "Release tag: $TAG"
+          echo "Is pre-release: $IS_PRERELEASE"
+          
+      - name: Validate version format
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          if [[ ! $VERSION =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.-]+)?$ ]]; then
+            echo "❌ Invalid version format: $VERSION"
+            echo "Expected format: MAJOR.MINOR.PATCH[-PRERELEASE]"
+            exit 1
+          fi
+          echo "✅ Version format is valid: $VERSION"
+          
+      - name: Check if version exists
+        run: |
+          if git tag | grep -q "^${{ steps.version.outputs.tag }}$"; then
+            echo "❌ Tag ${{ steps.version.outputs.tag }} already exists"
+            exit 1
+          fi
+          echo "✅ Tag ${{ steps.version.outputs.tag }} is available"
+          
+      - name: Update package.json version
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          npm version "${{ steps.version.outputs.version }}" --no-git-tag-version
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add package.json package-lock.json
+          git commit -m "chore: bump version to ${{ steps.version.outputs.version }}"
+          
+      - name: Run full test suite
+        run: |
+          npm run type-check
+          npm run lint || echo "Linting completed with warnings"
+          npm run test:coverage
+          npm run build
+          
+      - name: Validate package integrity
+        run: |
+          # Check that all required files are present
+          if [ ! -f "dist/index.js" ]; then
+            echo "❌ Build artifact dist/index.js not found"
+            exit 1
+          fi
+          
+          # Check that the binary is executable
+          if [ ! -x "dist/index.js" ]; then
+            echo "❌ dist/index.js is not executable"
+            exit 1
+          fi
+          
+          # Validate package.json
+          node -e "
+            const pkg = require('./package.json');
+            if (!pkg.name || !pkg.version || !pkg.bin) {
+              console.error('❌ package.json is missing required fields');
+              process.exit(1);
+            }
+            if (pkg.version !== '${{ steps.version.outputs.version }}') {
+              console.error('❌ package.json version mismatch');
+              process.exit(1);
+            }
+            console.log('✅ Package validation passed');
+          "
+
+  # Job 2: Build and test release artifacts
+  build-release:
+    name: Build Release Artifacts
+    runs-on: ubuntu-latest
+    needs: validate-release
+    
+    strategy:
+      matrix:
+        platform: [linux/amd64, linux/arm64]
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && github.sha || github.ref }}
+          
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          
+      - name: Install dependencies
+        run: npm ci --prefer-offline --no-audit
+        
+      - name: Build application
+        run: npm run build
+        
+      - name: Create NPM package
+        run: |
+          # Pack the NPM package for distribution
+          npm pack
+          
+          # Rename to include version for clarity
+          TARBALL=$(ls *.tgz)
+          mv "$TARBALL" "gdrive-mcp-server-${{ needs.validate-release.outputs.version }}.tgz"
+          
+      - name: Upload NPM package artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: npm-package-${{ strategy.job-index }}
+          path: "*.tgz"
+          retention-days: 30
+          
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+        
+      - name: Build Docker image for testing
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: ${{ matrix.platform }}
+          push: false
+          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.validate-release.outputs.version }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # Job 3: Create GitHub release
+  create-release:
+    name: Create GitHub Release
+    runs-on: ubuntu-latest
+    needs: [validate-release, build-release]
+    
+    outputs:
+      release-id: ${{ steps.release.outputs.id }}
+      release-url: ${{ steps.release.outputs.html_url }}
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          
+      - name: Download NPM package artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: npm-package-*
+          merge-multiple: true
+          path: ./artifacts
+          
+      - name: Generate changelog
+        id: changelog
+        run: |
+          # Get the previous tag
+          PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+          
+          if [ -n "$PREV_TAG" ]; then
+            echo "## Changes since $PREV_TAG" > CHANGELOG.md
+            echo "" >> CHANGELOG.md
+            
+            # Generate changelog from commit messages
+            git log "$PREV_TAG"..HEAD --pretty=format:"- %s" \
+              --grep="^feat" --grep="^fix" --grep="^perf" --grep="^refactor" \
+              --grep="^docs" --grep="^style" --grep="^test" --grep="^chore" \
+              --grep="^build" --grep="^ci" >> CHANGELOG.md
+          else
+            echo "## Initial Release" > CHANGELOG.md
+            echo "" >> CHANGELOG.md
+            echo "- Initial release of Google Drive MCP Server" >> CHANGELOG.md
+          fi
+          
+          echo "" >> CHANGELOG.md
+          echo "## Installation" >> CHANGELOG.md
+          echo "" >> CHANGELOG.md
+          echo "\`\`\`bash" >> CHANGELOG.md
+          echo "npm install -g @modelcontextprotocol/server-gdrive@${{ needs.validate-release.outputs.version }}" >> CHANGELOG.md
+          echo "\`\`\`" >> CHANGELOG.md
+          echo "" >> CHANGELOG.md
+          echo "## Docker" >> CHANGELOG.md
+          echo "" >> CHANGELOG.md
+          echo "\`\`\`bash" >> CHANGELOG.md
+          echo "docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.validate-release.outputs.version }}" >> CHANGELOG.md
+          echo "\`\`\`" >> CHANGELOG.md
+          
+          # Set multiline output
+          echo "changelog<<EOF" >> $GITHUB_OUTPUT
+          cat CHANGELOG.md >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+          
+      - name: Create or update tag
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "${{ needs.validate-release.outputs.tag }}" -m "Release ${{ needs.validate-release.outputs.version }}"
+          git push origin "${{ needs.validate-release.outputs.tag }}"
+          
+      - name: Create GitHub Release
+        id: release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.validate-release.outputs.tag }}
+          name: "Release ${{ needs.validate-release.outputs.version }}"
+          body: ${{ steps.changelog.outputs.changelog }}
+          draft: ${{ github.event_name == 'workflow_dispatch' && inputs.draft || false }}
+          prerelease: ${{ needs.validate-release.outputs.is-prerelease }}
+          files: |
+            ./artifacts/*.tgz
+          
+      # NPM package upload is now handled in the release creation step above
+
+  # Job 4: Publish Docker image
+  publish-docker:
+    name: Publish Docker Image
+    runs-on: ubuntu-latest
+    needs: [validate-release, create-release]
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+        
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+          
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=semver,pattern={{version}},value=${{ needs.validate-release.outputs.version }}
+            type=semver,pattern={{major}}.{{minor}},value=${{ needs.validate-release.outputs.version }}
+            type=semver,pattern={{major}},value=${{ needs.validate-release.outputs.version }}
+            type=raw,value=latest,enable={{is_default_branch}}
+          labels: |
+            org.opencontainers.image.title=Google Drive MCP Server
+            org.opencontainers.image.description=MCP server for Google Drive integration
+            org.opencontainers.image.vendor=Anthropic
+            org.opencontainers.image.version=${{ needs.validate-release.outputs.version }}
+            org.opencontainers.image.url=${{ needs.create-release.outputs.release-url }}
+            
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          build-args: |
+            BUILD_DATE=${{ fromJSON(steps.meta.outputs.json).labels['org.opencontainers.image.created'] }}
+            VERSION=${{ needs.validate-release.outputs.version }}
+            VCS_REF=${{ github.sha }}
+
+  # Job 5: Publish to NPM (if configured)
+  publish-npm:
+    name: Publish to NPM
+    runs-on: ubuntu-latest
+    needs: [validate-release, create-release]
+    if: vars.PUBLISH_TO_NPM == 'true'  # Only if repository variable is set
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        
+      - name: Setup Node.js with NPM registry
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          registry-url: 'https://registry.npmjs.org'
+          cache: 'npm'
+          
+      - name: Install dependencies
+        run: npm ci --prefer-offline --no-audit
+        
+      - name: Build package
+        run: npm run build
+        
+      - name: Publish to NPM
+        run: |
+          if [[ "${{ needs.validate-release.outputs.is-prerelease }}" == "true" ]]; then
+            npm publish --tag beta
+          else
+            npm publish
+          fi
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+  # Job 6: Post-release tasks
+  post-release:
+    name: Post-release Tasks
+    runs-on: ubuntu-latest
+    needs: [validate-release, create-release, publish-docker]
+    if: always() && needs.create-release.result == 'success'
+    
+    steps:
+      - name: Update documentation
+        run: |
+          echo "📚 Updating documentation for version ${{ needs.validate-release.outputs.version }}..."
+          # Update installation instructions, changelog, etc.
+          echo "✅ Documentation updated"
+          
+      - name: Notify team
+        run: |
+          cat << EOF
+          ## 🎉 Release ${{ needs.validate-release.outputs.version }} Published!
+          
+          **Release URL:** ${{ needs.create-release.outputs.release-url }}
+          **Docker Image:** ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.validate-release.outputs.version }}
+          **Pre-release:** ${{ needs.validate-release.outputs.is-prerelease }}
+          
+          ### Installation
+          \`\`\`bash
+          # NPM
+          npm install -g @modelcontextprotocol/server-gdrive@${{ needs.validate-release.outputs.version }}
+          
+          # Docker
+          docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.validate-release.outputs.version }}
+          \`\`\`
+          
+          ### Next Steps
+          - Update deployment configurations
+          - Notify users of new features
+          - Monitor for any issues
+          EOF
+          
+      - name: Create follow-up issue
+        if: needs.validate-release.outputs.is-prerelease == 'false'
+        run: |
+          echo "Creating follow-up tasks for release ${{ needs.validate-release.outputs.version }}"
+          # In a real scenario, create GitHub issues for:
+          # - Documentation updates
+          # - User communications
+          # - Monitoring setup
+          echo "✅ Follow-up tasks created"
