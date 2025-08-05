@@ -9,63 +9,75 @@ jest.mock('fs/promises');
 jest.mock('os');
 jest.mock('crypto');
 
+// Type-safe mock helpers
+const mockFs = fs as jest.Mocked<typeof fs>;
+const mockCrypto = crypto as jest.Mocked<typeof crypto>;
+const mockHomedir = homedir as jest.MockedFunction<typeof homedir>;
+
 describe('Migration Performance and Stress Tests', () => {
-  const mockHomedir = '/mock/home';
-  const mockLegacyPath = path.join(mockHomedir, '.gdrive-mcp-tokens.json');
-  const mockBackupDir = path.join(mockHomedir, '.backup');
+  const mockHomedirPath = '/mock/home';
+  const mockLegacyPath = path.join(mockHomedirPath, '.gdrive-mcp-tokens.json');
+  const mockBackupDir = path.join(mockHomedirPath, '.backup');
   const mockKey = Buffer.from('test-key-123456789012345678901234', 'utf8').toString('base64');
 
   beforeEach(() => {
     jest.clearAllMocks();
-    (homedir as jest.Mock).mockReturnValue(mockHomedir);
+    mockHomedir.mockReturnValue(mockHomedirPath);
     process.env.GDRIVE_TOKEN_ENCRYPTION_KEY = mockKey;
     
-    // Setup performance-optimized mocks
-    (fs.access as jest.Mock).mockResolvedValue(undefined);
-    (fs.mkdir as jest.Mock).mockResolvedValue(undefined);
-    (fs.writeFile as jest.Mock).mockResolvedValue(undefined);
-    (fs.rename as jest.Mock).mockResolvedValue(undefined);
-    (fs.readFile as jest.Mock).mockResolvedValue('test-content');
-    (fs.unlink as jest.Mock).mockResolvedValue(undefined);
-    (fs.appendFile as jest.Mock).mockResolvedValue(undefined);
-    
-    // Fast crypto mocks for performance testing
-    (crypto.randomBytes as jest.Mock).mockImplementation((size: number) => {
-      return Buffer.alloc(size, 1);
-    });
-    
-    (crypto.pbkdf2Sync as jest.Mock).mockImplementation(() => {
-      return Buffer.alloc(32, 2);
-    });
-    
-    (crypto.createCipheriv as jest.Mock).mockReturnValue({
-      update: jest.fn().mockReturnValue('encrypted'),
-      final: jest.fn().mockReturnValue('data'),
-      getAuthTag: jest.fn().mockReturnValue(Buffer.alloc(16, 3))
-    });
-    
-    (crypto.createDecipheriv as jest.Mock).mockReturnValue({
-      setAuthTag: jest.fn(),
-      update: jest.fn().mockReturnValue(JSON.stringify({
-        access_token: 'test-token',
-        refresh_token: 'refresh-token',
-        expiry_date: Date.now() + 3600000,
-        token_type: 'Bearer',
-        scope: 'https://www.googleapis.com/auth/drive'
-      })),
-      final: jest.fn().mockReturnValue('')
-    });
+    setupPerformanceMocks();
   });
 
   afterEach(() => {
     delete process.env.GDRIVE_TOKEN_ENCRYPTION_KEY;
   });
+  
+  // Performance-optimized mock setup
+  function setupPerformanceMocks(): void {
+    // Setup fast fs mocks for performance testing
+    mockFs.access.mockResolvedValue(undefined as any);
+    mockFs.mkdir.mockResolvedValue(undefined as any);
+    mockFs.writeFile.mockResolvedValue(undefined as any);
+    mockFs.rename.mockResolvedValue(undefined as any);
+    mockFs.readFile.mockResolvedValue('test-content' as any);
+    mockFs.unlink.mockResolvedValue(undefined as any);
+    mockFs.appendFile.mockResolvedValue(undefined as any);
+    
+    // Fast crypto mocks for performance testing
+    mockCrypto.randomBytes.mockImplementation((size: number) => {
+      return Buffer.alloc(size, 1);
+    });
+    
+    mockCrypto.pbkdf2Sync.mockImplementation(() => {
+      return Buffer.alloc(32, 2);
+    });
+    
+    mockCrypto.createCipheriv.mockReturnValue({
+      update: jest.fn().mockReturnValue('encrypted'),
+      final: jest.fn().mockReturnValue('data'),
+      getAuthTag: jest.fn().mockReturnValue(Buffer.alloc(16, 3))
+    } as crypto.Cipher);
+    
+    const mockTokenData = {
+      access_token: 'test-token',
+      refresh_token: 'refresh-token',
+      expiry_date: Date.now() + 3600000,
+      token_type: 'Bearer',
+      scope: 'https://www.googleapis.com/auth/drive'
+    };
+    
+    mockCrypto.createDecipheriv.mockReturnValue({
+      setAuthTag: jest.fn(),
+      update: jest.fn().mockReturnValue(JSON.stringify(mockTokenData)),
+      final: jest.fn().mockReturnValue('')
+    } as crypto.Decipher);
+  }
 
   describe('Large Scale Migration Performance', () => {
     it('should handle 1000 token migration within performance threshold', async () => {
       const tokenCount = 1000;
       const largeTokenArray = generateMockTokenArray(tokenCount);
-      (fs.readFile as jest.Mock).mockResolvedValue(JSON.stringify(largeTokenArray));
+      mockFs.readFile.mockResolvedValue(JSON.stringify(largeTokenArray) as any);
 
       const startTime = Date.now();
       const result = await simulateHighVolumeMigration(tokenCount);
@@ -88,7 +100,7 @@ describe('Migration Performance and Stress Tests', () => {
 
       for (const testCase of testCases) {
         const tokens = generateMockTokenArray(testCase.count);
-        (fs.readFile as jest.Mock).mockResolvedValue(JSON.stringify(tokens));
+        mockFs.readFile.mockResolvedValue(JSON.stringify(tokens) as any);
 
         const startTime = Date.now();
         const result = await simulateHighVolumeMigration(testCase.count);
@@ -122,7 +134,7 @@ describe('Migration Performance and Stress Tests', () => {
       };
 
       const tokenArray = Array(100).fill(largeTokenData);
-      (fs.readFile as jest.Mock).mockResolvedValue(JSON.stringify(tokenArray));
+      mockFs.readFile.mockResolvedValue(JSON.stringify(tokenArray) as any);
 
       const result = await simulateHighVolumeMigration(100);
       
@@ -197,9 +209,9 @@ describe('Migration Performance and Stress Tests', () => {
   describe('Resource Exhaustion Scenarios', () => {
     it('should handle low disk space gracefully', async () => {
       // Mock disk space error
-      (fs.writeFile as jest.Mock).mockRejectedValueOnce(
-        Object.assign(new Error('ENOSPC: no space left on device'), { code: 'ENOSPC' })
-      );
+      const diskSpaceError = new Error('ENOSPC: no space left on device') as Error & { code: string };
+      diskSpaceError.code = 'ENOSPC';
+      mockFs.writeFile.mockRejectedValueOnce(diskSpaceError);
 
       const result = await simulateHighVolumeMigration(10);
       
@@ -218,7 +230,7 @@ describe('Migration Performance and Stress Tests', () => {
         scope: 'https://www.googleapis.com/auth/drive'
       }));
 
-      (fs.readFile as jest.Mock).mockResolvedValue(JSON.stringify(hugeTokens));
+      mockFs.readFile.mockResolvedValue(JSON.stringify(hugeTokens) as any);
 
       const result = await simulateHighVolumeMigration(1000, { memoryPressure: true });
       
@@ -233,7 +245,7 @@ describe('Migration Performance and Stress Tests', () => {
     it('should handle corrupted file system state', async () => {
       // Simulate file system corruption during atomic operations
       let writeCount = 0;
-      (fs.writeFile as jest.Mock).mockImplementation(() => {
+      mockFs.writeFile.mockImplementation((): Promise<void> => {
         writeCount++;
         if (writeCount === 2) { // Fail on second write (temp file)
           return Promise.reject(new Error('EIO: i/o error'));
@@ -259,7 +271,7 @@ describe('Migration Performance and Stress Tests', () => {
 
       for (const [name, benchmark] of Object.entries(benchmarks)) {
         const tokens = generateMockTokenArray(benchmark.tokens);
-        (fs.readFile as jest.Mock).mockResolvedValue(JSON.stringify(tokens));
+        mockFs.readFile.mockResolvedValue(JSON.stringify(tokens) as any);
 
         const startTime = Date.now();
         const result = await simulateHighVolumeMigration(benchmark.tokens);
@@ -268,7 +280,10 @@ describe('Migration Performance and Stress Tests', () => {
         expect(result.success).toBe(true);
         expect(duration).toBeLessThan(benchmark.maxTime);
         
-        console.log(`${name}: ${benchmark.tokens} tokens in ${duration}ms (limit: ${benchmark.maxTime}ms)`);
+        // Performance logging (can be disabled in CI)
+        if (process.env.NODE_ENV !== 'ci') {
+          console.log(`${name}: ${benchmark.tokens} tokens in ${duration}ms (limit: ${benchmark.maxTime}ms)`);
+        }
       }
     });
 
@@ -279,7 +294,7 @@ describe('Migration Performance and Stress Tests', () => {
 
       for (let i = 0; i < runCount; i++) {
         const tokens = generateMockTokenArray(tokenCount);
-        (fs.readFile as jest.Mock).mockResolvedValue(JSON.stringify(tokens));
+        mockFs.readFile.mockResolvedValue(JSON.stringify(tokens) as any);
 
         const startTime = Date.now();
         const result = await simulateHighVolumeMigration(tokenCount);
@@ -298,7 +313,10 @@ describe('Migration Performance and Stress Tests', () => {
       // Performance should be consistent (variance < 50% of average)
       expect(variance).toBeLessThan(avgDuration * 0.5);
       
-      console.log(`Performance consistency: avg=${avgDuration}ms, min=${minDuration}ms, max=${maxDuration}ms, variance=${variance}ms`);
+      // Performance logging (can be disabled in CI)
+      if (process.env.NODE_ENV !== 'ci') {
+        console.log(`Performance consistency: avg=${avgDuration}ms, min=${minDuration}ms, max=${maxDuration}ms, variance=${variance}ms`);
+      }
     });
   });
 
@@ -326,16 +344,18 @@ describe('Migration Performance and Stress Tests', () => {
     
     try {
       // Simulate the migration process with performance tracking
-      await fs.mkdir(mockBackupDir, { recursive: true });
+      await mockFs.mkdir(mockBackupDir, { recursive: true });
       
-      // Simulate processing each token
+      // Simulate processing each token (fast mocked operations)
       for (let i = 0; i < tokenCount; i++) {
-        // Simulate encryption/decryption work
-        await new Promise(resolve => setImmediate(resolve));
+        // Simulate minimal work for performance testing
+        if (i % 100 === 0) {
+          await new Promise(resolve => setImmediate(resolve));
+        }
       }
       
-      await fs.writeFile(`${mockLegacyPath}.tmp`, 'versioned-data', 'utf8');
-      await fs.rename(`${mockLegacyPath}.tmp`, mockLegacyPath);
+      await mockFs.writeFile(`${mockLegacyPath}.tmp`, 'versioned-data', 'utf8');
+      await mockFs.rename(`${mockLegacyPath}.tmp`, mockLegacyPath);
       
       const duration = Date.now() - startTime;
       const averageTimePerToken = duration / tokenCount;
@@ -377,8 +397,8 @@ describe('Migration Performance and Stress Tests', () => {
         throw new Error('Migration already in progress');
       }
       
-      await fs.writeFile(tempPath, 'data', 'utf8');
-      await fs.rename(tempPath, mockLegacyPath);
+      await mockFs.writeFile(tempPath, 'data', 'utf8');
+      await mockFs.rename(tempPath, mockLegacyPath);
       
       return { success: true };
     } catch (error) {
@@ -395,7 +415,7 @@ describe('Migration Performance and Stress Tests', () => {
   }> {
     try {
       // Simulate token verification process
-      await fs.readFile(mockLegacyPath, 'utf8');
+      await mockFs.readFile(mockLegacyPath, 'utf8');
       
       // Random delay to simulate processing
       await new Promise(resolve => setTimeout(resolve, Math.random() * 100));

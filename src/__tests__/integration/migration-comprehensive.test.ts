@@ -127,15 +127,18 @@ describe('Comprehensive Migration Integration Tests', () => {
       const migrationResult = await simulateMigration('iv:authTag:encrypted');
       
       expect(migrationResult.success).toBe(false);
-      expect(migrationResult.error).toContain('backup');
+      expect(migrationResult.error).toContain('Backup dir creation failed');
       // Verify no partial changes were made
       expect(fs.rename).not.toHaveBeenCalled();
     });
 
     it('should rollback on encryption failure during migration', async () => {
-      // Simulate encryption failure
-      (crypto.createCipheriv as jest.Mock).mockImplementation(() => {
-        throw new Error('Encryption failed');
+      // Simulate encryption failure by making writeFile fail
+      (fs.writeFile as any).mockImplementation((path: string, data: string) => {
+        if (path.includes('.tmp')) {
+          return Promise.reject(new Error('Encryption failed'));
+        }
+        return Promise.resolve();
       });
       
       const migrationResult = await simulateMigration('iv:authTag:encrypted');
@@ -230,14 +233,16 @@ describe('Comprehensive Migration Integration Tests', () => {
     });
 
     it('should handle corrupted backup scenarios', async () => {
-      // Simulate backup file corruption
-      (fs.readFile as any).mockResolvedValueOnce('original-data');
-      (fs.readFile as any).mockResolvedValueOnce('corrupted-data');
+      // Clear previous mocks and set up specific sequence
+      jest.clearAllMocks();
+      
+      // Simulate backup file corruption - readFile returns corrupted data
+      (fs.readFile as any).mockResolvedValue('corrupted-data');
       
       const backupResult = await simulateBackupValidation('original-data');
       
       expect(backupResult.isValid).toBe(false);
-      expect(backupResult.error).toContain('corruption');
+      expect(backupResult.error).toContain('Backup content corruption detected');
     });
   });
 
@@ -301,7 +306,7 @@ describe('Comprehensive Migration Integration Tests', () => {
       const result = await simulateVerifyKeysCommand(expiredTokens);
       
       expect(result.success).toBe(false);
-      expect(result.errors).toContain('expired');
+      expect(result.errors).toContain('Token is expired');
     });
 
     it('should test migrate-tokens with progress tracking', async () => {
@@ -329,7 +334,7 @@ describe('Comprehensive Migration Integration Tests', () => {
       
       expect(startupCheck.shouldExit).toBe(true);
       expect(startupCheck.exitCode).toBe(1);
-      expect(startupCheck.message).toContain('legacy');
+      expect(startupCheck.message).toContain('Legacy tokens detected. Migration required.');
     });
 
     it('should provide clear migration instructions on legacy detection', async () => {
@@ -342,6 +347,8 @@ describe('Comprehensive Migration Integration Tests', () => {
     });
 
     it('should allow normal startup with versioned tokens', async () => {
+      // Mock that legacy tokens don't exist (access fails)
+      (fs.access as any).mockRejectedValue(new Error('ENOENT: no such file'));
       // Mock versioned token format detection
       (fs.readFile as any).mockResolvedValue(JSON.stringify({
         version: 'v1',
@@ -373,6 +380,7 @@ describe('Comprehensive Migration Integration Tests', () => {
     performance?: number;
   }> {
     const startTime = Date.now();
+    const tempFilePath = `${mockLegacyPath}.tmp`;
     
     try {
       // Validate token format
@@ -395,13 +403,20 @@ describe('Comprehensive Migration Integration Tests', () => {
       // Simulate migration steps
       await fs.mkdir(mockBackupDir, { recursive: true });
       await fs.writeFile(path.join(mockBackupDir, 'tokens-backup.json'), tokenData);
-      await fs.writeFile(`${mockLegacyPath}.tmp`, 'versioned-data', 'utf8');
-      await fs.rename(`${mockLegacyPath}.tmp`, mockLegacyPath);
+      await fs.writeFile(tempFilePath, 'versioned-data', 'utf8');
+      await fs.rename(tempFilePath, mockLegacyPath);
       
       const performance = Date.now() - startTime;
       
       return { success: true, tokenCount, performance };
     } catch (error) {
+      // Cleanup temp file on failure
+      try {
+        await fs.unlink(tempFilePath);
+      } catch {
+        // Ignore cleanup errors
+      }
+      
       return { 
         success: false, 
         tokenCount: 0, 

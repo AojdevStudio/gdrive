@@ -12,6 +12,29 @@ export default [
         ecmaVersion: 2022,
         sourceType: 'module',
         project: './tsconfig.json'
+      },
+      globals: {
+        // Node.js globals
+        Buffer: 'readonly',
+        process: 'readonly',
+        console: 'readonly',
+        setTimeout: 'readonly',
+        setInterval: 'readonly',
+        clearTimeout: 'readonly',
+        clearInterval: 'readonly',
+        NodeJS: 'readonly',
+        global: 'readonly',
+        __dirname: 'readonly',
+        __filename: 'readonly',
+        // Jest testing globals
+        jest: 'readonly',
+        describe: 'readonly',
+        it: 'readonly',
+        expect: 'readonly',
+        beforeEach: 'readonly',
+        afterEach: 'readonly',
+        beforeAll: 'readonly',
+        afterAll: 'readonly',
       }
     },
     plugins: {
@@ -19,7 +42,7 @@ export default [
     },
     rules: {
       ...tsPlugin.configs.recommended.rules,
-      '@typescript-eslint/no-unused-vars': 'error',
+      '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
       '@typescript-eslint/no-explicit-any': 'warn',
       '@typescript-eslint/explicit-function-return-type': 'off',
       '@typescript-eslint/no-non-null-assertion': 'warn',

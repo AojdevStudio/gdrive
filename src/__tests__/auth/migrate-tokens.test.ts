@@ -9,68 +9,80 @@ jest.mock('fs/promises');
 jest.mock('os');
 jest.mock('crypto');
 
+// Type-safe mock helpers
+const mockFs = fs as jest.Mocked<typeof fs>;
+const mockCrypto = crypto as jest.Mocked<typeof crypto>;
+const mockHomedir = homedir as jest.MockedFunction<typeof homedir>;
+
 describe('Token Migration Functions', () => {
-  const mockHomedir = '/mock/home';
-  const mockLegacyPath = path.join(mockHomedir, '.gdrive-mcp-tokens.json');
-  const mockBackupDir = path.join(mockHomedir, '.backup');
+  const mockHomedirPath = '/mock/home';
+  const mockLegacyPath = path.join(mockHomedirPath, '.gdrive-mcp-tokens.json');
+  const mockBackupDir = path.join(mockHomedirPath, '.backup');
   
   const mockKey = Buffer.from('test-key-123456789012345678901234', 'utf8').toString('base64');
 
   beforeEach(() => {
     jest.clearAllMocks();
-    (homedir as jest.Mock).mockReturnValue(mockHomedir);
+    mockHomedir.mockReturnValue(mockHomedirPath);
     process.env.GDRIVE_TOKEN_ENCRYPTION_KEY = mockKey;
     
-    // Setup default mocks
-    (fs.access as jest.Mock).mockResolvedValue(undefined);
-    (fs.mkdir as jest.Mock).mockResolvedValue(undefined);
-    (fs.writeFile as jest.Mock).mockResolvedValue(undefined);
-    (fs.rename as jest.Mock).mockResolvedValue(undefined);
-    (fs.readFile as jest.Mock).mockResolvedValue('test-content');
-    (fs.unlink as jest.Mock).mockResolvedValue(undefined);
-    (fs.appendFile as jest.Mock).mockResolvedValue(undefined);
-    
-    // Mock crypto functions
-    (crypto.randomBytes as jest.Mock).mockImplementation((size: number) => {
-      return Buffer.alloc(size, 1);
-    });
-    
-    (crypto.pbkdf2Sync as jest.Mock).mockImplementation(() => {
-      return Buffer.alloc(32, 2);
-    });
-    
-    (crypto.createCipheriv as jest.Mock).mockReturnValue({
-      update: jest.fn().mockReturnValue('encrypted'),
-      final: jest.fn().mockReturnValue('data'),
-      getAuthTag: jest.fn().mockReturnValue(Buffer.alloc(16, 3))
-    });
-    
-    (crypto.createDecipheriv as jest.Mock).mockReturnValue({
-      setAuthTag: jest.fn(),
-      update: jest.fn().mockReturnValue(JSON.stringify({
-        access_token: 'test-token',
-        refresh_token: 'refresh-token',
-        expiry_date: Date.now() + 3600000,
-        token_type: 'Bearer',
-        scope: 'https://www.googleapis.com/auth/drive'
-      })),
-      final: jest.fn().mockReturnValue('')
-    });
+    setupMocks();
   });
 
   afterEach(() => {
     delete process.env.GDRIVE_TOKEN_ENCRYPTION_KEY;
   });
+  
+  // Mock setup function
+  function setupMocks(): void {
+    // Setup default fs mocks
+    mockFs.access.mockResolvedValue(undefined as any);
+    mockFs.mkdir.mockResolvedValue(undefined as any);
+    mockFs.writeFile.mockResolvedValue(undefined as any);
+    mockFs.rename.mockResolvedValue(undefined as any);
+    mockFs.readFile.mockResolvedValue('test-content' as any);
+    mockFs.unlink.mockResolvedValue(undefined as any);
+    mockFs.appendFile.mockResolvedValue(undefined as any);
+    
+    // Mock crypto functions with predictable output
+    mockCrypto.randomBytes.mockImplementation((size: number) => {
+      return Buffer.alloc(size, 1);
+    });
+    
+    mockCrypto.pbkdf2Sync.mockImplementation(() => {
+      return Buffer.alloc(32, 'a'.charCodeAt(0)); // Consistent key
+    });
+    
+    mockCrypto.createCipheriv.mockReturnValue({
+      update: jest.fn().mockReturnValue('encrypted'),
+      final: jest.fn().mockReturnValue('data'),
+      getAuthTag: jest.fn().mockReturnValue(Buffer.alloc(16, 3))
+    } as crypto.Cipher);
+    
+    const mockTokenData = {
+      access_token: 'test-token',
+      refresh_token: 'refresh-token',
+      expiry_date: Date.now() + 3600000,
+      token_type: 'Bearer',
+      scope: 'https://www.googleapis.com/auth/drive'
+    };
+    
+    mockCrypto.createDecipheriv.mockReturnValue({
+      setAuthTag: jest.fn(),
+      update: jest.fn().mockReturnValue(JSON.stringify(mockTokenData)),
+      final: jest.fn().mockReturnValue('')
+    } as crypto.Decipher);
+  }
 
   describe('Migration Logic Tests', () => {
     it('should create backup directory with recursive option', async () => {
-      const expectedBackupDir = path.join(mockHomedir, '.backup');
+      const expectedBackupDir = path.join(mockHomedirPath, '.backup');
       
       // Simulate backup creation
       expect(fs.mkdir).not.toHaveBeenCalled();
       
       // Test the backup directory creation logic
-      await (fs.mkdir as jest.Mock)(expectedBackupDir, { recursive: true });
+      await mockFs.mkdir(expectedBackupDir, { recursive: true });
       
       expect(fs.mkdir).toHaveBeenCalledWith(expectedBackupDir, { recursive: true });
     });
@@ -81,8 +93,8 @@ describe('Token Migration Functions', () => {
       const content = 'test-versioned-content';
       
       // Simulate atomic write
-      await (fs.writeFile as jest.Mock)(tempPath, content, 'utf8');
-      await (fs.rename as jest.Mock)(tempPath, targetPath);
+      await mockFs.writeFile(tempPath, content, 'utf8');
+      await mockFs.rename(tempPath, targetPath);
       
       expect(fs.writeFile).toHaveBeenCalledWith(tempPath, content, 'utf8');
       expect(fs.rename).toHaveBeenCalledWith(tempPath, targetPath);
@@ -156,7 +168,7 @@ describe('Token Migration Functions', () => {
       const invalidTokenData = { access_token: 'test' };
       const isInvalid = (
         invalidTokenData &&
-        typeof (invalidTokenData as any).refresh_token === 'string'
+        typeof (invalidTokenData as Record<string, unknown>).refresh_token === 'string'
       );
       
       expect(isInvalid).toBe(false);
@@ -166,7 +178,7 @@ describe('Token Migration Functions', () => {
   describe('File Operations Tests', () => {
     it('should test file existence check pattern', async () => {
       // Test file exists
-      (fs.access as jest.Mock).mockResolvedValue(undefined);
+      mockFs.access.mockResolvedValue(undefined as any);
       
       let fileExists = true;
       try {
@@ -178,7 +190,7 @@ describe('Token Migration Functions', () => {
       expect(fileExists).toBe(true);
       
       // Test file doesn't exist
-      (fs.access as jest.Mock).mockRejectedValue(new Error('ENOENT'));
+      mockFs.access.mockRejectedValue(new Error('ENOENT') as any);
       
       fileExists = true;
       try {
@@ -241,7 +253,7 @@ describe('Token Migration Functions', () => {
     });
 
     it('should handle file operation failures', async () => {
-      (fs.writeFile as jest.Mock).mockRejectedValue(new Error('Write failed'));
+      mockFs.writeFile.mockRejectedValue(new Error('Write failed') as any);
       
       let writeError: Error | null = null;
       try {

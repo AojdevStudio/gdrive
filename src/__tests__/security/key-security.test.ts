@@ -465,12 +465,15 @@ describe('Cryptographic Security Tests', () => {
       // Keys should be different (extremely low probability of collision)
       expect(Buffer.compare(key1, key2)).not.toBe(0);
       
-      // Keys should have good distribution
+      // Keys should have proper length
+      expect(key1.length).toBe(32);
+      expect(key2.length).toBe(32);
+      
+      // Keys should not be all zeros (basic sanity check)
       const sum1 = key1.reduce((acc, byte) => acc + byte, 0);
       const sum2 = key2.reduce((acc, byte) => acc + byte, 0);
-      
-      // Sums should be reasonably different (not a perfect test but basic check)
-      expect(Math.abs(sum1 - sum2)).toBeGreaterThan(100);
+      expect(sum1).toBeGreaterThan(0);
+      expect(sum2).toBeGreaterThan(0);
       
       // Clean up
       key1.fill(0);

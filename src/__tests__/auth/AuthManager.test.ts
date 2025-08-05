@@ -7,7 +7,15 @@ import { TokenManager, TokenData } from '../../auth/TokenManager.js';
 jest.mock('google-auth-library');
 jest.mock('../../auth/TokenManager.js');
 
-const mockOAuth2Client = {
+interface MockOAuth2Client {
+  setCredentials: jest.MockedFunction<(credentials: any) => void>;
+  getAccessToken: jest.MockedFunction<() => Promise<{ token: string; res: any }>>;
+  on: jest.MockedFunction<(event: string, handler: any) => void>;
+  credentials: Record<string, unknown>;
+  refreshAccessToken: jest.MockedFunction<() => Promise<any>>;
+}
+
+const mockOAuth2Client: MockOAuth2Client = {
   setCredentials: jest.fn(),
   getAccessToken: jest.fn(),
   on: jest.fn(),
@@ -15,7 +23,16 @@ const mockOAuth2Client = {
   refreshAccessToken: jest.fn(),
 };
 
-const mockTokenManager = {
+interface MockTokenManager {
+  loadTokens: jest.MockedFunction<() => Promise<TokenData | null>>;
+  saveTokens: jest.MockedFunction<(tokens: TokenData) => Promise<void>>;
+  isTokenExpired: jest.MockedFunction<(tokens: TokenData) => boolean>;
+  isTokenExpiringSoon: jest.MockedFunction<(tokens: TokenData, bufferMs?: number) => boolean>;
+  deleteTokensOnInvalidGrant: jest.MockedFunction<() => Promise<void>>;
+  isValidTokenData: jest.MockedFunction<(data: any) => data is TokenData>;
+}
+
+const mockTokenManager: MockTokenManager = {
   loadTokens: jest.fn(),
   saveTokens: jest.fn(),
   isTokenExpired: jest.fn(),
@@ -24,7 +41,14 @@ const mockTokenManager = {
   isValidTokenData: jest.fn(),
 };
 
-const mockLogger = {
+interface MockLogger {
+  info: jest.MockedFunction<(message: string, meta?: any) => void>;
+  error: jest.MockedFunction<(message: string, meta?: any) => void>;
+  warn: jest.MockedFunction<(message: string, meta?: any) => void>;
+  debug: jest.MockedFunction<(message: string, meta?: any) => void>;
+}
+
+const mockLogger: MockLogger = {
   info: jest.fn(),
   error: jest.fn(),
   warn: jest.fn(),
@@ -55,7 +79,7 @@ describe('AuthManager', () => {
     (TokenManager.getInstance as jest.Mock).mockReturnValue(mockTokenManager);
     
     // Reset singleton
-    // @ts-ignore
+    // @ts-expect-error - Accessing private static property for test reset
     AuthManager._instance = undefined;
   });
 
@@ -229,7 +253,9 @@ describe('AuthManager', () => {
 
   describe('Error Handling and Retry Logic', () => {
     it('should handle invalid_grant error by deleting tokens', async () => {
-      const invalidGrantError: any = new Error('invalid_grant');
+      const invalidGrantError = new Error('invalid_grant') as Error & {
+        response?: { data?: { error?: string } };
+      };
       invalidGrantError.response = { data: { error: 'invalid_grant' } };
       
       mockOAuth2Client.getAccessToken.mockRejectedValue(invalidGrantError);
