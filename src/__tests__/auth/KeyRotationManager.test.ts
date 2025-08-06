@@ -416,7 +416,9 @@ describe('KeyRotationManager', () => {
           iterations: 100000,
           salt: crypto.randomBytes(32).toString('base64'),
         };
-        keyRotationManager.registerKey(version, keys[index], metadata);
+        const key = keys[index];
+        if (!key) {throw new Error(`Key at index ${index} should be defined`);}
+        keyRotationManager.registerKey(version, key, metadata);
       });
 
       expect(keyRotationManager.getVersions()).toEqual(expect.arrayContaining(versions));

@@ -50,6 +50,8 @@ describe('Comprehensive Migration and CLI Tests', () => {
       // Verify format consistency
       const randomIndex = Math.floor(Math.random() * tokenCount);
       const randomToken = largeTokenArray[randomIndex];
+      expect(randomToken).toBeDefined();
+      if (!randomToken) {throw new Error('Random token should be defined');}
       const parts = randomToken.split(':');
       
       expect(parts).toHaveLength(3);
@@ -165,13 +167,12 @@ describe('Comprehensive Migration and CLI Tests', () => {
         scope: 'test-scope'
       };
       
-      const isValid = (
-        validToken &&
-        validToken.access_token &&
-        validToken.refresh_token &&
-        validToken.expiry_date &&
-        validToken.token_type &&
-        validToken.scope &&
+      const isValid = !!(
+        validToken?.access_token &&
+        validToken?.refresh_token &&
+        validToken?.expiry_date &&
+        validToken?.token_type &&
+        validToken?.scope &&
         validToken.expiry_date > Date.now()
       );
       
@@ -280,7 +281,7 @@ describe('Comprehensive Migration and CLI Tests', () => {
         largeMigration: { tokens: 500, maxTime: 8000 }
       };
       
-      Object.entries(benchmarks).forEach(([name, benchmark]) => {
+      Object.entries(benchmarks).forEach(([, benchmark]) => {
         expect(benchmark.maxTime).toBeGreaterThan(0);
         expect(benchmark.tokens).toBeGreaterThan(0);
         

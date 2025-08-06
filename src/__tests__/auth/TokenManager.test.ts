@@ -1,3 +1,4 @@
+import { describe, it, expect, beforeEach, afterEach, jest } from '@jest/globals';
 import { TokenManager, TokenData, VersionedTokenStorage } from '../../auth/TokenManager.js';
 import { KeyRotationManager } from '../../auth/KeyRotationManager.js';
 import { Logger } from 'winston';
@@ -34,7 +35,7 @@ describe('TokenManager', () => {
       info: jest.fn(),
       warn: jest.fn(),
       error: jest.fn(),
-    } as any;
+    } as unknown as jest.Mocked<Logger>;
 
     // Mock KeyRotationManager
     mockKeyRotationManager = {
@@ -63,9 +64,9 @@ describe('TokenManager', () => {
           salt: crypto.randomBytes(32).toString('base64'),
         },
       }),
-    } as any;
+    } as unknown as jest.Mocked<KeyRotationManager>;
 
-    (KeyRotationManager.getInstance as jest.Mock).mockReturnValue(mockKeyRotationManager);
+    (KeyRotationManager.getInstance as jest.MockedFunction<any>).mockReturnValue(mockKeyRotationManager);
 
     // Set environment variables
     process.env.GDRIVE_TOKEN_STORAGE_PATH = mockTokenPath;
@@ -73,9 +74,9 @@ describe('TokenManager', () => {
     process.env.GDRIVE_TOKEN_ENCRYPTION_KEY = crypto.randomBytes(32).toString('base64');
 
     // Mock fs
-    (fs.writeFile as jest.Mock).mockResolvedValue(undefined);
-    (fs.chmod as jest.Mock).mockResolvedValue(undefined);
-    (fs.appendFile as jest.Mock).mockResolvedValue(undefined);
+    (fs.writeFile as jest.MockedFunction<any>).mockResolvedValue(undefined);
+    (fs.chmod as jest.MockedFunction<any>).mockResolvedValue(undefined);
+    (fs.appendFile as jest.MockedFunction<any>).mockResolvedValue(undefined);
   });
 
   afterEach(() => {
@@ -113,11 +114,11 @@ describe('TokenManager', () => {
       await tokenManager.saveTokens(mockTokenData);
 
       expect(fs.writeFile).toHaveBeenCalled();
-      const writeCall = (fs.writeFile as jest.Mock).mock.calls[0];
-      expect(writeCall[0]).toBe(mockTokenPath);
+      const writeCall = (fs.writeFile as jest.MockedFunction<any>).mock.calls[0];
+      expect(writeCall?.[0]).toBe(mockTokenPath);
       
       // Parse the saved data
-      const savedData = JSON.parse(writeCall[1]);
+      const savedData = JSON.parse(writeCall?.[1] as string);
       expect(savedData.version).toBe('v1');
       expect(savedData.algorithm).toBe('aes-256-gcm');
       expect(savedData.keyDerivation).toEqual({
@@ -147,7 +148,7 @@ describe('TokenManager', () => {
       
       // Test that save works with versioned format
       await tokenManager.saveTokens(mockTokenData);
-      const savedData = JSON.parse((fs.writeFile as jest.Mock).mock.calls[0][1]);
+      const savedData = JSON.parse((fs.writeFile as jest.MockedFunction<any>).mock.calls[0]?.[1] as string);
       
       // Verify the saved data has the correct versioned structure
       expect(savedData.version).toBe('v1');
@@ -164,7 +165,7 @@ describe('TokenManager', () => {
       tokenManager = TokenManager.getInstance(mockLogger);
       
       // Mock legacy format
-      (fs.readFile as jest.Mock).mockResolvedValue('iv:authTag:encryptedData');
+      (fs.readFile as jest.MockedFunction<any>).mockResolvedValue('iv:authTag:encryptedData');
       
       const result = await tokenManager.loadTokens();
       
@@ -177,7 +178,7 @@ describe('TokenManager', () => {
       
       const error = new Error('ENOENT') as any;
       error.code = 'ENOENT';
-      (fs.readFile as jest.Mock).mockRejectedValue(error);
+      (fs.readFile as jest.MockedFunction<any>).mockRejectedValue(error);
       
       const result = await tokenManager.loadTokens();
       
@@ -251,7 +252,7 @@ describe('TokenManager', () => {
     it('should delete token file and log audit event', async () => {
       tokenManager = TokenManager.getInstance(mockLogger);
       
-      (fs.unlink as jest.Mock).mockResolvedValue(undefined);
+      (fs.unlink as jest.MockedFunction<any>).mockResolvedValue(undefined);
       
       await tokenManager.deleteTokensOnInvalidGrant();
       
@@ -266,7 +267,7 @@ describe('TokenManager', () => {
     it('should handle deletion failure gracefully', async () => {
       tokenManager = TokenManager.getInstance(mockLogger);
       
-      (fs.unlink as jest.Mock).mockRejectedValue(new Error('Permission denied'));
+      (fs.unlink as jest.MockedFunction<any>).mockRejectedValue(new Error('Permission denied'));
       
       await tokenManager.deleteTokensOnInvalidGrant();
       
@@ -297,7 +298,7 @@ describe('TokenManager', () => {
         { ...mockTokenData, expiry_date: 'not-a-number' },
       ];
       
-      invalidCases.forEach((testCase, index) => {
+      invalidCases.forEach((testCase) => {
         const result = tokenManager.isValidTokenData(testCase);
         expect(result).toBeFalsy(); // Use toBeFalsy to handle null, false, undefined
       });
@@ -418,7 +419,7 @@ describe('TokenManager', () => {
       };
       
       mockKeyRotationManager.getKey.mockReturnValue(undefined);
-      (fs.readFile as jest.Mock).mockResolvedValue(JSON.stringify(versionedData));
+      (fs.readFile as jest.MockedFunction<any>).mockResolvedValue(JSON.stringify(versionedData));
       
       const result = await tokenManager.loadTokens();
       
@@ -449,7 +450,7 @@ describe('TokenManager', () => {
         keyId: 'v1',
       };
       
-      (fs.readFile as jest.Mock).mockResolvedValue(JSON.stringify(versionedData));
+      (fs.readFile as jest.MockedFunction<any>).mockResolvedValue(JSON.stringify(versionedData));
       
       const result = await tokenManager.loadTokens();
       
@@ -467,7 +468,7 @@ describe('TokenManager', () => {
     it('should handle audit log write failure gracefully', async () => {
       tokenManager = TokenManager.getInstance(mockLogger);
       
-      (fs.appendFile as jest.Mock).mockRejectedValue(new Error('Disk full'));
+      (fs.appendFile as jest.MockedFunction<any>).mockRejectedValue(new Error('Disk full'));
       
       await tokenManager.saveTokens(mockTokenData);
       
@@ -477,19 +478,6 @@ describe('TokenManager', () => {
       );
     });
 
-    it('should properly clear sensitive data during encryption', async () => {
-      tokenManager = TokenManager.getInstance(mockLogger);
-      
-      // Mock KeyDerivation.clearSensitiveData
-      const clearSensitiveDataSpy = jest.spyOn(require('../../auth/KeyDerivation.js').KeyDerivation, 'clearSensitiveData')
-        .mockImplementation(() => {});
-      
-      await tokenManager.saveTokens(mockTokenData);
-      
-      expect(clearSensitiveDataSpy).toHaveBeenCalled();
-      
-      clearSensitiveDataSpy.mockRestore();
-    });
   });
 
   describe('legacy format detection', () => {
@@ -497,7 +485,7 @@ describe('TokenManager', () => {
       tokenManager = TokenManager.getInstance(mockLogger);
       
       // Mock reading legacy format
-      (fs.readFile as jest.Mock).mockResolvedValue('iv:authTag:encryptedData');
+      (fs.readFile as jest.MockedFunction<any>).mockResolvedValue('iv:authTag:encryptedData');
       
       const result = await tokenManager.loadTokens();
       
@@ -515,7 +503,7 @@ describe('TokenManager', () => {
         encrypted: 'some-data',
         timestamp: Date.now(),
       };
-      (fs.readFile as jest.Mock).mockResolvedValue(JSON.stringify(nonVersionedData));
+      (fs.readFile as jest.MockedFunction<any>).mockResolvedValue(JSON.stringify(nonVersionedData));
       
       const result = await tokenManager.loadTokens();
       
@@ -568,7 +556,7 @@ describe('TokenManager', () => {
     it('should handle file write errors during save', async () => {
       tokenManager = TokenManager.getInstance(mockLogger);
       
-      (fs.writeFile as jest.Mock).mockRejectedValue(new Error('Permission denied'));
+      (fs.writeFile as jest.MockedFunction<any>).mockRejectedValue(new Error('Permission denied'));
       
       await expect(tokenManager.saveTokens(mockTokenData)).rejects.toThrow('Permission denied');
       expect(mockLogger.error).toHaveBeenCalledWith(
@@ -580,7 +568,7 @@ describe('TokenManager', () => {
     it('should handle chmod errors during save', async () => {
       tokenManager = TokenManager.getInstance(mockLogger);
       
-      (fs.chmod as jest.Mock).mockRejectedValue(new Error('Chmod failed'));
+      (fs.chmod as jest.MockedFunction<any>).mockRejectedValue(new Error('Chmod failed'));
       
       await expect(tokenManager.saveTokens(mockTokenData)).rejects.toThrow('Chmod failed');
     });

@@ -22,7 +22,7 @@
     "test:coverage": "jest --coverage",
     "test:integration": "jest --testMatch='**/__tests__/integration/**/*.test.ts'",
     "test:e2e": "jest --testMatch='**/tests/e2e/**/*.test.ts'",
-    "lint": "eslint . --ext .ts",
+    "lint": "eslint .",
     "type-check": "tsc --noEmit"
   },
   "dependencies": {

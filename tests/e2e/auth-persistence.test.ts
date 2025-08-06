@@ -1,21 +1,18 @@
 import { jest, describe, it, expect, beforeAll, afterAll, beforeEach } from '@jest/globals';
-import { spawn, ChildProcess } from 'child_process';
+import { ChildProcess } from 'child_process';
 import * as fs from 'fs/promises';
+import { Stats } from 'fs';
 import * as path from 'path';
-import * as os from 'os';
-import * as crypto from 'crypto';
 
 // Mock dependencies for E2E testing
 jest.mock('fs/promises');
-jest.mock('child_process');
 
 const mockFs = fs as jest.Mocked<typeof fs>;
-const mockSpawn = spawn as jest.MockedFunction<typeof spawn>;
 
 // E2E test for full authentication flow
 describe('E2E: Authentication Persistence', () => {
   let tempDir: string;
-  let serverProcess: any = null;
+  let serverProcess: ChildProcess | null = null;
   
   // Test credentials for E2E mocking
   const testCredentials = {
@@ -44,9 +41,9 @@ describe('E2E: Authentication Persistence', () => {
   });
 
   afterAll(async () => {
-    // Cleanup
+    // Cleanup  
     if (serverProcess) {
-      serverProcess?.kill?.('SIGTERM');
+      (serverProcess as ChildProcess).kill?.('SIGTERM');
     }
     
     delete process.env.GDRIVE_TOKEN_ENCRYPTION_KEY;
@@ -70,7 +67,7 @@ describe('E2E: Authentication Persistence', () => {
       );
       
       // Mock stat to return correct permissions
-      mockFs.stat.mockResolvedValueOnce({ mode: 0o600 } as any);
+      mockFs.stat.mockResolvedValueOnce({ mode: 0o600 } as Stats);
       const stats = await mockFs.stat(tokenPath);
       expect(stats.mode & 0o777).toBe(0o600);
       
@@ -262,7 +259,7 @@ describe('E2E: Authentication Persistence', () => {
     // Mock fs operations
     mockFs.writeFile.mockResolvedValue();
     mockFs.readFile.mockResolvedValue('mock-encrypted-data:authTag:encryptedContent');
-    mockFs.stat.mockResolvedValue({ mode: 0o600 } as any);
+    mockFs.stat.mockResolvedValue({ mode: 0o600 } as Stats);
     mockFs.access.mockResolvedValue();
     mockFs.unlink.mockResolvedValue();
     mockFs.appendFile.mockResolvedValue();
@@ -283,7 +280,7 @@ describe('E2E: Authentication Persistence', () => {
     const parts = encrypted.split(':');
     if (parts.length === 3) {
       try {
-        const data = Buffer.from(parts[2], 'hex').toString('utf8');
+        const data = Buffer.from(parts[2]!, 'hex').toString('utf8');
         return JSON.parse(data);
       } catch {
         return testCredentials as Record<string, unknown>; // Fallback to test credentials

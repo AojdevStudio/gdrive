@@ -12,12 +12,11 @@ import {
 import * as fs from "fs";
 import { google } from "googleapis";
 import * as path from "path";
-import { createClient } from "redis";
+import { createClient, RedisClientType } from "redis";
 import winston from "winston";
 import { AuthManager, AuthState } from "./src/auth/AuthManager.js";
 import { TokenManager } from "./src/auth/TokenManager.js";
 import { KeyRotationManager } from "./src/auth/KeyRotationManager.js";
-import { KeyDerivation } from "./src/auth/KeyDerivation.js";
 import { performHealthCheck, HealthStatus } from "./src/health-check.js";
 
 const drive = google.drive("v3");
@@ -38,14 +37,101 @@ interface AppsScriptFile {
   };
 }
 
-interface AppsScriptContent {
-  scriptId: string;
-  files: AppsScriptFile[];
+// Performance monitoring types
+interface PerformanceStats {
+  uptime: number;
+  operations: Record<string, {
+    count: number;
+    avgTime: number;
+    errorRate: number;
+  }>;
+  cache: {
+    hits: number;
+    misses: number;
+    hitRate: number;
+  };
+}
+
+// Redis Cache types
+interface CacheData {
+  [key: string]: unknown;
+}
+
+// Search filters interface
+interface SearchFilters {
+  mimeType?: string;
+  modifiedTime?: string;
+  createdTime?: string;
+  modifiedAfter?: string;
+  modifiedBefore?: string;
+  createdAfter?: string;
+  createdBefore?: string;
+  sharedWithMe?: boolean;
+  ownedByMe?: boolean;
+  parents?: string;
+  trashed?: boolean;
+  [key: string]: unknown;
+}
+
+// File metadata interface
+interface FileMetadata {
+  name: string;
+  mimeType?: string;
+  parents?: string[];
+  [key: string]: unknown;
+}
+
+// Question item interface for forms
+interface QuestionItem {
+  required: boolean;
+  question: {
+    textQuestion?: {
+      paragraph: boolean;
+    };
+    choiceQuestion?: {
+      type: string;
+      options: Array<{ value: string }>;
+    };
+    scaleQuestion?: {
+      low: number;
+      high: number;
+      lowLabel?: string;
+      highLabel?: string;
+    };
+    dateQuestion?: {
+      includeTime: boolean;
+      includeYear: boolean;
+    };
+    timeQuestion?: {
+      duration: boolean;
+    };
+    [key: string]: unknown;
+  };
+}
+
+// Text style interface for Google Docs
+interface TextStyle {
+  bold?: boolean;
+  italic?: boolean;
+  underline?: boolean;
+  fontSize?: {
+    magnitude: number;
+    unit: string;
+  };
+  foregroundColor?: {
+    color: {
+      rgbColor: {
+        red: number;
+        green: number;
+        blue: number;
+      };
+    };
+  };
 }
 
 // Structured logging with Winston
 const logger = winston.createLogger({
-  level: process.env.LOG_LEVEL || 'info',
+  level: process.env.LOG_LEVEL ?? 'info',
   format: winston.format.combine(
     winston.format.timestamp(),
     winston.format.errors({ stack: true }),
@@ -84,10 +170,12 @@ class PerformanceMonitor {
   private startTime = Date.now();
 
   track(operation: string, duration: number, error: boolean = false) {
-    const current = this.metrics.get(operation) || { count: 0, totalTime: 0, errors: 0 };
+    const current = this.metrics.get(operation) ?? { count: 0, totalTime: 0, errors: 0 };
     current.count++;
     current.totalTime += duration;
-    if (error) current.errors++;
+    if (error) {
+      current.errors++;
+    }
     this.metrics.set(operation, current);
   }
 
@@ -95,13 +183,13 @@ class PerformanceMonitor {
   recordCacheMiss() { this.cacheMisses++; }
 
   getStats() {
-    const stats: any = {
+    const stats: PerformanceStats = {
       uptime: Date.now() - this.startTime,
       operations: {},
       cache: {
         hits: this.cacheHits,
         misses: this.cacheMisses,
-        hitRate: this.cacheHits / (this.cacheHits + this.cacheMisses) || 0
+        hitRate: (this.cacheHits + this.cacheMisses) > 0 ? this.cacheHits / (this.cacheHits + this.cacheMisses) : 0
       }
     };
 
@@ -126,14 +214,14 @@ setInterval(() => {
 
 // Redis Cache Manager
 class CacheManager {
-  private client: any;
+  private client: RedisClientType | null = null;
   private connected = false;
   private ttl = 300; // 5 minutes
 
   async connect() {
     try {
       this.client = createClient({
-        url: process.env.REDIS_URL || 'redis://localhost:6379',
+        url: process.env.REDIS_URL ?? 'redis://localhost:6379',
         socket: {
           reconnectStrategy: (retries: number) => {
             if (retries > 10) {
@@ -145,7 +233,7 @@ class CacheManager {
         }
       });
 
-      this.client.on('error', (err: any) => {
+      this.client.on('error', (err: Error) => {
         logger.error('Redis client error', { error: err.message });
         this.connected = false;
       });
@@ -162,11 +250,13 @@ class CacheManager {
     }
   }
 
-  async get(key: string): Promise<any> {
-    if (!this.connected) return null;
+  async get(key: string): Promise<CacheData | null> {
+    if (!this.connected) {
+      return null;
+    }
 
     try {
-      const data = await this.client.get(key);
+      const data = await this.client?.get(key);
       if (data) {
         performanceMonitor.recordCacheHit();
         return JSON.parse(data);
@@ -179,24 +269,32 @@ class CacheManager {
     }
   }
 
-  async set(key: string, value: any): Promise<void> {
-    if (!this.connected) return;
+  async set(key: string, value: CacheData): Promise<void> {
+    if (!this.connected) {
+      return;
+    }
 
     try {
-      await this.client.setEx(key, this.ttl, JSON.stringify(value));
+      if (this.client) {
+        await this.client.setEx(key, this.ttl, JSON.stringify(value));
+      }
     } catch (error) {
       logger.error('Cache set error', { error, key });
     }
   }
 
   async invalidate(pattern: string): Promise<void> {
-    if (!this.connected) return;
+    if (!this.connected) {
+      return;
+    }
 
     try {
-      const keys = await this.client.keys(pattern);
-      if (keys.length > 0) {
-        await this.client.del(keys);
-        logger.debug(`Invalidated ${keys.length} cache entries`);
+      if (this.client) {
+        const keys = await this.client.keys(pattern);
+        if (keys.length > 0) {
+          await this.client.del(keys);
+          logger.debug(`Invalidated ${keys.length} cache entries`);
+        }
       }
     } catch (error) {
       logger.error('Cache invalidation error', { error, pattern });
@@ -218,9 +316,9 @@ let authManager: AuthManager | null = null;
 let tokenManager: TokenManager | null = null;
 
 // Natural language search parser
-function parseNaturalLanguageQuery(query: string) {
+function parseNaturalLanguageQuery(query: string): { searchTerms: string; filters: SearchFilters } {
   const lowerQuery = query.toLowerCase();
-  const filters: any = {};
+  const filters: SearchFilters = {};
 
   // Document type detection
   if (lowerQuery.includes('spreadsheet') || lowerQuery.includes('sheet')) {
@@ -300,7 +398,7 @@ const server = new Server(
 );
 
 // List available resources
-server.setRequestHandler(ListResourcesRequestSchema, async (request) => {
+server.setRequestHandler(ListResourcesRequestSchema, async (_request) => {
   const startTime = Date.now();
   
   try {
@@ -324,10 +422,10 @@ server.setRequestHandler(ListResourcesRequestSchema, async (request) => {
 
     const resources = response.data.files?.map((file) => ({
       uri: `gdrive:///${file.id}`,
-      name: file.name || "Untitled",
+      name: file.name ?? "Untitled",
       mimeType: file.mimeType,
       description: `Google Drive file: ${file.name}`,
-    })) || [];
+    })) ?? [];
 
     const result = { resources };
     await cacheManager.set(cacheKey, result);
@@ -1069,7 +1167,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         }
 
         const response = await drive.files.list({
-          q: q || undefined,
+          q: q ?? undefined,
           pageSize: Math.min(pageSize, 100),
           fields: "files(id, name, mimeType, createdTime, modifiedTime, size, parents, webViewLink, iconLink, owners, permissions)",
           orderBy: "modifiedTime desc",
@@ -1078,7 +1176,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const result = {
           content: [{
             type: "text",
-            text: JSON.stringify(response.data.files || [], null, 2),
+            text: JSON.stringify(response.data.files ?? [], null, 2),
           }],
         };
 
@@ -1093,7 +1191,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           throw new Error('Arguments are required');
         }
         const query = args.query as string | undefined;
-        const filters = (args.filters || {}) as Record<string, any>;
+        const filters = (args.filters ?? {}) as SearchFilters;
         const pageSize = (typeof args.pageSize === 'number' ? args.pageSize : 10);
         const orderBy = (typeof args.orderBy === 'string' ? args.orderBy : "modifiedTime desc");
         
@@ -1156,7 +1254,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         }
 
         const response = await drive.files.list({
-          q: q || undefined,
+          q: q ?? undefined,
           pageSize: Math.min(pageSize, 100),
           fields: "files(id, name, mimeType, createdTime, modifiedTime, size, parents, webViewLink, iconLink, owners, permissions, description, starred)",
           orderBy,
@@ -1167,8 +1265,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             type: "text",
             text: JSON.stringify({
               query: q,
-              totalResults: response.data.files?.length || 0,
-              files: response.data.files || [],
+              totalResults: response.data.files?.length ?? 0,
+              files: response.data.files ?? [],
             }, null, 2),
           }],
         };
@@ -1250,7 +1348,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const mimeType = (typeof args.mimeType === 'string' ? args.mimeType : "text/plain");
         const parentId = args.parentId as string | undefined;
         
-        const fileMetadata: any = {
+        const fileMetadata: FileMetadata = {
           name,
           mimeType,
         };
@@ -1323,7 +1421,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const { name } = args;
         const parentId = args.parentId as string | undefined;
         
-        const fileMetadata: any = {
+        const fileMetadata: FileMetadata = {
           name,
           mimeType: "application/vnd.google-apps.folder",
         };
@@ -1368,7 +1466,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           index: sheet.properties?.index,
           rowCount: sheet.properties?.gridProperties?.rowCount,
           columnCount: sheet.properties?.gridProperties?.columnCount,
-        })) || [];
+        })) ?? [];
 
         performanceMonitor.track('listSheets', Date.now() - startTime);
         
@@ -1404,7 +1502,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             type: "text",
             text: JSON.stringify({
               range: response.data.range,
-              values: response.data.values || [],
+              values: response.data.values ?? [],
             }, null, 2),
           }],
         };
@@ -1543,8 +1641,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             title: item.title,
             description: item.description,
             type: item.questionItem?.question ? Object.keys(item.questionItem.question)[0] : 'unknown',
-            required: (item.questionItem as any)?.required || false,
-          })) || [],
+            required: Boolean(item.questionItem && 'required' in item.questionItem && item.questionItem.required),
+          })) ?? [],
         };
 
         performanceMonitor.track('getForm', Date.now() - startTime);
@@ -1569,7 +1667,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const scaleMinLabel = args.scaleMinLabel as string | undefined;
         const scaleMaxLabel = args.scaleMaxLabel as string | undefined;
         
-        let questionItem: any = {
+        const questionItem: QuestionItem = {
           required,
           question: {},
         };
@@ -1622,8 +1720,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             questionItem.question.scaleQuestion = {
               low: scaleMin,
               high: scaleMax,
-              lowLabel: scaleMinLabel,
-              highLabel: scaleMaxLabel,
+              ...(scaleMinLabel ? { lowLabel: scaleMinLabel } : {}),
+              ...(scaleMaxLabel ? { highLabel: scaleMaxLabel } : {}),
             };
             break;
             
@@ -1644,7 +1742,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             throw new Error(`Unsupported question type: ${type}`);
         }
 
-        const response = await forms.forms.batchUpdate({
+        await forms.forms.batchUpdate({
           formId,
           requestBody: {
             requests: [{
@@ -1689,11 +1787,11 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           respondentEmail: resp.respondentEmail,
           answers: resp.answers ? Object.entries(resp.answers).map(([questionId, answer]) => ({
             questionId,
-            answer: answer.textAnswers?.answers?.[0]?.value || 
-                   (answer as any).choiceAnswers?.answers?.map((a: any) => a.value).join(", ") ||
+            answer: answer.textAnswers?.answers?.[0]?.value ?? 
+                   (answer as { choiceAnswers?: { answers?: Array<{ value: string }> } }).choiceAnswers?.answers?.map((a: { value: string }) => a.value).join(", ") ??
                    "No answer",
           })) : [],
-        })) || [];
+        })) ?? [];
 
         performanceMonitor.track('listResponses', Date.now() - startTime);
         
@@ -1832,13 +1930,19 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const italic = args.italic as boolean | undefined;
         const underline = args.underline as boolean | undefined;
         const fontSize = args.fontSize as number | undefined;
-        const foregroundColor = args.foregroundColor as any;
+        const foregroundColor = args.foregroundColor as { red: number; green: number; blue: number } | undefined;
         
-        const textStyle: any = {};
+        const textStyle: Partial<TextStyle> = {};
         
-        if (bold !== undefined) textStyle.bold = bold;
-        if (italic !== undefined) textStyle.italic = italic;
-        if (underline !== undefined) textStyle.underline = underline;
+        if (bold !== undefined) {
+          textStyle.bold = bold;
+        }
+        if (italic !== undefined) {
+          textStyle.italic = italic;
+        }
+        if (underline !== undefined) {
+          textStyle.underline = underline;
+        }
         if (fontSize !== undefined) {
           textStyle.fontSize = {
             magnitude: fontSize,
@@ -1925,7 +2029,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           logger.info('getAppScript cache hit', { scriptId });
           
           // Format the cached response
-          const filesText = cached.files.map((file: AppsScriptFile) => {
+          const filesText = (cached as { files: AppsScriptFile[] }).files.map((file: AppsScriptFile) => {
             let fileInfo = `File: ${file.name} (${file.type})\n`;
             fileInfo += '```' + (file.type === 'HTML' ? 'html' : 'javascript') + '\n';
             fileInfo += file.source;
@@ -1951,10 +2055,14 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const content = response.data;
         
         // Cache the result
-        await cacheManager.set(`script:${scriptId}`, content);
+        await cacheManager.set(`script:${scriptId}`, content as CacheData);
         
         // Format the response
-        const filesText = content.files!.map((file: any) => {
+        if (!content.files) {
+          throw new Error('No files found in script content');
+        }
+        
+        const filesText = (content.files as AppsScriptFile[]).map((file: AppsScriptFile) => {
           let fileInfo = `File: ${file.name} (${file.type})\n`;
           fileInfo += '```' + (file.type === 'HTML' ? 'html' : 'javascript') + '\n';
           fileInfo += file.source;
@@ -1984,9 +2092,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           try {
             switch (op.type) {
               case "create": {
-                const fileMetadata: any = {
+                const fileMetadata: FileMetadata = {
                   name: op.name,
-                  mimeType: op.mimeType || "text/plain",
+                  mimeType: op.mimeType ?? "text/plain",
                 };
                 
                 if (op.parentId) {
@@ -1996,7 +2104,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                 const response = await drive.files.create({
                   requestBody: fileMetadata,
                   media: {
-                    mimeType: op.mimeType || "text/plain",
+                    mimeType: op.mimeType ?? "text/plain",
                     body: op.content,
                   },
                   fields: "id, name",
@@ -2012,14 +2120,23 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
               }
 
               case "update": {
-                await drive.files.update({
+                const updateParams: {
+                  fileId: string;
+                  requestBody?: { name?: string };
+                  media?: { mimeType: string; body: string };
+                } = {
                   fileId: op.fileId,
-                  requestBody: op.name ? { name: op.name } : undefined,
-                  media: op.content ? {
+                  requestBody: op.name ? { name: op.name } : {},
+                };
+                
+                if (op.content) {
+                  updateParams.media = {
                     mimeType: "text/plain",
                     body: op.content,
-                  } : undefined,
-                });
+                  };
+                }
+                
+                await drive.files.update(updateParams);
 
                 results.push({
                   type: "update",
@@ -2049,7 +2166,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                   fields: "parents",
                 });
 
-                const previousParents = file.data.parents?.join(",") || "";
+                const previousParents = file.data.parents?.join(",") ?? "";
 
                 await drive.files.update({
                   fileId: op.fileId,
@@ -2072,10 +2189,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                   error: `Unknown operation type: ${op.type}`,
                 });
             }
-          } catch (error: any) {
+          } catch (error: unknown) {
             errors.push({
               operation: op,
-              error: error.message,
+              error: error instanceof Error ? error.message : String(error),
             });
           }
         }
@@ -2121,16 +2238,11 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 });
 
 // OAuth key path handling
-const oauthPath = process.env.GDRIVE_OAUTH_PATH || path.join(
+const oauthPath = process.env.GDRIVE_OAUTH_PATH ?? path.join(
   path.dirname(new URL(import.meta.url).pathname),
   "../credentials/gcp-oauth.keys.json",
 );
 
-// Credentials path handling
-const credentialsPath = process.env.GDRIVE_CREDENTIALS_PATH || path.join(
-  path.dirname(new URL(import.meta.url).pathname),
-  "../credentials/.gdrive-server-credentials.json",
-);
 
 async function authenticateAndSaveCredentials() {
   logger.info("Launching auth flow…");
@@ -2156,12 +2268,16 @@ async function authenticateAndSaveCredentials() {
   // Initialize token manager and save credentials
   tokenManager = TokenManager.getInstance(logger);
   
+  if (!auth.credentials.access_token || !auth.credentials.refresh_token || !auth.credentials.expiry_date || !auth.credentials.token_type || !auth.credentials.scope) {
+    throw new Error('Missing required authentication credentials');
+  }
+  
   const tokenData = {
-    access_token: auth.credentials.access_token!,
-    refresh_token: auth.credentials.refresh_token!,
-    expiry_date: auth.credentials.expiry_date!,
-    token_type: auth.credentials.token_type!,
-    scope: auth.credentials.scope!,
+    access_token: auth.credentials.access_token,
+    refresh_token: auth.credentials.refresh_token,
+    expiry_date: auth.credentials.expiry_date,
+    token_type: auth.credentials.token_type,
+    scope: auth.credentials.scope,
   };
   
   await tokenManager.saveTokens(tokenData);
@@ -2189,7 +2305,7 @@ async function loadCredentialsAndRunServer() {
     
     const keysContent = fs.readFileSync(oauthPath, "utf-8");
     const keys = JSON.parse(keysContent);
-    const oauthKeys = keys.web || keys.installed;
+    const oauthKeys = keys.web ?? keys.installed;
     
     if (!oauthKeys) {
       console.error("Invalid OAuth keys format. Expected 'web' or 'installed' configuration.");

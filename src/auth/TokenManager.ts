@@ -46,7 +46,7 @@ interface AuditLog {
   userId?: string;
   tokenId?: string;
   success: boolean;
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
 }
 
 export class TokenManager {
@@ -60,10 +60,10 @@ export class TokenManager {
     this.logger = logger;
     
     // Load configuration from environment
-    this.tokenPath = process.env.GDRIVE_TOKEN_STORAGE_PATH || 
+    this.tokenPath = process.env.GDRIVE_TOKEN_STORAGE_PATH ?? 
       path.join(os.homedir(), '.gdrive-mcp-tokens.json');
     
-    this.auditPath = process.env.GDRIVE_TOKEN_AUDIT_LOG_PATH || 
+    this.auditPath = process.env.GDRIVE_TOKEN_AUDIT_LOG_PATH ?? 
       path.join(os.homedir(), '.gdrive-mcp-audit.log');
     
     // Initialize key rotation manager
@@ -88,7 +88,7 @@ export class TokenManager {
     let keyBuffer: Buffer;
     try {
       keyBuffer = Buffer.from(keyBase64, 'base64');
-    } catch (error) {
+    } catch {
       throw new Error('Invalid base64 encoding for GDRIVE_TOKEN_ENCRYPTION_KEY');
     }
     
@@ -133,7 +133,7 @@ export class TokenManager {
         let keyBuffer: Buffer;
         try {
           keyBuffer = Buffer.from(keyBase64, 'base64');
-        } catch (error) {
+        } catch {
           this.logger.warn(`Invalid base64 encoding for ${envKey}, skipping`);
           continue;
         }
@@ -174,7 +174,7 @@ export class TokenManager {
     }
 
     // Set current version from environment or default to v1
-    const currentVersion = process.env.GDRIVE_TOKEN_CURRENT_KEY_VERSION || 'v1';
+    const currentVersion = process.env.GDRIVE_TOKEN_CURRENT_KEY_VERSION ?? 'v1';
     this.keyRotationManager.setCurrentVersion(currentVersion);
     
     // Log audit event
@@ -248,8 +248,8 @@ export class TokenManager {
         if (fileContent.includes(':') && fileContent.split(':').length === 3) {
           // Legacy format detected
           this.logger.error('Legacy token format detected');
-          const error = new Error('LEGACY_TOKEN_FORMAT');
-          (error as any).isLegacyFormat = true;
+          const error = new Error('LEGACY_TOKEN_FORMAT') as Error & { isLegacyFormat?: boolean };
+          error.isLegacyFormat = true;
           throw error;
         }
         // Other parse error
@@ -266,13 +266,14 @@ export class TokenManager {
       
       this.logger.info('Tokens loaded successfully');
       return tokens;
-    } catch (error: any) {
-      if (error.code === 'ENOENT') {
+    } catch (error: unknown) {
+      const nodeError = error as NodeJS.ErrnoException & { isLegacyFormat?: boolean };
+      if (nodeError.code === 'ENOENT') {
         this.logger.debug('No saved tokens found', { path: this.tokenPath });
         return null;
       }
       
-      this.logger.error('Failed to load tokens', { error });
+      this.logger.error('Failed to load tokens', { error: nodeError });
       return null;
     }
   }
@@ -298,7 +299,9 @@ export class TokenManager {
    * Check if token is expired
    */
   public isTokenExpired(tokens: TokenData): boolean {
-    if (!tokens.expiry_date) return true;
+    if (!tokens.expiry_date) {
+      return true;
+    }
     return Date.now() >= tokens.expiry_date;
   }
 
@@ -306,21 +309,27 @@ export class TokenManager {
    * Check if token is expiring soon
    */
   public isTokenExpiringSoon(tokens: TokenData, bufferMs: number = 10 * 60 * 1000): boolean {
-    if (!tokens.expiry_date) return true;
+    if (!tokens.expiry_date) {
+      return true;
+    }
     return Date.now() >= (tokens.expiry_date - bufferMs);
   }
 
   /**
    * Validate token data structure
    */
-  public isValidTokenData(data: any): data is TokenData {
+  public isValidTokenData(data: unknown): data is TokenData {
+    if (!data || typeof data !== 'object') {
+      return false;
+    }
+    
+    const tokenData = data as Record<string, unknown>;
     return (
-      data &&
-      typeof data.access_token === 'string' &&
-      typeof data.refresh_token === 'string' &&
-      typeof data.expiry_date === 'number' &&
-      typeof data.token_type === 'string' &&
-      typeof data.scope === 'string'
+      typeof tokenData.access_token === 'string' &&
+      typeof tokenData.refresh_token === 'string' &&
+      typeof tokenData.expiry_date === 'number' &&
+      typeof tokenData.token_type === 'string' &&
+      typeof tokenData.scope === 'string'
     );
   }
 
@@ -338,8 +347,9 @@ export class TokenManager {
     const authTag = cipher.getAuthTag();
     
     // Clear sensitive data from memory
-    const dataBuffer = Buffer.from(data);
-    KeyDerivation.clearSensitiveData(dataBuffer);
+    // Note: Cannot clear the string data parameter as it's immutable
+    // This is a limitation of JavaScript - strings cannot be cleared from memory
+    // The caller should ensure sensitive data is handled appropriately
     
     // Return versioned format
     return {
@@ -372,9 +382,17 @@ export class TokenManager {
       throw new Error('Invalid encrypted data format');
     }
     
-    const iv = Buffer.from(parts[0], 'hex');
-    const authTag = Buffer.from(parts[1], 'hex');
+    // Ensure parts are defined before using them
+    const ivPart = parts[0];
+    const authTagPart = parts[1];
     const encryptedData = parts[2];
+    
+    if (!ivPart || !authTagPart || !encryptedData) {
+      throw new Error('Missing encryption components');
+    }
+    
+    const iv = Buffer.from(ivPart, 'hex');
+    const authTag = Buffer.from(authTagPart, 'hex');
     
     const decipher = crypto.createDecipheriv('aes-256-gcm', key.key, iv);
     decipher.setAuthTag(authTag);
@@ -400,13 +418,13 @@ export class TokenManager {
   private async logAuditEvent(
     event: AuditEvent,
     success: boolean,
-    metadata?: Record<string, any>
+    metadata?: Record<string, unknown>
   ): Promise<void> {
     const auditLog: AuditLog = {
       timestamp: new Date().toISOString(),
       event,
       success,
-      metadata,
+      metadata: metadata ?? {},  // Use empty object if metadata is undefined
     };
     
     try {

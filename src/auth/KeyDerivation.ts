@@ -24,7 +24,7 @@ export class KeyDerivation {
       throw new Error(`Iterations must be at least ${KeyDerivation.MIN_ITERATIONS}`);
     }
 
-    const actualSalt = salt || KeyDerivation.generateSalt();
+    const actualSalt = salt ?? KeyDerivation.generateSalt();
     
     const key = crypto.pbkdf2Sync(
       password,

@@ -13,7 +13,13 @@
     "declaration": true,
     "declarationMap": true,
     "sourceMap": true,
-    "resolveJsonModule": true
+    "resolveJsonModule": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noImplicitReturns": true,
+    "noFallthroughCasesInSwitch": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true
   },
   "include": [
     "./**/*.ts"
@@ -21,9 +27,6 @@
   "exclude": [
     "node_modules",
     "dist",
-    "**/__tests__/**/*",
-    "**/tests/**/*",
-    "**/*.test.ts",
     "jest.config.js",
     "jest.setup.js"
   ]

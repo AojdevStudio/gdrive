@@ -6,7 +6,7 @@ import * as os from 'os';
 import { TokenManager, TokenData } from '../../auth/TokenManager.js';
 import { KeyRotationManager } from '../../auth/KeyRotationManager.js';
 import { KeyDerivation } from '../../auth/KeyDerivation.js';
-import { Logger } from 'winston';
+import type { Logger } from 'winston';
 
 /**
  * Performance Tests for Key Rotation System
@@ -39,7 +39,7 @@ describe('Key Rotation Performance Tests', () => {
       info: jest.fn(),
       warn: jest.fn(),
       error: jest.fn(),
-    } as any;
+    } as unknown as jest.Mocked<Logger>;
 
     // Clear singleton instances
     (KeyRotationManager as any)._instance = undefined;
@@ -58,7 +58,7 @@ describe('Key Rotation Performance Tests', () => {
     // Clean up temporary files
     try {
       await fs.rm(tempDir, { recursive: true, force: true });
-    } catch (error) {
+    } catch {
       // Ignore cleanup errors
     }
     
@@ -242,18 +242,18 @@ describe('Key Rotation Performance Tests', () => {
       
       const baselineStartTime = process.hrtime.bigint();
       const cipher = crypto.createCipheriv('aes-256-gcm', directKey, iv);
-      let encrypted = cipher.update(plaintext, 'utf8', 'hex');
-      encrypted += cipher.final('hex');
-      const authTag = cipher.getAuthTag();
+      cipher.update(plaintext, 'utf8', 'hex');
+      cipher.final('hex');
+      cipher.getAuthTag(); // Execute encryption but don't store result
       const baselineEndTime = process.hrtime.bigint();
       const baselineTime = Number(baselineEndTime - baselineStartTime) / 1000000; // Convert to milliseconds
       
       // Measure encryption with PBKDF2-derived key
       const withPbkdf2StartTime = process.hrtime.bigint();
       const cipher2 = crypto.createCipheriv('aes-256-gcm', derivedKey.key, iv);
-      let encrypted2 = cipher2.update(plaintext, 'utf8', 'hex');
-      encrypted2 += cipher2.final('hex');
-      const authTag2 = cipher2.getAuthTag();
+      cipher2.update(plaintext, 'utf8', 'hex');
+      cipher2.final('hex');
+      cipher2.getAuthTag(); // Execute encryption but don't store result
       const withPbkdf2EndTime = process.hrtime.bigint();
       const withPbkdf2Time = Number(withPbkdf2EndTime - withPbkdf2StartTime) / 1000000; // Convert to milliseconds
       
@@ -307,8 +307,13 @@ describe('Key Rotation Performance Tests', () => {
       // Verify linear relationship between iterations and time
       const ratios = [];
       for (let i = 1; i < results.length; i++) {
-        const timeRatio = results[i].time / results[i-1].time;
-        const iterationRatio = results[i].iterations / results[i-1].iterations;
+        const currentResult = results[i];
+        const previousResult = results[i-1];
+        if (!currentResult || !previousResult) {
+          throw new Error(`Results at index ${i} or ${i-1} are undefined`);
+        }
+        const timeRatio = currentResult.time / previousResult.time;
+        const iterationRatio = currentResult.iterations / previousResult.iterations;
         ratios.push(timeRatio / iterationRatio);
       }
       
@@ -337,7 +342,7 @@ describe('Key Rotation Performance Tests', () => {
       const keyManager = KeyRotationManager.getInstance(mockLogger);
       
       // Initialize token manager (loads keys from environment)
-      const tokenManager = TokenManager.getInstance(mockLogger);
+      TokenManager.getInstance(mockLogger);
       
       // Verify system is ready
       const currentKey = keyManager.getCurrentKey();
@@ -369,7 +374,7 @@ describe('Key Rotation Performance Tests', () => {
       const startupStartTime = process.hrtime.bigint();
       
       const keyManager = KeyRotationManager.getInstance(mockLogger);
-      const tokenManager = TokenManager.getInstance(mockLogger);
+      TokenManager.getInstance(mockLogger);
       
       // Verify all keys are loaded
       for (let i = 1; i <= 5; i++) {

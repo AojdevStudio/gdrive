@@ -1,11 +1,12 @@
 // Jest setup file for test environment configuration
+/* eslint-env node */
 import { jest } from '@jest/globals';
 import crypto from 'crypto';
 
 // Set test environment variables
-process.env.NODE_ENV = 'test';
-process.env.LOG_LEVEL = 'error'; // Reduce noise in tests
-process.env.GDRIVE_TOKEN_ENCRYPTION_KEY = Buffer.from(crypto.randomBytes(32)).toString('base64'); // Test encryption key
+globalThis.process.env.NODE_ENV = 'test';
+globalThis.process.env.LOG_LEVEL = 'error'; // Reduce noise in tests
+globalThis.process.env.GDRIVE_TOKEN_ENCRYPTION_KEY = globalThis.Buffer.from(crypto.randomBytes(32)).toString('base64'); // Test encryption key
 
 // Mock winston to prevent file writes during tests
 jest.mock('winston', () => {

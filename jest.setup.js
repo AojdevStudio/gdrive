@@ -85,6 +85,25 @@ global.createMockFunction = (implementation) => {
   return jest.fn(implementation);
 };
 
+// Global type declarations for test environment
+global.mockLogger = () => ({
+  info: jest.fn(),
+  error: jest.fn(),
+  warn: jest.fn(),
+  debug: jest.fn(),
+  verbose: jest.fn(),
+  silly: jest.fn(),
+  log: jest.fn(),
+});
+
+global.mockCrypto = {
+  randomBytes: jest.fn(),
+  pbkdf2Sync: jest.fn(),
+  createCipheriv: jest.fn(),
+  createDecipheriv: jest.fn(),
+  timingSafeEqual: jest.fn(),
+};
+
 // Global test cleanup to prevent hanging worker processes
 let activeTimers = new Set();
 let activeProcesses = new Set();

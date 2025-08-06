@@ -9,6 +9,11 @@ jest.mock('fs/promises');
 jest.mock('os');
 jest.mock('crypto');
 
+// Type-safe mock helpers
+const mockFs = fs as jest.Mocked<typeof fs>;
+const mockCrypto = crypto as jest.Mocked<typeof crypto>;
+const mockHomedir = homedir as jest.MockedFunction<typeof homedir>;
+
 describe('Comprehensive Migration Integration Tests', () => {
   const mockHomePath = '/mock/home';
   const mockLegacyPath = path.join(mockHomePath, '.gdrive-mcp-tokens.json');
@@ -17,34 +22,34 @@ describe('Comprehensive Migration Integration Tests', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    (homedir as jest.Mock).mockReturnValue(mockHomePath);
+    mockHomedir.mockReturnValue(mockHomePath);
     process.env.GDRIVE_TOKEN_ENCRYPTION_KEY = mockKey;
     
-    // Setup comprehensive fs mocks - using any to bypass strict typing for test mocks
-    (fs.access as any).mockResolvedValue(undefined);
-    (fs.mkdir as any).mockResolvedValue(undefined);
-    (fs.writeFile as any).mockResolvedValue(undefined);
-    (fs.rename as any).mockResolvedValue(undefined);
-    (fs.readFile as any).mockResolvedValue('test-content');
-    (fs.unlink as any).mockResolvedValue(undefined);
-    (fs.appendFile as any).mockResolvedValue(undefined);
+    // Setup comprehensive fs mocks with proper typing
+    mockFs.access.mockResolvedValue(undefined);
+    mockFs.mkdir.mockResolvedValue(undefined as any);
+    mockFs.writeFile.mockResolvedValue();
+    mockFs.rename.mockResolvedValue();
+    mockFs.readFile.mockResolvedValue('test-content' as any);
+    mockFs.unlink.mockResolvedValue();
+    mockFs.appendFile.mockResolvedValue();
     
-    // Mock crypto functions for consistent testing - using any to bypass strict typing
-    (crypto.randomBytes as any).mockImplementation((size: number) => {
+    // Mock crypto functions for consistent testing with proper typing
+    mockCrypto.randomBytes.mockImplementation((size: number) => {
       return Buffer.alloc(size, 1);
     });
     
-    (crypto.pbkdf2Sync as any).mockImplementation(() => {
+    mockCrypto.pbkdf2Sync.mockImplementation(() => {
       return Buffer.alloc(32, 2);
     });
     
-    (crypto.createCipheriv as any).mockReturnValue({
+    mockCrypto.createCipheriv.mockReturnValue({
       update: jest.fn().mockReturnValue('encrypted'),
       final: jest.fn().mockReturnValue('data'),
       getAuthTag: jest.fn().mockReturnValue(Buffer.alloc(16, 3))
-    });
+    } as any);
     
-    (crypto.createDecipheriv as any).mockReturnValue({
+    mockCrypto.createDecipheriv.mockReturnValue({
       setAuthTag: jest.fn(),
       update: jest.fn().mockReturnValue(JSON.stringify({
         access_token: 'test-token',
@@ -54,7 +59,7 @@ describe('Comprehensive Migration Integration Tests', () => {
         scope: 'https://www.googleapis.com/auth/drive'
       })),
       final: jest.fn().mockReturnValue('')
-    });
+    } as any);
   });
 
   afterEach(() => {
@@ -64,14 +69,14 @@ describe('Comprehensive Migration Integration Tests', () => {
   describe('Migration with Various Token Counts', () => {
     it('should handle migration with single token', async () => {
       const singleTokenData = 'iv:authTag:encryptedSingleToken';
-      (fs.readFile as any).mockResolvedValue(singleTokenData);
+      mockFs.readFile.mockResolvedValue(singleTokenData as any);
 
       // Simulate the migration process
       const migrationResult = await simulateMigration(singleTokenData);
       
       expect(migrationResult.success).toBe(true);
       expect(migrationResult.tokenCount).toBe(1);
-      expect(fs.writeFile).toHaveBeenCalledWith(
+      expect(mockFs.writeFile).toHaveBeenCalledWith(
         expect.stringContaining('.tmp'),
         expect.any(String),
         'utf8'
@@ -134,7 +139,7 @@ describe('Comprehensive Migration Integration Tests', () => {
 
     it('should rollback on encryption failure during migration', async () => {
       // Simulate encryption failure by making writeFile fail
-      (fs.writeFile as any).mockImplementation((path: string, data: string) => {
+      (fs.writeFile as any).mockImplementation((path: string, _data: string) => {
         if (path.includes('.tmp')) {
           return Promise.reject(new Error('Encryption failed'));
         }
@@ -463,7 +468,7 @@ describe('Comprehensive Migration Integration Tests', () => {
     error?: string;
   }> {
     try {
-      const currentVersion = process.env.GDRIVE_TOKEN_CURRENT_KEY_VERSION || 'v1';
+      const currentVersion = process.env.GDRIVE_TOKEN_CURRENT_KEY_VERSION ?? 'v1';
       const versionNum = parseInt(currentVersion.substring(1));
       const newVersion = `v${versionNum + 1}`;
       const newKeyEnv = `GDRIVE_TOKEN_ENCRYPTION_KEY_${newVersion.toUpperCase()}`;
@@ -472,10 +477,8 @@ describe('Comprehensive Migration Integration Tests', () => {
         throw new Error('GDRIVE_TOKEN_ENCRYPTION_KEY environment variable not set');
       }
       
-      if (!process.env[newKeyEnv]) {
-        // In real implementation, this would generate a new key
-        process.env[newKeyEnv] = Buffer.alloc(32).toString('base64');
-      }
+      // Use nullish coalescing assignment for cleaner code
+      process.env[newKeyEnv] ??= Buffer.alloc(32).toString('base64');
       
       return { success: true, newVersion };
     } catch (error) {
@@ -534,7 +537,7 @@ describe('Comprehensive Migration Integration Tests', () => {
       await fs.rename(`${mockLegacyPath}.tmp`, mockLegacyPath);
       
       return { success: true, progress: { steps } };
-    } catch (error) {
+    } catch {
       return { success: false, progress: { steps } };
     }
   }

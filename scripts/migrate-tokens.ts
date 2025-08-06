@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+/* eslint-disable no-console */
 
 import * as fs from 'fs/promises';
 import * as path from 'path';
@@ -55,7 +56,7 @@ class KeyDerivation {
       throw new Error(`Iterations must be at least ${KeyDerivation.MIN_ITERATIONS}`);
     }
 
-    const actualSalt = salt || KeyDerivation.generateSalt();
+    const actualSalt = salt ?? KeyDerivation.generateSalt();
     
     const key = crypto.pbkdf2Sync(
       password,
@@ -109,9 +110,9 @@ async function decryptLegacyTokens(encryptedData: string, encryptionKey: Buffer)
   }
 
   const [ivHex, authTagHex, encrypted] = parts;
-  const iv = Buffer.from(ivHex, 'hex');
-  const authTag = Buffer.from(authTagHex, 'hex');
-  const encryptedBuffer = Buffer.from(encrypted, 'hex');
+  const iv = Buffer.from(ivHex ?? "", "hex");
+  const authTag = Buffer.from(authTagHex ?? "", "hex");
+  const encryptedBuffer = Buffer.from(encrypted ?? "", "hex");
 
   const decipher = crypto.createDecipheriv(ALGORITHM, encryptionKey, iv);
   decipher.setAuthTag(authTag);
@@ -185,7 +186,7 @@ async function atomicWrite(filePath: string, content: string): Promise<void> {
     // Clean up temp file on error
     try {
       await fs.unlink(tempPath);
-    } catch {}
+    } catch { /* ignore */ }
     throw error;
   }
 }
@@ -230,11 +231,11 @@ async function migrateTokens(): Promise<void> {
     
     // Ensure all required fields are present for TokenData
     const tokenData: LegacyTokenData = {
-      access_token: legacyTokens.access_token || '',
-      refresh_token: legacyTokens.refresh_token || '',
-      expiry_date: legacyTokens.expiry_date || Date.now() + 3600000,
-      token_type: legacyTokens.token_type || 'Bearer',
-      scope: legacyTokens.scope || 'https://www.googleapis.com/auth/drive https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/documents https://www.googleapis.com/auth/forms https://www.googleapis.com/auth/script.projects.readonly'
+      access_token: legacyTokens.access_token ?? "",
+      refresh_token: legacyTokens.refresh_token ?? "",
+      expiry_date: legacyTokens.expiry_date ?? Date.now() + 3600000,
+      token_type: legacyTokens.token_type ?? "Bearer",
+      scope: legacyTokens.scope ?? "https://www.googleapis.com/auth/drive https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/documents https://www.googleapis.com/auth/forms https://www.googleapis.com/auth/script.projects.readonly"
     };
 
     // Step 6: Derive key and encrypt with new format
@@ -345,7 +346,7 @@ async function cleanupLegacyTokens(): Promise<void> {
     
     try {
       await fs.appendFile(auditPath, JSON.stringify(auditEntry) + '\n', 'utf8');
-    } catch {}
+    } catch { /* ignore */ }
 
     console.log('\n✅ Cleanup completed successfully!');
     console.log('💡 Your tokens are now using the new versioned format');

@@ -24,7 +24,7 @@ describe('CLI Commands Logic', () => {
       const nowExists = process.env[newKeyEnv];
       
       expect(nowExists).toBeDefined();
-      expect(() => Buffer.from(nowExists!, 'base64')).not.toThrow();
+      expect(() => Buffer.from(nowExists, 'base64')).not.toThrow();
     });
 
     it('should generate correct version numbers', () => {
@@ -69,14 +69,13 @@ describe('CLI Commands Logic', () => {
         scope: 'test-scope'
       };
       
-      // Token validation logic
+      // Token validation logic - use optional chaining
       const isValid = !!(
-        validToken &&
-        validToken.access_token &&
-        validToken.refresh_token &&
-        validToken.expiry_date &&
-        validToken.token_type &&
-        validToken.scope
+        validToken?.access_token &&
+        validToken?.refresh_token &&
+        validToken?.expiry_date &&
+        validToken?.token_type &&
+        validToken?.scope
       );
       
       expect(isValid).toBe(true);

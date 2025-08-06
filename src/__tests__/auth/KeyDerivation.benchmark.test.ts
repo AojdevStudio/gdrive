@@ -41,8 +41,20 @@ describe('KeyDerivation Performance Benchmarks', () => {
       results.forEach(r => console.log(`  ${r.iterations} iterations: ${r.time.toFixed(2)}ms`));
       
       // Check that time scales roughly linearly
-      const ratio1to2 = results[1].time / results[0].time;
-      const ratio2to3 = results[2].time / results[1].time;
+      const result0 = results[0];
+      const result1 = results[1];
+      const result2 = results[2];
+      
+      expect(result0).toBeDefined();
+      expect(result1).toBeDefined();
+      expect(result2).toBeDefined();
+      
+      if (!result0 || !result1 || !result2) {
+        throw new Error('Expected all benchmark results to be defined');
+      }
+      
+      const ratio1to2 = result1.time / result0.time;
+      const ratio2to3 = result2.time / result1.time;
       
       // Allow 20% variance from perfect linear scaling
       expect(ratio1to2).toBeGreaterThan(1.8);

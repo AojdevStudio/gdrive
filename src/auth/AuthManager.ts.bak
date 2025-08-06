@@ -68,7 +68,7 @@ export class AuthManager {
       // Load existing tokens
       const savedTokens = await this.tokenManager.loadTokens();
       if (savedTokens && this.tokenManager.isValidTokenData(savedTokens)) {
-        this.oauth2Client?.setCredentials(savedTokens);
+        this.oauth2Client.setCredentials(savedTokens);
         this.state = AuthState.AUTHENTICATED;
         this.logger.info('Loaded existing tokens successfully');
         
@@ -109,7 +109,7 @@ export class AuthManager {
     }
     
     if (this.oauth2Client?.credentials) {
-      if (this.tokenManager.isTokenExpired(this.oauth2Client?.credentials as TokenData)) {
+      if (this.tokenManager.isTokenExpired(this.oauth2Client.credentials as TokenData)) {
         return AuthState.TOKEN_EXPIRED;
       }
       return this.state;
@@ -186,23 +186,18 @@ export class AuthManager {
       this.logger.info('Handling token update event');
       
       // Merge with existing credentials (preserve refresh token)
-      if (!this.oauth2Client) {
-      throw new Error("OAuth2 client not initialized");
-    }
-    const currentCredentials = this.oauth2Client.credentials;
+      const currentCredentials = this.oauth2Client!.credentials;
       const updatedCredentials = {
         ...currentCredentials,
         ...tokens,
-        refresh_token: tokens.refresh_token ?? currentCredentials.refresh_token,
+        refresh_token: tokens.refresh_token || currentCredentials.refresh_token,
       } as TokenData;
       
       // Save to persistent storage
       await this.tokenManager.saveTokens(updatedCredentials);
       
       // Update in-memory credentials
-      if (this.oauth2Client) {
-      this.oauth2Client.setCredentials(updatedCredentials);
-    }
+      this.oauth2Client!.setCredentials(updatedCredentials);
       this.state = AuthState.AUTHENTICATED;
       
       this.logger.info('Tokens refreshed and persisted', {
@@ -220,7 +215,7 @@ export class AuthManager {
    */
   private startTokenMonitoring(): void {
     // Check token every 30 minutes
-    const intervalMs = parseInt(process.env.GDRIVE_TOKEN_REFRESH_INTERVAL ?? '1800000', 10);
+    const intervalMs = parseInt(process.env.GDRIVE_TOKEN_REFRESH_INTERVAL || '1800000', 10);
     
     this.refreshInterval = setInterval(async () => {
       await this.checkAndRefreshToken();
@@ -238,9 +233,9 @@ export class AuthManager {
         return;
       }
       
-      const tokens = this.oauth2Client?.credentials as TokenData;
+      const tokens = this.oauth2Client.credentials as TokenData;
       const bufferMs = parseInt(
-        process.env.GDRIVE_TOKEN_PREEMPTIVE_REFRESH ?? '600000',
+        process.env.GDRIVE_TOKEN_PREEMPTIVE_REFRESH || '600000',
         10
       );
       
@@ -257,24 +252,19 @@ export class AuthManager {
    * Perform the actual token refresh with retry logic
    */
   private async performTokenRefresh(): Promise<void> {
-    const maxRetries = parseInt(process.env.GDRIVE_TOKEN_MAX_RETRIES ?? '3', 10);
-    const baseDelay = parseInt(process.env.GDRIVE_TOKEN_RETRY_DELAY ?? '1000', 10);
+    const maxRetries = parseInt(process.env.GDRIVE_TOKEN_MAX_RETRIES || '3', 10);
+    const baseDelay = parseInt(process.env.GDRIVE_TOKEN_RETRY_DELAY || '1000', 10);
     
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
         this.logger.debug(`Token refresh attempt ${attempt}/${maxRetries}`);
         
         // Force token refresh
-        if (!this.oauth2Client) {
-      throw new Error("OAuth2 client not initialized");
-    }
-        const response = await this.oauth2Client.getAccessToken();
-        const credentials = response.res?.data ?? (response.token ? { access_token: response.token } : null);
+        const response = await this.oauth2Client!.getAccessToken();
+        const credentials = response.res?.data || (response.token ? { access_token: response.token } : null);
         
-        if (credentials?.access_token) {
-          if (this.oauth2Client) {
-          this.oauth2Client.setCredentials(credentials);
-        }
+        if (credentials && credentials.access_token) {
+          this.oauth2Client!.setCredentials(credentials);
           this.state = AuthState.AUTHENTICATED;
         }
         
@@ -292,7 +282,7 @@ export class AuthManager {
         
         // Handle rate limiting
         if (refreshError.response?.status === 429) {
-          const retryAfter = parseInt(refreshError.response.headers?.['retry-after'] ?? '60', 10);
+          const retryAfter = parseInt(refreshError.response.headers?.['retry-after'] || '60', 10);
           await this.delay(retryAfter * 1000);
           continue;
         }
@@ -332,9 +322,7 @@ export class AuthManager {
     this.state = AuthState.TOKENS_REVOKED;
     
     // Clear credentials
-    if (this.oauth2Client) {
-      this.oauth2Client.setCredentials({});
-    }
+    this.oauth2Client!.setCredentials({});
   }
 
   /**
