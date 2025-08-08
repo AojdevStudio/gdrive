@@ -1,0 +1,389 @@
+name: Dependency Updates
+
+# Automated dependency updates and security scanning
+on:
+  schedule:
+    # Run every Monday at 9 AM UTC
+    - cron: '0 9 * * 1'
+  workflow_dispatch:
+    inputs:
+      update-type:
+        description: 'Type of update to perform'
+        required: true
+        default: 'patch'
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+          - security-only
+
+permissions:
+  contents: write
+  pull-requests: write
+  security-events: write
+  actions: read
+
+env:
+  NODE_VERSION: '20'
+
+jobs:
+  # Job 1: Security audit
+  security-audit:
+    name: Security Audit
+    runs-on: ubuntu-latest
+    
+    outputs:
+      vulnerabilities-found: ${{ steps.audit.outputs.vulnerabilities-found }}
+      audit-report: ${{ steps.audit.outputs.audit-report }}
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          
+      - name: Install dependencies
+        run: npm ci --prefer-offline
+        
+      - name: Run security audit
+        id: audit
+        run: |
+          # Run npm audit and capture output
+          if npm audit --audit-level=moderate --json > audit-report.json 2>&1; then
+            echo "vulnerabilities-found=false" >> $GITHUB_OUTPUT
+          else
+            echo "vulnerabilities-found=true" >> $GITHUB_OUTPUT
+          fi
+          
+          # Create human-readable summary
+          if [ -f "audit-report.json" ]; then
+            echo "audit-report<<EOF" >> $GITHUB_OUTPUT
+            node -e "
+              const audit = JSON.parse(require('fs').readFileSync('audit-report.json', 'utf8'));
+              if (audit.vulnerabilities) {
+                console.log('## Security Vulnerabilities Found');
+                Object.entries(audit.vulnerabilities).forEach(([pkg, vuln]) => {
+                  console.log('- **' + pkg + '**: ' + vuln.severity + ' - ' + vuln.title);
+                });
+              } else {
+                console.log('No vulnerabilities found.');
+              }
+            " >> $GITHUB_OUTPUT
+            echo "EOF" >> $GITHUB_OUTPUT
+          fi
+          
+      - name: Upload audit report
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-audit-report
+          path: audit-report.json
+          retention-days: 30
+
+  # Job 2: Check for dependency updates
+  check-updates:
+    name: Check for Updates
+    runs-on: ubuntu-latest
+    
+    outputs:
+      updates-available: ${{ steps.check.outputs.updates-available }}
+      update-summary: ${{ steps.check.outputs.update-summary }}
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          
+      - name: Check for updates
+        id: check
+        run: |
+          # Install npm-check-updates
+          npm install -g npm-check-updates
+          
+          # Check for updates based on input type
+          UPDATE_TYPE="${{ github.event.inputs.update-type || 'patch' }}"
+          
+          case $UPDATE_TYPE in
+            "patch")
+              NCU_ARGS="--target patch"
+              ;;
+            "minor")
+              NCU_ARGS="--target minor"
+              ;;
+            "major")
+              NCU_ARGS="--target latest"
+              ;;
+            "security-only")
+              # Only update packages with known vulnerabilities
+              NCU_ARGS="--target patch --filter $(npm audit --json | jq -r '.vulnerabilities | keys | join(",")')"
+              ;;
+          esac
+          
+          # Check what would be updated
+          if ncu $NCU_ARGS --jsonUpgraded > updates.json; then
+            if [ -s updates.json ] && [ "$(cat updates.json)" != "{}" ]; then
+              echo "updates-available=true" >> $GITHUB_OUTPUT
+              
+              # Create summary
+              echo "update-summary<<EOF" >> $GITHUB_OUTPUT
+              echo "## Available Updates ($UPDATE_TYPE)" >> $GITHUB_OUTPUT
+              echo "" >> $GITHUB_OUTPUT
+              node -e "
+                const updates = JSON.parse(require('fs').readFileSync('updates.json', 'utf8'));
+                Object.entries(updates).forEach(([pkg, version]) => {
+                  console.log('- **' + pkg + '**: ' + version);
+                });
+              " >> $GITHUB_OUTPUT
+              echo "EOF" >> $GITHUB_OUTPUT
+            else
+              echo "updates-available=false" >> $GITHUB_OUTPUT
+              echo "update-summary=No updates available for $UPDATE_TYPE level." >> $GITHUB_OUTPUT
+            fi
+          else
+            echo "updates-available=false" >> $GITHUB_OUTPUT
+            echo "update-summary=Error checking for updates." >> $GITHUB_OUTPUT
+          fi
+          
+      - name: Upload updates report
+        uses: actions/upload-artifact@v4
+        with:
+          name: updates-report
+          path: updates.json
+          retention-days: 7
+
+  # Job 3: Create update pull request
+  create-update-pr:
+    name: Create Update PR
+    runs-on: ubuntu-latest
+    needs: [security-audit, check-updates]
+    if: needs.check-updates.outputs.updates-available == 'true' || needs.security-audit.outputs.vulnerabilities-found == 'true'
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          
+      - name: Configure Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          
+      - name: Create update branch
+        run: |
+          BRANCH_NAME="deps/automated-updates-$(date +%Y%m%d)"
+          git checkout -b "$BRANCH_NAME"
+          echo "BRANCH_NAME=$BRANCH_NAME" >> $GITHUB_ENV
+          
+      - name: Install npm-check-updates
+        run: npm install -g npm-check-updates
+        
+      - name: Apply updates
+        run: |
+          UPDATE_TYPE="${{ github.event.inputs.update-type || 'patch' }}"
+          
+          case $UPDATE_TYPE in
+            "patch")
+              ncu --target patch -u
+              ;;
+            "minor")
+              ncu --target minor -u
+              ;;
+            "major")
+              ncu --target latest -u
+              ;;
+            "security-only")
+              # Update only vulnerable packages
+              npm audit fix --audit-level=moderate
+              ;;
+          esac
+          
+      - name: Install updated dependencies
+        run: |
+          rm -f package-lock.json
+          npm install
+          
+      - name: Run tests
+        run: |
+          # Run basic validation
+          npm run type-check
+          npm run build
+          npm test -- --passWithNoTests
+          
+      - name: Commit changes
+        run: |
+          git add package.json package-lock.json
+          
+          # Create commit message
+          UPDATE_TYPE="${{ github.event.inputs.update-type || 'patch' }}"
+          if [ "${{ needs.security-audit.outputs.vulnerabilities-found }}" = "true" ]; then
+            COMMIT_MSG="fix: update dependencies to address security vulnerabilities"
+          else
+            COMMIT_MSG="chore: update dependencies ($UPDATE_TYPE level)"
+          fi
+          
+          git commit -m "$COMMIT_MSG
+          
+          Generated with Claude Code (https://claude.ai/code)
+          
+          Co-Authored-By: Claude <noreply@anthropic.com>"
+          
+      - name: Push branch
+        run: |
+          git push origin "$BRANCH_NAME"
+          
+      - name: Create Pull Request
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Create PR body
+          cat > pr-body.md << 'EOF'
+          ## Automated Dependency Updates
+          
+          This PR was automatically created to update project dependencies.
+          
+          ### Update Summary
+          ${{ needs.check-updates.outputs.update-summary }}
+          
+          ### Security Audit
+          ${{ needs.security-audit.outputs.audit-report }}
+          
+          ### Changes Made
+          - Updated dependencies based on the **${{ github.event.inputs.update-type || 'patch' }}** update strategy
+          - Regenerated package-lock.json
+          - Verified that tests still pass
+          
+          ### Testing Checklist
+          - [x] TypeScript compilation succeeds
+          - [x] Build process completes
+          - [x] Basic tests pass
+          - [ ] Manual testing of core functionality
+          - [ ] Integration tests with Google Drive API
+          - [ ] Docker image builds successfully
+          
+          ### Review Notes
+          Please review the following before merging:
+          1. Check the specific package changes for any breaking changes
+          2. Run the full test suite locally
+          3. Test with actual Google Drive credentials
+          4. Verify Docker functionality
+          
+          Generated with [Claude Code](https://claude.ai/code)
+          EOF
+          
+          # Create the pull request
+          PR_URL=$(gh pr create \
+            --title "chore: automated dependency updates (${{ github.event.inputs.update-type || 'patch' }} level)" \
+            --body-file pr-body.md \
+            --head "$BRANCH_NAME" \
+            --base main \
+            --label "dependencies" \
+            --label "automated")
+          
+          echo "Created PR: $PR_URL"
+          
+          # If security vulnerabilities were found, add priority label
+          if [ "${{ needs.security-audit.outputs.vulnerabilities-found }}" = "true" ]; then
+            gh pr edit "$PR_URL" --add-label "security" --add-label "priority"
+          fi
+
+  # Job 4: Outdated dependencies report
+  outdated-report:
+    name: Generate Outdated Report
+    runs-on: ubuntu-latest
+    if: github.event_name == 'schedule'
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          
+      - name: Install dependencies
+        run: npm ci --prefer-offline
+        
+      - name: Generate outdated report
+        run: |
+          # Create comprehensive outdated report
+          echo "# Dependency Status Report" > outdated-report.md
+          echo "" >> outdated-report.md
+          echo "Generated on: $(date)" >> outdated-report.md
+          echo "" >> outdated-report.md
+          
+          # NPM outdated
+          echo "## Outdated Packages" >> outdated-report.md
+          echo "" >> outdated-report.md
+          if npm outdated --json > outdated.json 2>/dev/null; then
+            if [ -s outdated.json ] && [ "$(cat outdated.json)" != "{}" ]; then
+              echo "| Package | Current | Wanted | Latest |" >> outdated-report.md
+              echo "|---------|---------|--------|--------|" >> outdated-report.md
+              node -e "
+                const outdated = JSON.parse(require('fs').readFileSync('outdated.json', 'utf8'));
+                Object.entries(outdated).forEach(([pkg, info]) => {
+                  console.log('| ' + pkg + ' | ' + info.current + ' | ' + info.wanted + ' | ' + info.latest + ' |');
+                });
+              " >> outdated-report.md
+            else
+              echo "All packages are up to date! ✅" >> outdated-report.md
+            fi
+          else
+            echo "Error generating outdated report" >> outdated-report.md
+          fi
+          
+          echo "" >> outdated-report.md
+          echo "## Security Audit" >> outdated-report.md
+          echo "" >> outdated-report.md
+          if npm audit --json > audit.json 2>&1; then
+            echo "No security vulnerabilities found! ✅" >> outdated-report.md
+          else
+            node -e "
+              const audit = JSON.parse(require('fs').readFileSync('audit.json', 'utf8'));
+              if (audit.vulnerabilities && Object.keys(audit.vulnerabilities).length > 0) {
+                console.log('**⚠️ Security vulnerabilities found:**');
+                console.log('');
+                Object.entries(audit.vulnerabilities).forEach(([pkg, vuln]) => {
+                  console.log('- **' + pkg + '**: ' + vuln.severity + ' - ' + vuln.title);
+                });
+              }
+            " >> outdated-report.md
+          fi
+          
+      - name: Create issue with report
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Check if there's already an open dependency report issue
+          EXISTING_ISSUE=$(gh issue list --label "dependency-report" --state open --json number --jq '.[0].number')
+          
+          if [ "$EXISTING_ISSUE" != "null" ] && [ -n "$EXISTING_ISSUE" ]; then
+            # Update existing issue
+            gh issue edit "$EXISTING_ISSUE" --body-file outdated-report.md
+            echo "Updated existing dependency report issue #$EXISTING_ISSUE"
+          else
+            # Create new issue
+            gh issue create \
+              --title "📊 Weekly Dependency Status Report" \
+              --body-file outdated-report.md \
+              --label "dependency-report" \
+              --label "maintenance"
+            echo "Created new dependency report issue"
+          fi

@@ -1,0 +1,715 @@
+name: Security Scanning
+
+# Comprehensive security scanning and vulnerability assessment
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+  schedule:
+    # Run security scans weekly on Mondays at 3 AM UTC
+    - cron: '0 3 * * 1'
+  workflow_dispatch:
+    inputs:
+      scan-type:
+        description: 'Type of security scan to perform'
+        required: true
+        default: 'all'
+        type: choice
+        options:
+          - all
+          - sast
+          - dependencies
+          - secrets
+          - docker
+          - licenses
+
+permissions:
+  contents: read
+  security-events: write
+  actions: read
+  checks: write
+  pull-requests: write
+
+env:
+  NODE_VERSION: '20'
+
+jobs:
+  # Job 1: Static Application Security Testing (SAST)
+  sast-analysis:
+    name: SAST Analysis
+    runs-on: ubuntu-latest
+    if: github.event.inputs.scan-type == 'all' || github.event.inputs.scan-type == 'sast' || github.event.inputs.scan-type == null
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: javascript
+          queries: security-extended,security-and-quality
+          config: |
+            paths:
+              - src
+            paths-ignore:
+              - node_modules
+              - dist
+              - "**/*.test.ts"
+              - "__tests__/**"
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci --prefer-offline --no-audit
+
+      - name: Build application
+        run: npm run build
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: "/language:javascript"
+
+      - name: Run ESLint security rules
+        run: |
+          # Install security-focused ESLint plugins
+          npm install --no-save eslint-plugin-security eslint-plugin-node-security
+          
+          # Create security-focused ESLint config
+          cat > .eslintrc.security.js << 'EOF'
+          module.exports = {
+            extends: ['plugin:security/recommended-legacy'],
+            plugins: ['security'],
+            rules: {
+              'security/detect-object-injection': 'error',
+              'security/detect-non-literal-regexp': 'error',
+              'security/detect-unsafe-regex': 'error',
+              'security/detect-buffer-noassert': 'error',
+              'security/detect-child-process': 'error',
+              'security/detect-disable-mustache-escape': 'error',
+              'security/detect-eval-with-expression': 'error',
+              'security/detect-no-csrf-before-method-override': 'error',
+              'security/detect-non-literal-fs-filename': 'error',
+              'security/detect-non-literal-require': 'error',
+              'security/detect-possible-timing-attacks': 'error',
+              'security/detect-pseudoRandomBytes': 'error'
+            }
+          };
+          EOF
+          
+          # Run security linting
+          npx eslint src/ --config .eslintrc.security.js --format json --output-file security-lint-results.json || true
+          
+          # Process results
+          if [ -f "security-lint-results.json" ]; then
+            echo "Security linting completed. Results saved to security-lint-results.json"
+            # Display summary
+            node -e "
+              const results = JSON.parse(require('fs').readFileSync('security-lint-results.json', 'utf8'));
+              const totalIssues = results.reduce((sum, file) => sum + file.errorCount + file.warningCount, 0);
+              console.log('Security issues found:', totalIssues);
+              if (totalIssues > 0) {
+                results.forEach(file => {
+                  if (file.errorCount > 0 || file.warningCount > 0) {
+                    console.log('File:', file.filePath);
+                    file.messages.forEach(msg => {
+                      console.log('  -', msg.severity === 2 ? 'ERROR' : 'WARNING', ':', msg.message, 'at line', msg.line);
+                    });
+                  }
+                });
+              }
+            "
+          fi
+
+      - name: Upload SAST results
+        uses: actions/upload-artifact@v4
+        with:
+          name: sast-results-${{ github.run_id }}
+          path: |
+            security-lint-results.json
+          retention-days: 30
+
+  # Job 2: Dependency vulnerability scanning
+  dependency-scan:
+    name: Dependency Security Scan
+    runs-on: ubuntu-latest
+    if: github.event.inputs.scan-type == 'all' || github.event.inputs.scan-type == 'dependencies' || github.event.inputs.scan-type == null
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci --prefer-offline
+
+      - name: Run npm audit
+        run: |
+          echo "Running npm audit..."
+          npm audit --audit-level=low --json > npm-audit-results.json || true
+          
+          # Process and display results
+          if [ -f "npm-audit-results.json" ]; then
+            echo "## NPM Audit Results" > audit-summary.md
+            echo "" >> audit-summary.md
+            
+            node -e "
+              const audit = JSON.parse(require('fs').readFileSync('npm-audit-results.json', 'utf8'));
+              if (audit.vulnerabilities && Object.keys(audit.vulnerabilities).length > 0) {
+                console.log('Vulnerabilities found:');
+                const vulns = audit.vulnerabilities;
+                let criticalCount = 0, highCount = 0, moderateCount = 0, lowCount = 0;
+                
+                Object.entries(vulns).forEach(([pkg, vuln]) => {
+                  const severity = vuln.severity;
+                  switch(severity) {
+                    case 'critical': criticalCount++; break;
+                    case 'high': highCount++; break;
+                    case 'moderate': moderateCount++; break;
+                    case 'low': lowCount++; break;
+                  }
+                  console.log('- **' + pkg + '**: ' + severity + ' - ' + (vuln.via[0].title || vuln.via[0]));
+                });
+                
+                console.log('\\nSummary:');
+                console.log('- Critical:', criticalCount);
+                console.log('- High:', highCount);
+                console.log('- Moderate:', moderateCount);
+                console.log('- Low:', lowCount);
+              } else {
+                console.log('No vulnerabilities found!');
+              }
+            " | tee -a audit-summary.md
+          fi
+
+      - name: Run Snyk security scan
+        continue-on-error: true
+        run: |
+          # Install Snyk CLI
+          npm install -g snyk
+          
+          # Test for vulnerabilities (requires auth token for full functionality)
+          if [ -n "${{ secrets.SNYK_TOKEN }}" ]; then
+            snyk auth ${{ secrets.SNYK_TOKEN }}
+            snyk test --json > snyk-results.json || true
+            snyk monitor || true
+          else
+            echo "Snyk token not configured, skipping Snyk scan"
+            echo '{"vulnerabilities": [], "summary": "Snyk scan skipped - no token"}' > snyk-results.json
+          fi
+
+      - name: Check for known security advisories
+        run: |
+          echo "Checking GitHub Security Advisories..."
+          
+          # Create a script to check against known advisories
+          cat > check-advisories.js << 'EOF'
+          const fs = require('fs');
+          const https = require('https');
+          
+          // Read package.json to get dependencies
+          const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+          const deps = { ...pkg.dependencies, ...pkg.devDependencies };
+          
+          console.log('Checking dependencies against known advisories...');
+          console.log('Dependencies to check:', Object.keys(deps).length);
+          
+          // Note: In a real implementation, you would query GitHub's GraphQL API
+          // for security advisories. This is a simplified version.
+          const report = {
+            timestamp: new Date().toISOString(),
+            dependencies: deps,
+            advisories: [],
+            summary: 'Manual review recommended for security advisories'
+          };
+          
+          fs.writeFileSync('security-advisories.json', JSON.stringify(report, null, 2));
+          console.log('Advisory check completed. Manual review recommended.');
+          EOF
+          
+          node check-advisories.js
+
+      - name: Upload dependency scan results
+        uses: actions/upload-artifact@v4
+        with:
+          name: dependency-scan-results-${{ github.run_id }}
+          path: |
+            npm-audit-results.json
+            audit-summary.md
+            snyk-results.json
+            security-advisories.json
+          retention-days: 30
+
+  # Job 3: Secret scanning
+  secret-scan:
+    name: Secret Scanning
+    runs-on: ubuntu-latest
+    if: github.event.inputs.scan-type == 'all' || github.event.inputs.scan-type == 'secrets' || github.event.inputs.scan-type == null
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Run TruffleHog secret scanner
+        uses: trufflesecurity/trufflehog@main
+        with:
+          path: ./
+          base: main
+          head: HEAD
+          extra_args: --debug --only-verified
+
+      - name: Run custom secret patterns
+        run: |
+          echo "Running custom secret pattern detection..."
+          
+          # Create patterns for common secrets
+          cat > secret-patterns.txt << 'EOF'
+          # API Keys and tokens
+          [a-zA-Z0-9]{32,}
+          # Google API keys
+          AIza[0-9A-Za-z\\-_]{35}
+          # GitHub tokens
+          ghp_[0-9A-Za-z]{36}
+          gho_[0-9A-Za-z]{36}
+          ghu_[0-9A-Za-z]{36}
+          ghs_[0-9A-Za-z]{36}
+          ghr_[0-9A-Za-z]{36}
+          # Generic secrets in environment files
+          [A-Z_]+_KEY\\s*=\\s*['\"][^'\"\\n]+['\"]
+          [A-Z_]+_SECRET\\s*=\\s*['\"][^'\"\\n]+['\"]
+          [A-Z_]+_TOKEN\\s*=\\s*['\"][^'\"\\n]+['\"]
+          # Credentials in JSON
+          \"client_secret\"\\s*:\\s*\"[^\"]+\"
+          \"private_key\"\\s*:\\s*\"[^\"]+\"
+          EOF
+          
+          # Scan for patterns
+          echo "## Secret Scan Results" > secret-scan-results.txt
+          echo "" >> secret-scan-results.txt
+          
+          # Search for patterns in source files
+          if grep -r -f secret-patterns.txt src/ --include="*.ts" --include="*.js" --include="*.json" --exclude-dir=node_modules || true; then
+            echo "⚠️ Potential secrets found in source files" >> secret-scan-results.txt
+          else
+            echo "✅ No obvious secrets found in source files" >> secret-scan-results.txt
+          fi
+          
+          # Check for common secret files
+          echo "" >> secret-scan-results.txt
+          echo "## Configuration Files Check" >> secret-scan-results.txt
+          
+          if [ -f ".env" ]; then
+            echo "⚠️ .env file present - ensure it's in .gitignore" >> secret-scan-results.txt
+          fi
+          
+          if [ -f "credentials.json" ] || [ -f "service-account.json" ]; then
+            echo "⚠️ Credential files present - ensure they're in .gitignore" >> secret-scan-results.txt
+          fi
+          
+          if [ -f ".gitignore" ]; then
+            if grep -q "\.env" .gitignore && grep -q "credentials" .gitignore; then
+              echo "✅ .gitignore properly configured for common secret files" >> secret-scan-results.txt
+            else
+              echo "⚠️ .gitignore may be missing secret file patterns" >> secret-scan-results.txt
+            fi
+          fi
+
+      - name: Upload secret scan results
+        uses: actions/upload-artifact@v4
+        with:
+          name: secret-scan-results-${{ github.run_id }}
+          path: |
+            secret-scan-results.txt
+          retention-days: 30
+
+  # Job 4: Docker security scanning
+  docker-security-scan:
+    name: Docker Security Scan
+    runs-on: ubuntu-latest
+    if: github.event.inputs.scan-type == 'all' || github.event.inputs.scan-type == 'docker' || github.event.inputs.scan-type == null
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Docker image for scanning
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          tags: gdrive-mcp:security-scan
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: 'gdrive-mcp:security-scan'
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+
+      - name: Upload Trivy scan results to GitHub Security tab
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: 'trivy-results.sarif'
+
+      - name: Run Trivy filesystem scan
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          scan-ref: '.'
+          format: 'json'
+          output: 'trivy-fs-results.json'
+
+      - name: Analyze Docker security best practices
+        run: |
+          echo "Analyzing Dockerfile for security best practices..."
+          
+          cat > docker-security-check.sh << 'EOF'
+          #!/bin/bash
+          
+          echo "## Docker Security Analysis" > docker-security-report.md
+          echo "" >> docker-security-report.md
+          
+          # Check Dockerfile best practices
+          if [ -f "Dockerfile" ]; then
+            echo "### Dockerfile Security Check" >> docker-security-report.md
+            echo "" >> docker-security-report.md
+            
+            # Check for non-root user
+            if grep -q "USER " Dockerfile; then
+              echo "✅ Non-root user configured" >> docker-security-report.md
+            else
+              echo "⚠️ Consider adding a non-root user" >> docker-security-report.md
+            fi
+            
+            # Check for COPY vs ADD
+            if grep -q "ADD " Dockerfile; then
+              echo "⚠️ ADD instruction found - consider using COPY instead" >> docker-security-report.md
+            else
+              echo "✅ Using COPY instead of ADD" >> docker-security-report.md
+            fi
+            
+            # Check for specific versions
+            if grep -q "FROM.*:latest" Dockerfile; then
+              echo "⚠️ Using 'latest' tag - consider pinning to specific version" >> docker-security-report.md
+            else
+              echo "✅ Base image version is pinned" >> docker-security-report.md
+            fi
+            
+            # Check for health check
+            if grep -q "HEALTHCHECK" Dockerfile; then
+              echo "✅ Health check configured" >> docker-security-report.md
+            else
+              echo "⚠️ Consider adding a health check" >> docker-security-report.md
+            fi
+            
+            # Check for secrets in build context
+            echo "" >> docker-security-report.md
+            echo "### Build Context Security" >> docker-security-report.md
+            
+            if [ -f ".dockerignore" ]; then
+              echo "✅ .dockerignore file present" >> docker-security-report.md
+              if grep -q "credentials" .dockerignore && grep -q "\.env" .dockerignore; then
+                echo "✅ Common secret files are ignored" >> docker-security-report.md
+              else
+                echo "⚠️ Consider adding common secret patterns to .dockerignore" >> docker-security-report.md
+              fi
+            else
+              echo "⚠️ .dockerignore file missing" >> docker-security-report.md
+            fi
+          fi
+          EOF
+          
+          chmod +x docker-security-check.sh
+          ./docker-security-check.sh
+
+      - name: Upload Docker security scan results
+        uses: actions/upload-artifact@v4
+        with:
+          name: docker-security-scan-results-${{ github.run_id }}
+          path: |
+            trivy-results.sarif
+            trivy-fs-results.json
+            docker-security-report.md
+          retention-days: 30
+
+  # Job 5: License compliance scanning
+  license-scan:
+    name: License Compliance Scan
+    runs-on: ubuntu-latest
+    if: github.event.inputs.scan-type == 'all' || github.event.inputs.scan-type == 'licenses' || github.event.inputs.scan-type == null
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci --prefer-offline --no-audit
+
+      - name: Run license checker
+        run: |
+          # Install license checker tools
+          npm install -g license-checker license-checker-rseidelsohn
+          
+          # Generate detailed license report
+          license-checker --json --out license-report.json
+          license-checker --csv --out license-report.csv
+          
+          # Check for problematic licenses
+          cat > check-licenses.js << 'EOF'
+          const fs = require('fs');
+          
+          const licenses = JSON.parse(fs.readFileSync('license-report.json', 'utf8'));
+          
+          // Define license categories
+          const restrictive = ['GPL-2.0', 'GPL-3.0', 'AGPL', 'LGPL'];
+          const permissive = ['MIT', 'BSD', 'Apache', 'ISC', 'Unlicense'];
+          const commercial = ['Commercial', 'Proprietary'];
+          
+          const report = {
+            timestamp: new Date().toISOString(),
+            total: Object.keys(licenses).length,
+            categories: {
+              restrictive: [],
+              permissive: [],
+              commercial: [],
+              unknown: []
+            },
+            issues: []
+          };
+          
+          console.log('## License Compliance Report');
+          console.log('');
+          console.log('Total packages:', report.total);
+          console.log('');
+          
+          Object.entries(licenses).forEach(([pkg, info]) => {
+            const license = info.licenses || 'Unknown';
+            
+            if (restrictive.some(r => license.includes(r))) {
+              report.categories.restrictive.push({ package: pkg, license });
+              report.issues.push({ 
+                package: pkg, 
+                license, 
+                severity: 'high',
+                issue: 'Restrictive license may require source code disclosure'
+              });
+            } else if (permissive.some(p => license.includes(p))) {
+              report.categories.permissive.push({ package: pkg, license });
+            } else if (commercial.some(c => license.includes(c))) {
+              report.categories.commercial.push({ package: pkg, license });
+              report.issues.push({
+                package: pkg,
+                license,
+                severity: 'critical',
+                issue: 'Commercial license may require payment'
+              });
+            } else {
+              report.categories.unknown.push({ package: pkg, license });
+              report.issues.push({
+                package: pkg,
+                license,
+                severity: 'medium',
+                issue: 'Unknown or unrecognized license'
+              });
+            }
+          });
+          
+          console.log('### License Distribution');
+          console.log('- Permissive:', report.categories.permissive.length);
+          console.log('- Restrictive:', report.categories.restrictive.length);
+          console.log('- Commercial:', report.categories.commercial.length);
+          console.log('- Unknown:', report.categories.unknown.length);
+          
+          if (report.issues.length > 0) {
+            console.log('');
+            console.log('### ⚠️ License Issues Found');
+            report.issues.forEach(issue => {
+              console.log('- **' + issue.package + '**: ' + issue.license + ' (' + issue.issue + ')');
+            });
+          } else {
+            console.log('');
+            console.log('✅ No license issues found');
+          }
+          
+          fs.writeFileSync('license-compliance-report.json', JSON.stringify(report, null, 2));
+          
+          // Exit with error if critical issues found
+          const criticalIssues = report.issues.filter(i => i.severity === 'critical');
+          if (criticalIssues.length > 0) {
+            console.log('');
+            console.log('❌ Critical license issues found. Review required.');
+            process.exit(1);
+          }
+          EOF
+          
+          node check-licenses.js > license-compliance-summary.md
+
+      - name: Upload license scan results
+        uses: actions/upload-artifact@v4
+        with:
+          name: license-scan-results-${{ github.run_id }}
+          path: |
+            license-report.json
+            license-report.csv
+            license-compliance-report.json
+            license-compliance-summary.md
+          retention-days: 30
+
+  # Job 6: Security summary and reporting
+  security-summary:
+    name: Security Summary
+    runs-on: ubuntu-latest
+    needs: [sast-analysis, dependency-scan, secret-scan, docker-security-scan, license-scan]
+    if: always()
+
+    steps:
+      - name: Download all security artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: ./security-reports
+
+      - name: Generate comprehensive security report
+        run: |
+          echo "# 🔒 Security Scan Summary" > security-summary.md
+          echo "" >> security-summary.md
+          echo "**Generated on:** $(date)" >> security-summary.md
+          echo "**Commit:** ${{ github.sha }}" >> security-summary.md
+          echo "" >> security-summary.md
+          
+          echo "## Scan Results" >> security-summary.md
+          echo "- **SAST Analysis:** ${{ needs.sast-analysis.result }}" >> security-summary.md
+          echo "- **Dependency Scan:** ${{ needs.dependency-scan.result }}" >> security-summary.md
+          echo "- **Secret Scan:** ${{ needs.secret-scan.result }}" >> security-summary.md
+          echo "- **Docker Security Scan:** ${{ needs.docker-security-scan.result }}" >> security-summary.md
+          echo "- **License Scan:** ${{ needs.license-scan.result }}" >> security-summary.md
+          echo "" >> security-summary.md
+          
+          # Count total issues
+          total_issues=0
+          critical_issues=0
+          
+          if [ "${{ needs.sast-analysis.result }}" = "failure" ]; then
+            critical_issues=$((critical_issues + 1))
+          fi
+          
+          if [ "${{ needs.dependency-scan.result }}" = "failure" ]; then
+            critical_issues=$((critical_issues + 1))
+          fi
+          
+          if [ "${{ needs.license-scan.result }}" = "failure" ]; then
+            critical_issues=$((critical_issues + 1))
+          fi
+          
+          echo "## Summary" >> security-summary.md
+          echo "- **Total scans:** 5" >> security-summary.md
+          echo "- **Critical issues:** $critical_issues" >> security-summary.md
+          echo "- **Overall status:** $([ $critical_issues -eq 0 ] && echo "✅ PASS" || echo "❌ ISSUES FOUND")" >> security-summary.md
+          echo "" >> security-summary.md
+          
+          echo "## Recommendations" >> security-summary.md
+          echo "1. Review all failed scans and address critical issues" >> security-summary.md
+          echo "2. Update dependencies with known vulnerabilities" >> security-summary.md
+          echo "3. Ensure no secrets are committed to the repository" >> security-summary.md
+          echo "4. Follow Docker security best practices" >> security-summary.md
+          echo "5. Review license compliance for all dependencies" >> security-summary.md
+          echo "" >> security-summary.md
+          
+          echo "📋 Detailed reports available in workflow artifacts."
+
+      - name: Comment security summary on PR
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const summary = fs.readFileSync('security-summary.md', 'utf8');
+            
+            // Find existing security comment
+            const comments = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+            
+            const botComment = comments.data.find(comment => 
+              comment.user.type === 'Bot' && comment.body.includes('Security Scan Summary')
+            );
+            
+            const commentBody = `${summary}
+
+---
+*Security report generated by [Claude Code](https://claude.ai/code)*`;
+            
+            if (botComment) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: botComment.id,
+                body: commentBody,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body: commentBody,
+              });
+            }
+
+      - name: Upload security summary
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-summary-${{ github.run_id }}
+          path: |
+            security-summary.md
+          retention-days: 90
+
+      - name: Fail workflow if critical security issues found
+        run: |
+          critical_issues=0
+          
+          if [ "${{ needs.sast-analysis.result }}" = "failure" ]; then
+            critical_issues=$((critical_issues + 1))
+          fi
+          
+          if [ "${{ needs.dependency-scan.result }}" = "failure" ]; then
+            critical_issues=$((critical_issues + 1))
+          fi
+          
+          if [ "${{ needs.license-scan.result }}" = "failure" ]; then
+            critical_issues=$((critical_issues + 1))
+          fi
+          
+          if [ $critical_issues -gt 0 ]; then
+            echo "❌ Critical security issues found ($critical_issues). Please review and address."
+            exit 1
+          else
+            echo "✅ All security scans passed!"
+          fi

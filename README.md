@@ -189,6 +189,72 @@ node ./dist/index.js auth
 
 **📖 [Security Documentation →](./docs/Architecture/ARCHITECTURE.md#security)**
 
+## 🔑 Key Rotation
+
+### 🔄 Initial Migration (Required for Existing Installations)
+
+Before upgrading to v2.0.0, migrate your existing tokens to the new versioned encryption system:
+
+```bash
+# 1. Backup existing tokens (automatic, but manual backup recommended)
+cp .gdrive-mcp-tokens.json .gdrive-mcp-tokens.backup.json
+
+# 2. Run migration script
+node scripts/migrate-tokens.js
+
+# 3. Verify migration success
+node dist/index.js verify-keys
+```
+
+### 🔄 Rotating Encryption Keys
+
+For enhanced security, rotate your encryption keys periodically:
+
+```bash
+# Generate new key and re-encrypt all tokens
+node dist/index.js rotate-key
+
+# Verify all tokens work with new key
+node dist/index.js verify-keys
+```
+
+### ⚙️ Key Management Environment Variables
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `GDRIVE_TOKEN_ENCRYPTION_KEY` | Base64-encoded 32-byte encryption key | Auto-generated |
+| `GDRIVE_KEY_DERIVATION_ITERATIONS` | PBKDF2 iterations for key strengthening | 100000 |
+| `GDRIVE_ROTATION_BACKUP_COUNT` | Number of backup files to retain | 5 |
+
+### 🛠️ CLI Commands
+
+```bash
+# Key management commands
+node dist/index.js rotate-key          # Rotate encryption key
+node dist/index.js verify-keys         # Verify all tokens
+node dist/index.js migrate-tokens      # Migrate legacy tokens
+node dist/index.js key-status          # Show key version and health
+```
+
+### 🚨 Troubleshooting Key Issues
+
+**Token Decryption Failures:**
+```bash
+# Check key status and version compatibility
+node dist/index.js key-status
+
+# Restore from backup if needed
+cp .gdrive-mcp-tokens.backup.json .gdrive-mcp-tokens.json
+node dist/index.js verify-keys
+```
+
+**Performance Issues:**
+- Key rotation should complete in < 30 seconds for 100 tokens
+- PBKDF2 overhead should be < 5% compared to static key
+- Memory usage remains stable during rotation operations
+
+**📖 [Complete Key Rotation Guide →](./docs/Guides/07-key-rotation.md)**
+
 ## 🏥 Health Monitoring
 
 ```bash
@@ -273,12 +339,16 @@ await callTool("batchFileOperations", {
 | Variable | Description | Required |
 |----------|-------------|----------|
 | `GDRIVE_TOKEN_ENCRYPTION_KEY` | 32-byte base64 encryption key | ✅ |
+| `GDRIVE_KEY_DERIVATION_ITERATIONS` | PBKDF2 iterations for key strengthening (min: 100000) | ❌ |
+| `GDRIVE_ROTATION_BACKUP_COUNT` | Number of backup files to retain during rotation | ❌ |
 | `REDIS_URL` | Redis cache connection URL | ❌ |
 | `LOG_LEVEL` | Winston logging level (info/debug) | ❌ |
 
 ### 📋 Sample .env File
 ```bash
 GDRIVE_TOKEN_ENCRYPTION_KEY=your-32-byte-base64-key
+GDRIVE_KEY_DERIVATION_ITERATIONS=100000
+GDRIVE_ROTATION_BACKUP_COUNT=5
 REDIS_URL=redis://localhost:6379
 LOG_LEVEL=info
 ```

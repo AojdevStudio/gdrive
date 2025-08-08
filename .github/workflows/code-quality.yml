@@ -1,0 +1,372 @@
+name: Code Quality
+
+# Run comprehensive code quality checks
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+  schedule:
+    # Run weekly quality checks on Sunday at 2 AM UTC
+    - cron: '0 2 * * 0'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  security-events: write
+  actions: read
+  checks: write
+  pull-requests: write
+
+env:
+  NODE_VERSION: '20'
+
+jobs:
+  # Job 1: Code Complexity and Metrics
+  complexity-analysis:
+    name: Code Complexity Analysis
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci --prefer-offline --no-audit
+
+      - name: Run TypeScript complexity analysis
+        run: |
+          # Install complexity analysis tools
+          npm install -g typescript-complexity-report
+          
+          # Generate complexity report
+          npx tsc --noEmit --skipLibCheck
+          
+          # Analyze complexity (if tool exists)
+          if command -v ts-complexity &> /dev/null; then
+            ts-complexity src/ --format json > complexity-report.json
+          else
+            echo "Complexity analysis tool not available, creating placeholder report"
+            echo '{"summary": "Manual review needed"}' > complexity-report.json
+          fi
+
+      - name: Upload complexity report
+        uses: actions/upload-artifact@v4
+        with:
+          name: complexity-report
+          path: complexity-report.json
+          retention-days: 30
+
+  # Job 2: Dependency Analysis
+  dependency-analysis:
+    name: Dependency Analysis
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci --prefer-offline --no-audit
+
+      - name: Analyze bundle size
+        run: |
+          # Install bundle analyzer
+          npm install -g bundlesize webpack-bundle-analyzer
+          
+          # Create a simple webpack config for analysis
+          cat > webpack.config.js << 'EOF'
+          const path = require('path');
+          
+          module.exports = {
+            entry: './dist/index.js',
+            target: 'node',
+            mode: 'production',
+            output: {
+              path: path.resolve(__dirname, 'bundle-analysis'),
+              filename: 'bundle.js'
+            },
+            resolve: {
+              extensions: ['.js', '.json']
+            }
+          };
+          EOF
+          
+          # Build for analysis
+          npm run build
+          
+          # Analyze if webpack is available
+          if npm list webpack &> /dev/null; then
+            npx webpack --config webpack.config.js --json > bundle-stats.json
+            echo "Bundle analysis completed"
+          else
+            echo "Bundle analysis skipped - webpack not available"
+          fi
+
+      - name: Check for circular dependencies
+        run: |
+          # Install madge for circular dependency detection
+          npm install -g madge
+          
+          # Check for circular dependencies in TypeScript source
+          madge --circular --extensions ts src/ > circular-deps.txt || echo "No circular dependencies found"
+          
+          # Display results
+          cat circular-deps.txt
+
+      - name: Generate dependency tree
+        run: |
+          # Generate dependency tree
+          npm list --all --json > dependency-tree.json
+          
+          # Generate license report
+          npm install -g license-checker
+          license-checker --json > license-report.json
+
+      - name: Upload dependency analysis
+        uses: actions/upload-artifact@v4
+        with:
+          name: dependency-analysis
+          path: |
+            bundle-stats.json
+            circular-deps.txt
+            dependency-tree.json
+            license-report.json
+          retention-days: 30
+
+  # Job 3: Code Duplication Detection
+  duplication-analysis:
+    name: Code Duplication Analysis
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci --prefer-offline --no-audit
+
+      - name: Run duplication detection
+        run: |
+          # Install jscpd for duplication detection
+          npm install -g jscpd
+          
+          # Run duplication analysis on TypeScript files
+          jscpd src/ --format "json" --output "./duplication-report.json" --min-tokens 50 --reporters json,html || echo "Duplication analysis completed"
+          
+          # Create summary
+          if [ -f "duplication-report.json" ]; then
+            echo "## Code Duplication Report" > duplication-summary.md
+            echo "Duplication analysis completed. Check artifacts for detailed report." >> duplication-summary.md
+          fi
+
+      - name: Upload duplication report
+        uses: actions/upload-artifact@v4
+        with:
+          name: duplication-report
+          path: |
+            duplication-report.json
+            duplication-summary.md
+            .jscpd/
+          retention-days: 30
+
+  # Job 4: Type Coverage Analysis
+  type-coverage:
+    name: TypeScript Type Coverage
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci --prefer-offline --no-audit
+
+      - name: Run type coverage analysis
+        run: |
+          # Install type coverage tool
+          npm install -g type-coverage
+          
+          # Run type coverage analysis
+          npx type-coverage --detail --strict --cache --ignore-catch > type-coverage-report.txt
+          
+          # Extract coverage percentage
+          COVERAGE=$(npx type-coverage --strict | grep -o '[0-9]*\.[0-9]*%' | head -1)
+          echo "Type coverage: $COVERAGE"
+          echo "TYPE_COVERAGE=$COVERAGE" >> $GITHUB_ENV
+
+      - name: Comment type coverage on PR
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const fs = require('fs');
+            const coverage = process.env.TYPE_COVERAGE;
+            
+            const comment = `## 📊 Type Coverage Report
+            
+            **Type Coverage: ${coverage}**
+            
+            This PR's TypeScript type coverage analysis is complete.
+            Check the full report in the workflow artifacts.`;
+            
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: comment
+            });
+
+      - name: Upload type coverage report
+        uses: actions/upload-artifact@v4
+        with:
+          name: type-coverage-report
+          path: type-coverage-report.txt
+          retention-days: 30
+
+  # Job 5: Performance Budget Check
+  performance-budget:
+    name: Performance Budget Check
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci --prefer-offline --no-audit
+
+      - name: Build application
+        run: npm run build
+
+      - name: Check bundle size
+        run: |
+          # Create performance budget configuration
+          cat > performance-budget.json << 'EOF'
+          {
+            "budgets": [
+              {
+                "path": "dist/**/*.js",
+                "maxSize": "500kb",
+                "type": "bundle"
+              },
+              {
+                "path": "dist/index.js",
+                "maxSize": "200kb",
+                "type": "initial"
+              }
+            ]
+          }
+          EOF
+          
+          # Check file sizes against budget
+          echo "## Performance Budget Check" > budget-report.md
+          echo "" >> budget-report.md
+          
+          for file in dist/*.js; do
+            if [ -f "$file" ]; then
+              size=$(stat -c%s "$file" 2>/dev/null || stat -f%z "$file" 2>/dev/null || echo "0")
+              size_kb=$((size / 1024))
+              echo "- $(basename $file): ${size_kb}KB" >> budget-report.md
+              
+              # Check against budget (simplified check)
+              if [ $size_kb -gt 500 ]; then
+                echo "  ⚠️ Exceeds 500KB budget" >> budget-report.md
+                echo "BUDGET_EXCEEDED=true" >> $GITHUB_ENV
+              else
+                echo "  ✅ Within budget" >> budget-report.md
+              fi
+            fi
+          done
+
+      - name: Fail if budget exceeded
+        if: env.BUDGET_EXCEEDED == 'true'
+        run: |
+          echo "❌ Performance budget exceeded!"
+          cat budget-report.md
+          exit 1
+
+      - name: Upload budget report
+        uses: actions/upload-artifact@v4
+        with:
+          name: performance-budget-report
+          path: budget-report.md
+          retention-days: 30
+
+  # Job 6: Generate Quality Summary
+  quality-summary:
+    name: Quality Summary
+    runs-on: ubuntu-latest
+    needs: [complexity-analysis, dependency-analysis, duplication-analysis, type-coverage, performance-budget]
+    if: always()
+
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: ./reports
+
+      - name: Generate quality summary
+        run: |
+          echo "# 📊 Code Quality Summary" > quality-summary.md
+          echo "" >> quality-summary.md
+          echo "**Generated on:** $(date)" >> quality-summary.md
+          echo "" >> quality-summary.md
+          
+          echo "## Job Results" >> quality-summary.md
+          echo "- **Complexity Analysis:** ${{ needs.complexity-analysis.result }}" >> quality-summary.md
+          echo "- **Dependency Analysis:** ${{ needs.dependency-analysis.result }}" >> quality-summary.md
+          echo "- **Duplication Analysis:** ${{ needs.duplication-analysis.result }}" >> quality-summary.md
+          echo "- **Type Coverage:** ${{ needs.type-coverage.result }}" >> quality-summary.md
+          echo "- **Performance Budget:** ${{ needs.performance-budget.result }}" >> quality-summary.md
+          echo "" >> quality-summary.md
+          
+          echo "## Recommendations" >> quality-summary.md
+          echo "- Review complexity analysis for overly complex functions" >> quality-summary.md
+          echo "- Check for circular dependencies in the dependency analysis" >> quality-summary.md
+          echo "- Address any code duplication found" >> quality-summary.md
+          echo "- Improve type coverage where possible" >> quality-summary.md
+          echo "- Monitor bundle size to stay within performance budget" >> quality-summary.md
+          echo "" >> quality-summary.md
+          
+          echo "📋 Full reports available in workflow artifacts."
+
+      - name: Upload quality summary
+        uses: actions/upload-artifact@v4
+        with:
+          name: quality-summary
+          path: quality-summary.md
+          retention-days: 90

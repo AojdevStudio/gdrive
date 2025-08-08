@@ -54,13 +54,21 @@ export class AuthManager {
       
       // Set up token event listener
       this.oauth2Client.on('tokens', async (tokens) => {
-        await this.handleTokenUpdate(tokens);
+        // Filter out null/undefined values
+        const filteredTokens: Partial<TokenData> = {
+          ...(tokens.access_token ? { access_token: tokens.access_token } : {}),
+          ...(tokens.refresh_token ? { refresh_token: tokens.refresh_token } : {}),
+          ...(tokens.expiry_date ? { expiry_date: tokens.expiry_date } : {}),
+          ...(tokens.token_type ? { token_type: tokens.token_type } : {}),
+          ...(tokens.scope ? { scope: tokens.scope } : {})
+        };
+        await this.handleTokenUpdate(filteredTokens);
       });
       
       // Load existing tokens
       const savedTokens = await this.tokenManager.loadTokens();
       if (savedTokens && this.tokenManager.isValidTokenData(savedTokens)) {
-        this.oauth2Client.setCredentials(savedTokens);
+        this.oauth2Client?.setCredentials(savedTokens);
         this.state = AuthState.AUTHENTICATED;
         this.logger.info('Loaded existing tokens successfully');
         
@@ -70,8 +78,23 @@ export class AuthManager {
         this.state = AuthState.UNAUTHENTICATED;
         this.logger.info('No saved tokens found. Authentication required.');
       }
-    } catch (error) {
-      this.logger.error('Failed to initialize AuthManager', { error });
+    } catch (error: unknown) {
+      const authError = error as Error & { isLegacyFormat?: boolean };
+      // Check for legacy token format error
+      if (authError.isLegacyFormat || authError.message === 'LEGACY_TOKEN_FORMAT') {
+        this.logger.error('Legacy token format detected during initialization');
+        this.logger.error('\n❌ Legacy Token Format Detected\n');
+        this.logger.error('Your tokens are in the old format and need to be migrated.');
+        this.logger.error('\nTo fix this issue:');
+        this.logger.error('1. Run the migration tool:');
+        this.logger.error('   node dist/index.js migrate-tokens\n');
+        this.logger.error('2. After migration, run:');
+        this.logger.error('   node dist/index.js verify-keys\n');
+        this.logger.error('3. Then restart the server normally\n');
+        process.exit(1);
+      }
+      
+      this.logger.error('Failed to initialize AuthManager', { error: authError });
       this.state = AuthState.UNAUTHENTICATED;
     }
   }
@@ -80,8 +103,13 @@ export class AuthManager {
    * Get the current authentication state
    */
   public getState(): AuthState {
+    // Prioritize error states from internal state
+    if (this.state === AuthState.REFRESH_FAILED || this.state === AuthState.TOKENS_REVOKED) {
+      return this.state;
+    }
+    
     if (this.oauth2Client?.credentials) {
-      if (this.tokenManager.isTokenExpired(this.oauth2Client.credentials as TokenData)) {
+      if (this.tokenManager.isTokenExpired(this.oauth2Client?.credentials as TokenData)) {
         return AuthState.TOKEN_EXPIRED;
       }
       return this.state;
@@ -137,33 +165,44 @@ export class AuthManager {
    * Create OAuth2 client instance
    */
   private createOAuth2Client(): OAuth2Client {
+    // Ensure redirect URI exists
+    const redirectUri = this.oauthKeys.redirect_uris?.[0];
+    if (!redirectUri) {
+      throw new Error('No redirect URI found in OAuth configuration');
+    }
+    
     return new OAuth2Client({
       clientId: this.oauthKeys.client_id,
       clientSecret: this.oauthKeys.client_secret,
-      redirectUri: this.oauthKeys.redirect_uris[0],
+      redirectUri,
     });
   }
 
   /**
    * Handle token update events
    */
-  private async handleTokenUpdate(tokens: any): Promise<void> {
+  private async handleTokenUpdate(tokens: Partial<TokenData>): Promise<void> {
     try {
       this.logger.info('Handling token update event');
       
       // Merge with existing credentials (preserve refresh token)
-      const currentCredentials = this.oauth2Client!.credentials;
+      if (!this.oauth2Client) {
+      throw new Error("OAuth2 client not initialized");
+    }
+    const currentCredentials = this.oauth2Client.credentials;
       const updatedCredentials = {
         ...currentCredentials,
         ...tokens,
-        refresh_token: tokens.refresh_token || currentCredentials.refresh_token,
+        refresh_token: tokens.refresh_token ?? currentCredentials.refresh_token,
       } as TokenData;
       
       // Save to persistent storage
       await this.tokenManager.saveTokens(updatedCredentials);
       
       // Update in-memory credentials
-      this.oauth2Client!.setCredentials(updatedCredentials);
+      if (this.oauth2Client) {
+      this.oauth2Client.setCredentials(updatedCredentials);
+    }
       this.state = AuthState.AUTHENTICATED;
       
       this.logger.info('Tokens refreshed and persisted', {
@@ -181,7 +220,7 @@ export class AuthManager {
    */
   private startTokenMonitoring(): void {
     // Check token every 30 minutes
-    const intervalMs = parseInt(process.env.GDRIVE_TOKEN_REFRESH_INTERVAL || '1800000', 10);
+    const intervalMs = parseInt(process.env.GDRIVE_TOKEN_REFRESH_INTERVAL ?? '1800000', 10);
     
     this.refreshInterval = setInterval(async () => {
       await this.checkAndRefreshToken();
@@ -199,9 +238,9 @@ export class AuthManager {
         return;
       }
       
-      const tokens = this.oauth2Client.credentials as TokenData;
+      const tokens = this.oauth2Client?.credentials as TokenData;
       const bufferMs = parseInt(
-        process.env.GDRIVE_TOKEN_PREEMPTIVE_REFRESH || '600000',
+        process.env.GDRIVE_TOKEN_PREEMPTIVE_REFRESH ?? '600000',
         10
       );
       
@@ -218,36 +257,42 @@ export class AuthManager {
    * Perform the actual token refresh with retry logic
    */
   private async performTokenRefresh(): Promise<void> {
-    const maxRetries = parseInt(process.env.GDRIVE_TOKEN_MAX_RETRIES || '3', 10);
-    const baseDelay = parseInt(process.env.GDRIVE_TOKEN_RETRY_DELAY || '1000', 10);
+    const maxRetries = parseInt(process.env.GDRIVE_TOKEN_MAX_RETRIES ?? '3', 10);
+    const baseDelay = parseInt(process.env.GDRIVE_TOKEN_RETRY_DELAY ?? '1000', 10);
     
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
         this.logger.debug(`Token refresh attempt ${attempt}/${maxRetries}`);
         
         // Force token refresh
-        const response = await this.oauth2Client!.getAccessToken();
-        const credentials = response.res?.data || response.token ? { access_token: response.token } : null;
+        if (!this.oauth2Client) {
+      throw new Error("OAuth2 client not initialized");
+    }
+        const response = await this.oauth2Client.getAccessToken();
+        const credentials = response.res?.data ?? (response.token ? { access_token: response.token } : null);
         
-        if (credentials) {
-          this.oauth2Client!.setCredentials(credentials);
+        if (credentials?.access_token) {
+          if (this.oauth2Client) {
+          this.oauth2Client.setCredentials(credentials);
+        }
           this.state = AuthState.AUTHENTICATED;
         }
         
         this.logger.info('Token refreshed successfully');
         return;
-      } catch (error: any) {
-        this.logger.warn(`Token refresh failed (attempt ${attempt})`, { error });
+      } catch (error: unknown) {
+        const refreshError = error as Error & { response?: { status?: number; headers?: Record<string, string>; data?: { error?: string } } };
+        this.logger.warn(`Token refresh failed (attempt ${attempt})`, { error: refreshError });
         
         // Handle specific error cases
-        if (this.isInvalidGrantError(error)) {
+        if (this.isInvalidGrantError(refreshError)) {
           await this.handleInvalidGrant();
           throw new Error('Authentication required - refresh token invalid');
         }
         
         // Handle rate limiting
-        if (error.response?.status === 429) {
-          const retryAfter = parseInt(error.response.headers['retry-after'] || '60', 10);
+        if (refreshError.response?.status === 429) {
+          const retryAfter = parseInt(refreshError.response.headers?.['retry-after'] ?? '60', 10);
           await this.delay(retryAfter * 1000);
           continue;
         }
@@ -258,7 +303,7 @@ export class AuthManager {
           await this.delay(delay);
         } else {
           this.state = AuthState.REFRESH_FAILED;
-          throw error;
+          throw refreshError;
         }
       }
     }
@@ -267,7 +312,7 @@ export class AuthManager {
   /**
    * Check if error is invalid_grant
    */
-  private isInvalidGrantError(error: any): boolean {
+  private isInvalidGrantError(error: Error & { response?: { data?: { error?: string } } }): boolean {
     return (
       error.message?.includes('invalid_grant') ||
       error.response?.data?.error === 'invalid_grant'
@@ -287,7 +332,9 @@ export class AuthManager {
     this.state = AuthState.TOKENS_REVOKED;
     
     // Clear credentials
-    this.oauth2Client!.setCredentials({});
+    if (this.oauth2Client) {
+      this.oauth2Client.setCredentials({});
+    }
   }
 
   /**

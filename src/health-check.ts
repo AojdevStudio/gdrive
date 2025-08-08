@@ -73,7 +73,7 @@ export async function performHealthCheck(): Promise<HealthCheckResult> {
 
   try {
     // Check if we have OAuth keys
-    const oauthPath = process.env.GDRIVE_OAUTH_PATH || './gcp-oauth.keys.json';
+    const oauthPath = process.env.GDRIVE_OAUTH_PATH ?? './gcp-oauth.keys.json';
     const fs = await import('fs/promises');
     
     let authManager: AuthManager | null = null;
@@ -81,7 +81,7 @@ export async function performHealthCheck(): Promise<HealthCheckResult> {
     try {
       const keysContent = await fs.readFile(oauthPath, 'utf-8');
       const keys = JSON.parse(keysContent);
-      const oauthKeys = keys.web || keys.installed;
+      const oauthKeys = keys.web ?? keys.installed;
       
       if (!oauthKeys) {
         throw new Error('Invalid OAuth keys format');
@@ -144,10 +144,10 @@ export async function performHealthCheck(): Promise<HealthCheckResult> {
           result.status = HealthStatus.UNHEALTHY;
         }
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error('Health check error', { error });
       
-      if (error.code === 'ENOENT') {
+      if (error instanceof Error && 'code' in error && (error as NodeJS.ErrnoException).code === 'ENOENT') {
         result.checks.tokenStatus = {
           status: 'fail',
           message: 'OAuth configuration not found',
@@ -155,7 +155,7 @@ export async function performHealthCheck(): Promise<HealthCheckResult> {
       } else {
         result.checks.tokenStatus = {
           status: 'fail',
-          message: `Health check failed: ${error.message}`,
+          message: `Health check failed: ${(error instanceof Error ? error.message : String(error))}`,
         };
       }
       
@@ -171,7 +171,7 @@ export async function performHealthCheck(): Promise<HealthCheckResult> {
         authManager.stopTokenMonitoring();
       }
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     logger.error('Unexpected health check error', { error });
     result.status = HealthStatus.UNHEALTHY;
     result.checks.tokenStatus = {
@@ -200,6 +200,7 @@ async function main() {
     const result = await performHealthCheck();
     
     // Output result as JSON
+    // eslint-disable-next-line no-console
     console.log(JSON.stringify(result, null, 2));
     
     // Exit with appropriate code
@@ -215,6 +216,7 @@ async function main() {
         break;
     }
   } catch (error) {
+    // eslint-disable-next-line no-console
     console.error(JSON.stringify({
       status: HealthStatus.UNHEALTHY,
       timestamp: new Date().toISOString(),

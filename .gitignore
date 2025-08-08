@@ -39,3 +39,7 @@ dump.rdb
 
 # Claude Desktop configuration files
 claude-config-*.json
+
+# BMad framework installations - external tools
+.bmad-core/
+.claude/commands/BMad/

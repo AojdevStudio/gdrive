@@ -7,6 +7,53 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+
+## [0.7.0] - 2025-08-05
+
+### Added
+
+- ✨ feat(auth): complete GDRIVE-3 encryption key rotation epic (Stories 2&3)
+- ✨ feat(auth): implement versioned key system for GDRIVE-3 Story 1
+- 📝 docs: add brownfield epic and stories for GDRIVE-3 encryption key rotation
+- 🙈 chore: add BMad framework directories to .gitignore
+- 🗺️ feat(planning): add comprehensive product roadmap for 2025-2026
+- 📝 feat(docs): add phase-based developer checklists for GDRIVE-3
+- 📋 feat(security): add comprehensive PRD for encryption key rotation
+- 🤖 feat(agents): enhance prd-writer with phase-based checklist capabilities
+- 📚 docs: add comprehensive documentation structure and MIT license
+- 🙈 chore(config): add Claude Desktop config files to gitignore
+- ✨ feat(dev): add authentication and testing scripts
+- implement automatic OAuth token refresh with secure storage
+- add support for viewing Google Apps Script projects
+- 📚 docs: Reorganize documentation structure and add PRDs
+- 🛠️ feat: add comprehensive roadmap building command and session tracking
+- ✨ feat: enhance MCP server with comprehensive Google APIs integration
+- 🐳 feat: add comprehensive Docker deployment infrastructure
+- 📝 docs: add comprehensive OAuth token refresh research and implementation plan
+- 🎉 feat: initialize Google Drive MCP server project with development environment
+
+### Changed
+
+- 🔄 refactor(framework): migrate from legacy .claude commands to BMad agent structure
+- 📝 docs: update Story 1 completion status
+- 📚 docs: update project metadata and changelog for v0.7.0
+- 🗂️ refactor(scripts): reorganize scripts into structured directory
+- 🧹 refactor(agents): reorganize Claude agents configuration
+- 📚 docs: update Docker usage instructions and authentication flow
+- cleaned up .claude dr
+- ➕ chore: update dependencies and improve gitignore configuration
+- initial commit
+
+### Removed
+
+- 🧹 chore(cleanup): remove old script files from root directory
+
+### Fixed
+
+- 🐛 fix(apps-script): add parameter validation for getAppScript tool
+- resolve TypeScript compilation errors
+- apply PR #2 review feedback from CodeRabbit [#2]
+
 ### Added
 - OAuth2 automatic token refresh research and implementation plan
 - Comprehensive documentation for token refresh solutions
@@ -93,3 +140,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [0.7.0]: https://github.com/modelcontextprotocol/servers/compare/v0.6.2...v0.7.0
 [0.6.2]: https://github.com/modelcontextprotocol/servers/compare/v0.1.0...v0.6.2
 [0.1.0]: https://github.com/modelcontextprotocol/servers/releases/tag/v0.1.0
+
+## Links
+[Unreleased]: https://github.com/org/repo/compare/v0.7.0...HEAD
+[0.7.0]: https://github.com/org/repo/releases/tag/v0.7.0

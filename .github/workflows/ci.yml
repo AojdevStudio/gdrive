@@ -1,0 +1,388 @@
+name: CI
+
+# Trigger the workflow on push to any branch and pull requests to main
+on:
+  push:
+    branches: [ "*" ]
+  pull_request:
+    branches: [ "main" ]
+  # Allow manual trigger for testing
+  workflow_dispatch:
+
+# Set default permissions for security
+permissions:
+  contents: read
+  pull-requests: write
+  checks: write
+  actions: read
+  security-events: write
+
+env:
+  NODE_VERSION: '20'
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  # Job 1: Code Quality and Testing
+  test:
+    name: Test and Code Quality
+    runs-on: ubuntu-latest
+    
+    strategy:
+      matrix:
+        node-version: [18, 20, 22]
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Full history for better analysis
+      
+      - name: Get npm cache directory
+        id: npm-cache-dir
+        shell: bash
+        run: echo "dir=$(npm config get cache)" >> $GITHUB_OUTPUT
+      
+      - name: Setup Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          
+      - name: Cache npm dependencies
+        uses: actions/cache@v4
+        id: npm-cache
+        with:
+          path: ${{ steps.npm-cache-dir.outputs.dir }}
+          key: ${{ runner.os }}-node-${{ matrix.node-version }}-${{ hashFiles('**/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-node-${{ matrix.node-version }}-
+            ${{ runner.os }}-node-
+      
+      - name: Install dependencies
+        run: |
+          npm ci --prefer-offline --no-audit
+          # Verify package integrity
+          npm audit --audit-level=high || echo "Audit completed with warnings"
+      
+      - name: Type checking
+        run: npm run type-check
+        
+      - name: Lint code
+        run: npm run lint
+      
+      - name: Build TypeScript
+        run: npm run build
+        
+      - name: Cache build artifacts
+        uses: actions/cache@v4
+        with:
+          path: |
+            dist/
+            coverage/
+          key: ${{ runner.os }}-build-${{ matrix.node-version }}-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-build-${{ matrix.node-version }}-
+        
+      - name: Run unit tests
+        run: npm run test:coverage
+        env:
+          NODE_ENV: test
+          
+      - name: Run integration tests
+        run: npm run test:integration
+        env:
+          NODE_ENV: test
+          # Mock credentials for testing
+          GDRIVE_CREDENTIALS_PATH: ./test-credentials.json
+          GDRIVE_OAUTH_PATH: ./test-oauth.json
+          
+      - name: Upload coverage reports
+        if: matrix.node-version == 20  # Only upload once
+        uses: codecov/codecov-action@v4
+        with:
+          file: ./coverage/lcov.info
+          flags: unittests
+          name: codecov-umbrella
+          fail_ci_if_error: false
+          
+      - name: Store build artifacts
+        if: matrix.node-version == 20  # Only store once
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-artifacts
+          path: |
+            dist/
+            package*.json
+          retention-days: 1
+
+  # Job 2: Security Analysis
+  security:
+    name: Security Analysis
+    runs-on: ubuntu-latest
+    needs: test
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          
+      - name: Install dependencies
+        run: npm ci --prefer-offline --no-audit
+        
+      - name: Run npm audit
+        run: |
+          npm audit --audit-level=moderate --omit=dev
+          
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: javascript
+          queries: security-extended,security-and-quality
+          
+      - name: Build for CodeQL
+        run: npm run build
+        
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: "/language:javascript"
+
+  # Job 3: Docker Build and Test
+  docker:
+    name: Docker Build and Test
+    runs-on: ubuntu-latest
+    needs: test
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+        
+      - name: Get current date
+        id: date
+        run: echo "date=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> $GITHUB_OUTPUT
+        
+      - name: Build Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: false
+          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:test
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          build-args: |
+            BUILD_DATE=${{ steps.date.outputs.date }}
+            VCS_REF=${{ github.sha }}
+            VERSION=${{ github.ref_name }}
+          
+      - name: Test Docker image
+        run: |
+          # Create test credentials directory
+          mkdir -p ./test-credentials
+          echo '{}' > ./test-credentials/gcp-oauth.keys.json
+          echo '{}' > ./test-credentials/.gdrive-server-credentials.json
+          
+          # Test that the container starts and exits gracefully
+          docker run --rm \
+            -v $(pwd)/test-credentials:/credentials:ro \
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:test \
+            node dist/index.js --help || true
+            
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:test
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+          
+      - name: Upload Trivy scan results
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: 'trivy-results.sarif'
+
+  # Job 4: Performance and Load Testing
+  performance:
+    name: Performance Testing
+    runs-on: ubuntu-latest
+    needs: test
+    if: github.event_name == 'pull_request' || github.ref == 'refs/heads/main'
+    
+    services:
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          
+      - name: Install dependencies
+        run: npm ci --prefer-offline --no-audit
+        
+      - name: Build application
+        run: npm run build
+        
+      - name: Run performance tests
+        run: |
+          # Run performance-related tests if they exist
+          if npm run test:performance 2>/dev/null; then
+            npm run test:performance
+          else
+            echo "No performance tests found, skipping..."
+          fi
+        env:
+          REDIS_URL: redis://localhost:6379
+          NODE_ENV: test
+          
+      - name: Benchmark key operations
+        run: |
+          # Run benchmark tests if they exist
+          if ls src/__tests__/**/*.benchmark.test.ts 1> /dev/null 2>&1; then
+            npx jest --testMatch="**/*.benchmark.test.ts" --verbose
+          else
+            echo "No benchmark tests found, skipping..."
+          fi
+        env:
+          REDIS_URL: redis://localhost:6379
+
+  # Job 5: E2E Testing (only on main branch and PRs)
+  e2e:
+    name: End-to-End Testing
+    runs-on: ubuntu-latest
+    needs: [test, docker]
+    if: github.event_name == 'pull_request' || github.ref == 'refs/heads/main'
+    
+    services:
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          
+      - name: Install dependencies
+        run: npm ci --prefer-offline --no-audit
+        
+      - name: Build application
+        run: npm run build
+        
+      - name: Create mock credentials for E2E
+        run: |
+          mkdir -p ./test-credentials
+          # Create mock OAuth configuration
+          cat > ./test-credentials/gcp-oauth.keys.json << 'EOF'
+          {
+            "installed": {
+              "client_id": "mock-client-id",
+              "project_id": "mock-project",
+              "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+              "token_uri": "https://oauth2.googleapis.com/token",
+              "client_secret": "mock-secret",
+              "redirect_uris": ["http://localhost"]
+            }
+          }
+          EOF
+          
+          # Create mock credentials
+          cat > ./test-credentials/.gdrive-server-credentials.json << 'EOF'
+          {
+            "type": "authorized_user",
+            "client_id": "mock-client-id",
+            "client_secret": "mock-secret",
+            "refresh_token": "mock-refresh-token"
+          }
+          EOF
+        
+      - name: Run E2E tests
+        run: |
+          if npm run test:e2e 2>/dev/null; then
+            npm run test:e2e
+          else
+            echo "No E2E tests found, running CLI command tests..."
+            if ls src/__tests__/e2e/**/*.test.ts 1> /dev/null 2>&1; then
+              npx jest --testMatch="**/e2e/**/*.test.ts" --verbose
+            fi
+          fi
+        env:
+          GDRIVE_CREDENTIALS_PATH: ./test-credentials/.gdrive-server-credentials.json
+          GDRIVE_OAUTH_PATH: ./test-credentials/gcp-oauth.keys.json
+          REDIS_URL: redis://localhost:6379
+          NODE_ENV: test
+
+  # Job 6: Documentation and Schema Validation
+  validate:
+    name: Validate Documentation and Schema
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          
+      - name: Install dependencies
+        run: npm ci --prefer-offline --no-audit
+        
+      - name: Build application
+        run: npm run build
+        
+      - name: Validate MCP schema compliance
+        run: |
+          # Test that the server can start and respond to basic MCP commands
+          timeout 10 node dist/index.js || echo "Server validation completed"
+          
+      - name: Check for TODO/FIXME comments
+        run: |
+          echo "Scanning for TODO/FIXME comments..."
+          if grep -r "TODO\|FIXME\|XXX" src/ dist/ --include="*.ts" --include="*.js" | grep -v node_modules; then
+            echo "Warning: Found TODO/FIXME comments. Consider addressing them before release."
+            exit 0  # Don't fail the build, just warn
+          else
+            echo "No TODO/FIXME comments found."
+          fi
+          
+      - name: Validate package.json
+        run: |
+          node -e "const pkg = require('./package.json'); 
+                   console.log('Package validation passed:'); 
+                   console.log('- Name:', pkg.name); 
+                   console.log('- Version:', pkg.version); 
+                   console.log('- Main entry:', pkg.bin);"

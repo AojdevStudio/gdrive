@@ -1,19 +1,22 @@
-import { jest, describe, it, expect, beforeEach, afterEach } from '@jest/globals';
+import { describe, it, expect, beforeEach, afterEach, jest } from '@jest/globals';
 import { OAuth2Client } from 'google-auth-library';
 import { AuthManager, AuthState } from '../../auth/AuthManager.js';
 import { TokenManager, TokenData } from '../../auth/TokenManager.js';
+import { Logger } from 'winston';
 
 // Mock dependencies
 jest.mock('google-auth-library');
 jest.mock('../../auth/TokenManager.js');
 
 const mockOAuth2Client = {
-  setCredentials: jest.fn(),
+  setCredentials: jest.fn().mockImplementation((credentials: any) => {
+    (mockOAuth2Client as any).credentials = credentials;
+  }),
   getAccessToken: jest.fn(),
-  on: jest.fn(),
+  on: jest.fn().mockReturnValue({} as OAuth2Client),
   credentials: {},
   refreshAccessToken: jest.fn(),
-};
+} as unknown as jest.Mocked<OAuth2Client>;
 
 const mockTokenManager = {
   loadTokens: jest.fn(),
@@ -22,14 +25,14 @@ const mockTokenManager = {
   isTokenExpiringSoon: jest.fn(),
   deleteTokensOnInvalidGrant: jest.fn(),
   isValidTokenData: jest.fn(),
-};
+} as unknown as jest.Mocked<TokenManager>;
 
 const mockLogger = {
   info: jest.fn(),
   error: jest.fn(),
   warn: jest.fn(),
   debug: jest.fn(),
-};
+} as unknown as jest.Mocked<Logger>;
 
 describe('AuthManager', () => {
   let authManager: AuthManager;
@@ -51,12 +54,19 @@ describe('AuthManager', () => {
     jest.clearAllMocks();
     
     // Setup mocks
-    (OAuth2Client as jest.MockedClass<typeof OAuth2Client>).mockImplementation(() => mockOAuth2Client as any);
-    (TokenManager.getInstance as jest.Mock).mockReturnValue(mockTokenManager);
+    (OAuth2Client as unknown as jest.MockedClass<typeof OAuth2Client>).mockImplementation(() => mockOAuth2Client);
+    const MockedTokenManager = TokenManager as unknown as { getInstance: jest.MockedFunction<any> };
+    MockedTokenManager.getInstance = jest.fn().mockReturnValue(mockTokenManager);
+    
+    // Set default mock behaviors
+    mockTokenManager.isTokenExpired.mockReturnValue(false);
+    mockTokenManager.isValidTokenData.mockReturnValue(false);
+    mockTokenManager.loadTokens.mockResolvedValue(null);
+    // Start with no credentials to ensure UNAUTHENTICATED state
+    delete (mockOAuth2Client as any).credentials;
     
     // Reset singleton
-    // @ts-ignore
-    AuthManager._instance = undefined;
+    (AuthManager as any)._instance = undefined;
   });
 
   afterEach(() => {
@@ -68,7 +78,7 @@ describe('AuthManager', () => {
 
   describe('Initialization', () => {
     it('should initialize with OAuth2Client and set up event listeners', async () => {
-      authManager = AuthManager.getInstance(testOAuthKeys, mockLogger as any);
+      authManager = AuthManager.getInstance(testOAuthKeys, mockLogger);
       
       await authManager.initialize();
       
@@ -85,7 +95,7 @@ describe('AuthManager', () => {
       mockTokenManager.loadTokens.mockResolvedValueOnce(validTokenData);
       mockTokenManager.isValidTokenData.mockReturnValueOnce(true);
       
-      authManager = AuthManager.getInstance(testOAuthKeys, mockLogger as any);
+      authManager = AuthManager.getInstance(testOAuthKeys, mockLogger);
       
       await authManager.initialize();
       
@@ -97,7 +107,7 @@ describe('AuthManager', () => {
     it('should remain unauthenticated if no tokens exist', async () => {
       mockTokenManager.loadTokens.mockResolvedValueOnce(null);
       
-      authManager = AuthManager.getInstance(testOAuthKeys, mockLogger as any);
+      authManager = AuthManager.getInstance(testOAuthKeys, mockLogger);
       
       await authManager.initialize();
       
@@ -108,7 +118,7 @@ describe('AuthManager', () => {
 
   describe('Token Event Handling', () => {
     it('should persist tokens when tokens event is fired', async () => {
-      authManager = AuthManager.getInstance(testOAuthKeys, mockLogger as any);
+      authManager = AuthManager.getInstance(testOAuthKeys, mockLogger);
       
       // Capture the event handler
       let tokenEventHandler: ((tokens: any) => void) | undefined;
@@ -116,7 +126,11 @@ describe('AuthManager', () => {
         if (event === 'tokens') {
           tokenEventHandler = handler;
         }
+        return mockOAuth2Client;
       });
+      
+      // Ensure saveTokens resolves successfully
+      mockTokenManager.saveTokens.mockResolvedValue(undefined);
       
       await authManager.initialize();
       
@@ -127,7 +141,9 @@ describe('AuthManager', () => {
       };
       
       mockOAuth2Client.credentials = validTokenData;
-      tokenEventHandler!(newTokens);
+      if (tokenEventHandler) {
+        await tokenEventHandler(newTokens);
+      }
       
       expect(mockTokenManager.saveTokens).toHaveBeenCalledWith({
         ...validTokenData,
@@ -141,13 +157,14 @@ describe('AuthManager', () => {
     });
 
     it('should preserve refresh token if not provided in update', async () => {
-      authManager = AuthManager.getInstance(testOAuthKeys, mockLogger as any);
+      authManager = AuthManager.getInstance(testOAuthKeys, mockLogger);
       
       let tokenEventHandler: ((tokens: any) => void) | undefined;
       mockOAuth2Client.on.mockImplementation((event: string, handler: any) => {
         if (event === 'tokens') {
           tokenEventHandler = handler;
         }
+        return mockOAuth2Client;
       });
       
       mockOAuth2Client.credentials = validTokenData;
@@ -159,7 +176,9 @@ describe('AuthManager', () => {
         expiry_date: Date.now() + 7200000,
       };
       
-      tokenEventHandler!(newTokens);
+      if (tokenEventHandler) {
+        tokenEventHandler(newTokens);
+      }
       
       expect(mockTokenManager.saveTokens).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -179,7 +198,11 @@ describe('AuthManager', () => {
     });
 
     it('should start token monitoring on initialization', async () => {
-      authManager = AuthManager.getInstance(testOAuthKeys, mockLogger as any);
+      // Mock valid tokens to trigger startTokenMonitoring
+      mockTokenManager.loadTokens.mockResolvedValueOnce(validTokenData);
+      mockTokenManager.isValidTokenData.mockReturnValueOnce(true);
+      
+      authManager = AuthManager.getInstance(testOAuthKeys, mockLogger);
       
       const startMonitoringSpy = jest.spyOn(authManager as any, 'startTokenMonitoring');
       
@@ -190,13 +213,14 @@ describe('AuthManager', () => {
 
     it('should refresh token when expiring soon', async () => {
       mockTokenManager.loadTokens.mockResolvedValue(validTokenData);
+      mockTokenManager.isValidTokenData.mockReturnValue(true);
       mockTokenManager.isTokenExpiringSoon.mockReturnValue(true);
-      mockOAuth2Client.getAccessToken.mockResolvedValue({
+      (mockOAuth2Client.getAccessToken as jest.MockedFunction<any>).mockResolvedValue({
         token: 'refreshed_token',
         res: null,
       });
       
-      authManager = AuthManager.getInstance(testOAuthKeys, mockLogger as any);
+      authManager = AuthManager.getInstance(testOAuthKeys, mockLogger);
       await authManager.initialize();
       
       // Trigger the interval
@@ -217,7 +241,7 @@ describe('AuthManager', () => {
       mockTokenManager.loadTokens.mockResolvedValue(validTokenData);
       mockTokenManager.isTokenExpiringSoon.mockReturnValue(false);
       
-      authManager = AuthManager.getInstance(testOAuthKeys, mockLogger as any);
+      authManager = AuthManager.getInstance(testOAuthKeys, mockLogger);
       await authManager.initialize();
       
       jest.advanceTimersByTime(30 * 60 * 1000);
@@ -229,12 +253,15 @@ describe('AuthManager', () => {
 
   describe('Error Handling and Retry Logic', () => {
     it('should handle invalid_grant error by deleting tokens', async () => {
-      const invalidGrantError: any = new Error('invalid_grant');
+      const invalidGrantError = new Error('invalid_grant') as Error & {
+        response?: { data?: { error?: string } };
+      };
       invalidGrantError.response = { data: { error: 'invalid_grant' } };
       
-      mockOAuth2Client.getAccessToken.mockRejectedValue(invalidGrantError);
+      (mockOAuth2Client.getAccessToken as jest.MockedFunction<any>).mockRejectedValue(invalidGrantError);
       
-      authManager = AuthManager.getInstance(testOAuthKeys, mockLogger as any);
+      authManager = AuthManager.getInstance(testOAuthKeys, mockLogger);
+      await authManager.initialize();
       
       await expect(authManager.refreshToken()).rejects.toThrow('Authentication required');
       
@@ -245,12 +272,13 @@ describe('AuthManager', () => {
     it('should retry temporary errors with exponential backoff', async () => {
       const tempError = new Error('Network error');
       
-      mockOAuth2Client.getAccessToken
+      (mockOAuth2Client.getAccessToken as jest.MockedFunction<any>)
         .mockRejectedValueOnce(tempError)
         .mockRejectedValueOnce(tempError)
         .mockResolvedValueOnce({ token: 'success_token', res: null });
       
-      authManager = AuthManager.getInstance(testOAuthKeys, mockLogger as any);
+      authManager = AuthManager.getInstance(testOAuthKeys, mockLogger);
+      await authManager.initialize();
       
       await authManager.refreshToken();
       
@@ -263,9 +291,10 @@ describe('AuthManager', () => {
 
     it('should fail after max retries', async () => {
       const tempError = new Error('Network error');
-      mockOAuth2Client.getAccessToken.mockRejectedValue(tempError);
+      (mockOAuth2Client.getAccessToken as jest.MockedFunction<any>).mockRejectedValue(tempError);
       
-      authManager = AuthManager.getInstance(testOAuthKeys, mockLogger as any);
+      authManager = AuthManager.getInstance(testOAuthKeys, mockLogger);
+      await authManager.initialize();
       
       await expect(authManager.refreshToken()).rejects.toThrow('Network error');
       
@@ -282,7 +311,8 @@ describe('AuthManager', () => {
         return { token: 'refreshed_token', res: null };
       });
       
-      authManager = AuthManager.getInstance(testOAuthKeys, mockLogger as any);
+      authManager = AuthManager.getInstance(testOAuthKeys, mockLogger);
+      await authManager.initialize();
       
       // Start multiple refresh attempts
       const refresh1 = authManager.refreshToken();
@@ -301,7 +331,7 @@ describe('AuthManager', () => {
 
   describe('State Management', () => {
     it('should transition states correctly during lifecycle', async () => {
-      authManager = AuthManager.getInstance(testOAuthKeys, mockLogger as any);
+      authManager = AuthManager.getInstance(testOAuthKeys, mockLogger);
       
       expect(authManager.getState()).toBe(AuthState.UNAUTHENTICATED);
       
@@ -316,7 +346,8 @@ describe('AuthManager', () => {
       expect(authManager.getState()).toBe(AuthState.TOKEN_EXPIRED);
       
       // Simulate successful refresh
-      mockOAuth2Client.getAccessToken.mockResolvedValue({ token: 'new_token', res: null });
+      (mockOAuth2Client.getAccessToken as jest.MockedFunction<any>).mockResolvedValue({ token: 'new_token', res: null });
+      mockTokenManager.isTokenExpired.mockReturnValue(false);  // Reset to false after refresh
       await authManager.refreshToken();
       
       expect(authManager.getState()).toBe(AuthState.AUTHENTICATED);
@@ -328,7 +359,7 @@ describe('AuthManager', () => {
       mockTokenManager.loadTokens.mockResolvedValue(validTokenData);
       mockTokenManager.isValidTokenData.mockReturnValue(true);
       
-      authManager = AuthManager.getInstance(testOAuthKeys, mockLogger as any);
+      authManager = AuthManager.getInstance(testOAuthKeys, mockLogger);
       await authManager.initialize();
       
       const client = authManager.getOAuth2Client();
@@ -337,7 +368,7 @@ describe('AuthManager', () => {
     });
 
     it('should throw error when getting client in unauthenticated state', () => {
-      authManager = AuthManager.getInstance(testOAuthKeys, mockLogger as any);
+      authManager = AuthManager.getInstance(testOAuthKeys, mockLogger);
       
       expect(() => authManager.getOAuth2Client()).toThrow(
         'OAuth2Client not available - not authenticated'
@@ -349,7 +380,7 @@ describe('AuthManager', () => {
     it('should handle missing credentials gracefully', async () => {
       mockTokenManager.loadTokens.mockResolvedValue(null);
       
-      authManager = AuthManager.getInstance(testOAuthKeys, mockLogger as any);
+      authManager = AuthManager.getInstance(testOAuthKeys, mockLogger);
       await authManager.initialize();
       
       expect(authManager.getState()).toBe(AuthState.UNAUTHENTICATED);
@@ -361,12 +392,12 @@ describe('AuthManager', () => {
     it('should handle token manager errors gracefully', async () => {
       mockTokenManager.loadTokens.mockRejectedValue(new Error('File system error'));
       
-      authManager = AuthManager.getInstance(testOAuthKeys, mockLogger as any);
+      authManager = AuthManager.getInstance(testOAuthKeys, mockLogger);
       await authManager.initialize();
       
       expect(authManager.getState()).toBe(AuthState.UNAUTHENTICATED);
       expect(mockLogger.error).toHaveBeenCalledWith(
-        'Failed to load tokens during initialization',
+        'Failed to initialize AuthManager',
         expect.any(Object)
       );
     });

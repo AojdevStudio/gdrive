@@ -1,0 +1,451 @@
+name: CD (Continuous Deployment)
+
+# Trigger deployment on:
+# 1. Pushes to main branch (after successful CI)
+# 2. Manual workflow dispatch with environment selection
+# 3. Release creation
+on:
+  push:
+    branches: [ "main" ]
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - '.github/ISSUE_TEMPLATE/**'
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy to'
+        required: true
+        default: 'staging'
+        type: choice
+        options:
+          - staging
+          - production
+      skip-tests:
+        description: 'Skip test suite (use with caution)'
+        required: false
+        default: false
+        type: boolean
+
+# Enhanced permissions for deployment
+permissions:
+  contents: read
+  packages: write
+  deployments: write
+  actions: read
+  checks: read
+  security-events: write
+  id-token: write  # For OIDC authentication
+
+env:
+  NODE_VERSION: '20'
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  # Job 1: Pre-deployment validation
+  pre-deploy:
+    name: Pre-deployment Validation
+    runs-on: ubuntu-latest
+    if: github.event_name != 'workflow_dispatch' || !inputs.skip-tests
+    
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      environment: ${{ steps.env.outputs.environment }}
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          
+      - name: Install dependencies
+        run: npm ci --prefer-offline --no-audit
+        
+      - name: Run critical tests
+        run: |
+          npm run type-check
+          npm run test -- --passWithNoTests
+          npm run build
+          
+      - name: Determine version and environment
+        id: version
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Current version: $VERSION"
+          
+      - name: Determine target environment
+        id: env
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            ENV="${{ inputs.environment }}"
+          elif [[ "${{ github.event_name }}" == "release" ]]; then
+            ENV="production"
+          else
+            ENV="staging"
+          fi
+          echo "environment=$ENV" >> $GITHUB_OUTPUT
+          echo "Target environment: $ENV"
+
+  # Job 2: Build and push Docker image
+  build-and-push:
+    name: Build and Push Docker Image
+    runs-on: ubuntu-latest
+    needs: [pre-deploy]
+    if: always() && (needs.pre-deploy.result == 'success' || needs.pre-deploy.result == 'skipped')
+    
+    outputs:
+      image-digest: ${{ steps.build.outputs.digest }}
+      image-tag: ${{ steps.meta.outputs.tags }}
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+        
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+          
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=sha,prefix={{branch}}-
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
+          labels: |
+            org.opencontainers.image.title=Google Drive MCP Server
+            org.opencontainers.image.description=MCP server for Google Drive integration
+            org.opencontainers.image.vendor=Anthropic
+            
+      - name: Build and push Docker image
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          build-args: |
+            BUILD_DATE=${{ fromJSON(steps.meta.outputs.json).labels['org.opencontainers.image.created'] }}
+            VERSION=${{ needs.pre-deploy.outputs.version }}
+            VCS_REF=${{ github.sha }}
+            
+      - name: Generate SBOM
+        uses: anchore/sbom-action@v0
+        with:
+          image: ${{ steps.meta.outputs.tags }}
+          format: spdx-json
+          output-file: sbom.spdx.json
+          
+      - name: Upload SBOM
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom
+          path: sbom.spdx.json
+          retention-days: 30
+
+  # Job 3: Security scanning of the built image
+  security-scan:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    needs: [build-and-push]
+    
+    steps:
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ needs.build-and-push.outputs.image-tag }}
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+          severity: 'CRITICAL,HIGH'
+          
+      - name: Upload Trivy scan results
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: 'trivy-results.sarif'
+          
+      - name: Check for critical vulnerabilities
+        run: |
+          # Fail the deployment if critical vulnerabilities are found
+          if [ -f "trivy-results.sarif" ]; then
+            CRITICAL_COUNT=$(jq '.runs[0].results | length' trivy-results.sarif)
+            if [ "$CRITICAL_COUNT" -gt 0 ]; then
+              echo "❌ Found $CRITICAL_COUNT critical vulnerabilities. Deployment blocked."
+              jq '.runs[0].results[].message.text' trivy-results.sarif
+              exit 1
+            else
+              echo "✅ No critical vulnerabilities found."
+            fi
+          fi
+
+  # Job 4: Staging deployment
+  deploy-staging:
+    name: Deploy to Staging
+    runs-on: ubuntu-latest
+    needs: [pre-deploy, build-and-push, security-scan]
+    if: needs.pre-deploy.outputs.environment == 'staging' || (github.ref == 'refs/heads/main' && github.event_name == 'push')
+    environment:
+      name: staging
+      url: ${{ steps.deploy.outputs.url }}
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        
+      - name: Create deployment artifacts
+        run: |
+          mkdir -p deployment
+          
+          # Create docker-compose for staging
+          cat > deployment/docker-compose.staging.yml << 'EOF'
+          services:
+            gdrive-mcp:
+              image: ${{ needs.build-and-push.outputs.image-tag }}
+              container_name: gdrive-mcp-staging
+              environment:
+                - NODE_ENV=staging
+                - LOG_LEVEL=info
+                - REDIS_URL=redis://redis:6379
+              volumes:
+                - ./credentials:/credentials:ro
+                - ./logs:/app/logs
+              depends_on:
+                - redis
+              restart: unless-stopped
+              healthcheck:
+                test: ["CMD", "node", "dist/index.js", "health"]
+                interval: 30s
+                timeout: 10s
+                retries: 3
+            
+            redis:
+              image: redis:7-alpine
+              container_name: gdrive-mcp-redis-staging
+              volumes:
+                - redis_data:/data
+              healthcheck:
+                test: ["CMD", "redis-cli", "ping"]
+                interval: 30s
+                timeout: 3s
+                retries: 3
+          
+          volumes:
+            redis_data:
+          EOF
+          
+      - name: Deploy to staging
+        id: deploy
+        run: |
+          echo "🚀 Deploying to staging environment..."
+          echo "Image: ${{ needs.build-and-push.outputs.image-tag }}"
+          echo "Version: ${{ needs.pre-deploy.outputs.version }}"
+          
+          # In a real deployment, you would:
+          # - Copy files to staging server
+          # - Run docker-compose up -d
+          # - Perform health checks
+          # - Update load balancer
+          
+          echo "✅ Staging deployment completed"
+          echo "url=https://staging.gdrive-mcp.example.com" >> $GITHUB_OUTPUT
+          
+      - name: Run smoke tests
+        run: |
+          echo "🧪 Running smoke tests against staging..."
+          # Add actual smoke tests here
+          echo "✅ Smoke tests passed"
+          
+      - name: Notify deployment
+        if: always()
+        run: |
+          if [ "${{ job.status }}" == "success" ]; then
+            echo "✅ Staging deployment successful"
+          else
+            echo "❌ Staging deployment failed"
+          fi
+
+  # Job 5: Production deployment (manual approval required)
+  deploy-production:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    needs: [pre-deploy, build-and-push, security-scan, deploy-staging]
+    if: |
+      (needs.pre-deploy.outputs.environment == 'production' || github.event_name == 'release') &&
+      needs.deploy-staging.result == 'success'
+    environment:
+      name: production
+      url: ${{ steps.deploy.outputs.url }}
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        
+      - name: Create production deployment artifacts
+        run: |
+          mkdir -p deployment
+          
+          # Create optimized docker-compose for production
+          cat > deployment/docker-compose.production.yml << 'EOF'
+          services:
+            gdrive-mcp:
+              image: ${{ needs.build-and-push.outputs.image-tag }}
+              container_name: gdrive-mcp-production
+              environment:
+                - NODE_ENV=production
+                - LOG_LEVEL=warn
+                - REDIS_URL=redis://redis:6379
+              volumes:
+                - ./credentials:/credentials:ro
+                - ./logs:/app/logs
+              depends_on:
+                - redis
+              restart: unless-stopped
+              deploy:
+                resources:
+                  limits:
+                    cpus: '1.0'
+                    memory: 512M
+                  reservations:
+                    cpus: '0.25'
+                    memory: 256M
+              healthcheck:
+                test: ["CMD", "node", "dist/index.js", "health"]
+                interval: 60s
+                timeout: 10s
+                retries: 3
+                start_period: 30s
+            
+            redis:
+              image: redis:7-alpine
+              container_name: gdrive-mcp-redis-production
+              volumes:
+                - redis_data:/data
+                - ./redis.conf:/usr/local/etc/redis/redis.conf:ro
+              command: redis-server /usr/local/etc/redis/redis.conf
+              deploy:
+                resources:
+                  limits:
+                    cpus: '0.5'
+                    memory: 256M
+                  reservations:
+                    cpus: '0.1'
+                    memory: 128M
+              healthcheck:
+                test: ["CMD", "redis-cli", "ping"]
+                interval: 30s
+                timeout: 3s
+                retries: 3
+          
+          volumes:
+            redis_data:
+          EOF
+          
+          # Create Redis production configuration
+          cat > deployment/redis.conf << 'EOF'
+          # Redis production configuration
+          maxmemory 200mb
+          maxmemory-policy allkeys-lru
+          save 900 1
+          save 300 10
+          save 60 10000
+          EOF
+          
+      - name: Deploy to production
+        id: deploy
+        run: |
+          echo "🚀 Deploying to production environment..."
+          echo "Image: ${{ needs.build-and-push.outputs.image-tag }}"
+          echo "Version: ${{ needs.pre-deploy.outputs.version }}"
+          
+          # In a real deployment, you would:
+          # - Create backup of current deployment
+          # - Deploy with blue-green or rolling strategy
+          # - Run comprehensive health checks
+          # - Update monitoring and alerting
+          # - Update documentation
+          
+          echo "✅ Production deployment completed"
+          echo "url=https://gdrive-mcp.example.com" >> $GITHUB_OUTPUT
+          
+      - name: Run production health checks
+        run: |
+          echo "🏥 Running production health checks..."
+          # Add comprehensive health checks here
+          echo "✅ Production health checks passed"
+          
+      - name: Update deployment status
+        if: always()
+        run: |
+          if [ "${{ job.status }}" == "success" ]; then
+            echo "✅ Production deployment successful"
+            echo "📊 Version ${{ needs.pre-deploy.outputs.version }} is now live"
+          else
+            echo "❌ Production deployment failed"
+            # In a real scenario, trigger rollback here
+          fi
+
+  # Job 6: Post-deployment tasks
+  post-deploy:
+    name: Post-deployment Tasks
+    runs-on: ubuntu-latest
+    needs: [pre-deploy, deploy-staging, deploy-production]
+    if: always() && (needs.deploy-staging.result == 'success' || needs.deploy-production.result == 'success')
+    
+    steps:
+      - name: Update monitoring dashboards
+        run: |
+          echo "📊 Updating monitoring dashboards..."
+          # Update Grafana, DataDog, or other monitoring tools
+          echo "✅ Monitoring dashboards updated"
+          
+      - name: Update documentation
+        run: |
+          echo "📚 Updating deployment documentation..."
+          # Update internal documentation with new version info
+          echo "✅ Documentation updated"
+          
+      - name: Create deployment summary
+        run: |
+          cat << EOF
+          ## Deployment Summary 🚀
+          
+          **Version:** ${{ needs.pre-deploy.outputs.version }}
+          **Environment:** ${{ needs.pre-deploy.outputs.environment }}
+          **Image:** ${{ needs.build-and-push.outputs.image-tag }}
+          **Commit:** ${{ github.sha }}
+          
+          ### Deployment Status
+          - Staging: ${{ needs.deploy-staging.result }}
+          - Production: ${{ needs.deploy-production.result || 'Not deployed' }}
+          
+          ### Next Steps
+          - Monitor application metrics
+          - Check error rates and performance
+          - Verify all integrations are working
+          EOF

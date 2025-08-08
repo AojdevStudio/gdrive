@@ -12,10 +12,11 @@ import {
 import * as fs from "fs";
 import { google } from "googleapis";
 import * as path from "path";
-import { createClient } from "redis";
+import { createClient, RedisClientType } from "redis";
 import winston from "winston";
 import { AuthManager, AuthState } from "./src/auth/AuthManager.js";
 import { TokenManager } from "./src/auth/TokenManager.js";
+import { KeyRotationManager } from "./src/auth/KeyRotationManager.js";
 import { performHealthCheck, HealthStatus } from "./src/health-check.js";
 
 const drive = google.drive("v3");
@@ -36,14 +37,101 @@ interface AppsScriptFile {
   };
 }
 
-interface AppsScriptContent {
-  scriptId: string;
-  files: AppsScriptFile[];
+// Performance monitoring types
+interface PerformanceStats {
+  uptime: number;
+  operations: Record<string, {
+    count: number;
+    avgTime: number;
+    errorRate: number;
+  }>;
+  cache: {
+    hits: number;
+    misses: number;
+    hitRate: number;
+  };
+}
+
+// Redis Cache types
+interface CacheData {
+  [key: string]: unknown;
+}
+
+// Search filters interface
+interface SearchFilters {
+  mimeType?: string;
+  modifiedTime?: string;
+  createdTime?: string;
+  modifiedAfter?: string;
+  modifiedBefore?: string;
+  createdAfter?: string;
+  createdBefore?: string;
+  sharedWithMe?: boolean;
+  ownedByMe?: boolean;
+  parents?: string;
+  trashed?: boolean;
+  [key: string]: unknown;
+}
+
+// File metadata interface
+interface FileMetadata {
+  name: string;
+  mimeType?: string;
+  parents?: string[];
+  [key: string]: unknown;
+}
+
+// Question item interface for forms
+interface QuestionItem {
+  required: boolean;
+  question: {
+    textQuestion?: {
+      paragraph: boolean;
+    };
+    choiceQuestion?: {
+      type: string;
+      options: Array<{ value: string }>;
+    };
+    scaleQuestion?: {
+      low: number;
+      high: number;
+      lowLabel?: string;
+      highLabel?: string;
+    };
+    dateQuestion?: {
+      includeTime: boolean;
+      includeYear: boolean;
+    };
+    timeQuestion?: {
+      duration: boolean;
+    };
+    [key: string]: unknown;
+  };
+}
+
+// Text style interface for Google Docs
+interface TextStyle {
+  bold?: boolean;
+  italic?: boolean;
+  underline?: boolean;
+  fontSize?: {
+    magnitude: number;
+    unit: string;
+  };
+  foregroundColor?: {
+    color: {
+      rgbColor: {
+        red: number;
+        green: number;
+        blue: number;
+      };
+    };
+  };
 }
 
 // Structured logging with Winston
 const logger = winston.createLogger({
-  level: process.env.LOG_LEVEL || 'info',
+  level: process.env.LOG_LEVEL ?? 'info',
   format: winston.format.combine(
     winston.format.timestamp(),
     winston.format.errors({ stack: true }),
@@ -51,18 +139,20 @@ const logger = winston.createLogger({
   ),
   defaultMeta: { service: 'gdrive-mcp-server' },
   transports: [
-    new winston.transports.File({ 
-      filename: 'logs/error.log', 
+    new winston.transports.File({
+      filename: 'logs/error.log',
       level: 'error',
       maxsize: 5242880, // 5MB
       maxFiles: 5
     }),
-    new winston.transports.File({ 
+    new winston.transports.File({
       filename: 'logs/combined.log',
       maxsize: 5242880, // 5MB
       maxFiles: 5
     }),
     new winston.transports.Console({
+      // Route all levels to stderr to avoid contaminating MCP stdio on stdout
+      stderrLevels: ['error', 'warn', 'info', 'http', 'verbose', 'debug', 'silly'],
       format: winston.format.combine(
         winston.format.colorize(),
         winston.format.timestamp(),
@@ -82,10 +172,12 @@ class PerformanceMonitor {
   private startTime = Date.now();
 
   track(operation: string, duration: number, error: boolean = false) {
-    const current = this.metrics.get(operation) || { count: 0, totalTime: 0, errors: 0 };
+    const current = this.metrics.get(operation) ?? { count: 0, totalTime: 0, errors: 0 };
     current.count++;
     current.totalTime += duration;
-    if (error) current.errors++;
+    if (error) {
+      current.errors++;
+    }
     this.metrics.set(operation, current);
   }
 
@@ -93,13 +185,13 @@ class PerformanceMonitor {
   recordCacheMiss() { this.cacheMisses++; }
 
   getStats() {
-    const stats: any = {
+    const stats: PerformanceStats = {
       uptime: Date.now() - this.startTime,
       operations: {},
       cache: {
         hits: this.cacheHits,
         misses: this.cacheMisses,
-        hitRate: this.cacheHits / (this.cacheHits + this.cacheMisses) || 0
+        hitRate: (this.cacheHits + this.cacheMisses) > 0 ? this.cacheHits / (this.cacheHits + this.cacheMisses) : 0
       }
     };
 
@@ -124,14 +216,14 @@ setInterval(() => {
 
 // Redis Cache Manager
 class CacheManager {
-  private client: any;
+  private client: RedisClientType | null = null;
   private connected = false;
   private ttl = 300; // 5 minutes
 
   async connect() {
     try {
       this.client = createClient({
-        url: process.env.REDIS_URL || 'redis://localhost:6379',
+        url: process.env.REDIS_URL ?? 'redis://localhost:6379',
         socket: {
           reconnectStrategy: (retries: number) => {
             if (retries > 10) {
@@ -143,7 +235,7 @@ class CacheManager {
         }
       });
 
-      this.client.on('error', (err: any) => {
+      this.client.on('error', (err: Error) => {
         logger.error('Redis client error', { error: err.message });
         this.connected = false;
       });
@@ -160,11 +252,13 @@ class CacheManager {
     }
   }
 
-  async get(key: string): Promise<any> {
-    if (!this.connected) return null;
+  async get(key: string): Promise<CacheData | null> {
+    if (!this.connected) {
+      return null;
+    }
 
     try {
-      const data = await this.client.get(key);
+      const data = await this.client?.get(key);
       if (data) {
         performanceMonitor.recordCacheHit();
         return JSON.parse(data);
@@ -177,24 +271,32 @@ class CacheManager {
     }
   }
 
-  async set(key: string, value: any): Promise<void> {
-    if (!this.connected) return;
+  async set(key: string, value: CacheData): Promise<void> {
+    if (!this.connected) {
+      return;
+    }
 
     try {
-      await this.client.setEx(key, this.ttl, JSON.stringify(value));
+      if (this.client) {
+        await this.client.setEx(key, this.ttl, JSON.stringify(value));
+      }
     } catch (error) {
       logger.error('Cache set error', { error, key });
     }
   }
 
   async invalidate(pattern: string): Promise<void> {
-    if (!this.connected) return;
+    if (!this.connected) {
+      return;
+    }
 
     try {
-      const keys = await this.client.keys(pattern);
-      if (keys.length > 0) {
-        await this.client.del(keys);
-        logger.debug(`Invalidated ${keys.length} cache entries`);
+      if (this.client) {
+        const keys = await this.client.keys(pattern);
+        if (keys.length > 0) {
+          await this.client.del(keys);
+          logger.debug(`Invalidated ${keys.length} cache entries`);
+        }
       }
     } catch (error) {
       logger.error('Cache invalidation error', { error, pattern });
@@ -216,9 +318,9 @@ let authManager: AuthManager | null = null;
 let tokenManager: TokenManager | null = null;
 
 // Natural language search parser
-function parseNaturalLanguageQuery(query: string) {
+function parseNaturalLanguageQuery(query: string): { searchTerms: string; filters: SearchFilters } {
   const lowerQuery = query.toLowerCase();
-  const filters: any = {};
+  const filters: SearchFilters = {};
 
   // Document type detection
   if (lowerQuery.includes('spreadsheet') || lowerQuery.includes('sheet')) {
@@ -298,9 +400,9 @@ const server = new Server(
 );
 
 // List available resources
-server.setRequestHandler(ListResourcesRequestSchema, async (request) => {
+server.setRequestHandler(ListResourcesRequestSchema, async (_request) => {
   const startTime = Date.now();
-  
+
   try {
     // Ensure we're authenticated
     if (!authManager || authManager.getState() !== AuthState.AUTHENTICATED) {
@@ -322,17 +424,17 @@ server.setRequestHandler(ListResourcesRequestSchema, async (request) => {
 
     const resources = response.data.files?.map((file) => ({
       uri: `gdrive:///${file.id}`,
-      name: file.name || "Untitled",
+      name: file.name ?? "Untitled",
       mimeType: file.mimeType,
       description: `Google Drive file: ${file.name}`,
-    })) || [];
+    })) ?? [];
 
     const result = { resources };
     await cacheManager.set(cacheKey, result);
-    
+
     performanceMonitor.track('listResources', Date.now() - startTime);
     logger.info('Listed resources', { count: resources.length });
-    
+
     return result;
   } catch (error) {
     performanceMonitor.track('listResources', Date.now() - startTime, true);
@@ -344,7 +446,7 @@ server.setRequestHandler(ListResourcesRequestSchema, async (request) => {
 // Read a specific resource
 server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
   const startTime = Date.now();
-  
+
   try {
     // Ensure we're authenticated
     if (!authManager || authManager.getState() !== AuthState.AUTHENTICATED) {
@@ -352,7 +454,7 @@ server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
     }
 
     const fileId = request.params.uri.replace("gdrive:///", "");
-    
+
     const cacheKey = `resource:${fileId}`;
     const cached = await cacheManager.get(cacheKey);
     if (cached) {
@@ -384,9 +486,9 @@ server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
             fileId,
             mimeType: "image/png",
           }, { responseType: "arraybuffer" });
-          
+
           blob = Buffer.from(response.data as ArrayBuffer).toString("base64");
-          
+
           const result = {
             contents: [{
               uri: request.params.uri,
@@ -394,11 +496,11 @@ server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
               blob,
             }],
           };
-          
+
           await cacheManager.set(cacheKey, result);
           performanceMonitor.track('readResource', Date.now() - startTime);
           logger.info('Read resource (drawing)', { fileId, mimeType: file.data.mimeType });
-          
+
           return result;
         }
 
@@ -420,7 +522,7 @@ server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
           fileId,
           alt: "media",
         }, { responseType: "arraybuffer" });
-        
+
         blob = Buffer.from(response.data as ArrayBuffer).toString("base64");
       }
     } catch (error) {
@@ -440,7 +542,7 @@ server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
     await cacheManager.set(cacheKey, result);
     performanceMonitor.track('readResource', Date.now() - startTime);
     logger.info('Read resource', { fileId, mimeType: file.data.mimeType });
-    
+
     return result;
   } catch (error) {
     performanceMonitor.track('readResource', Date.now() - startTime, true);
@@ -1012,7 +1114,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
 // Handle tool calls
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
   const startTime = Date.now();
-  
+
   try {
     // Ensure we're authenticated
     if (!authManager || authManager.getState() !== AuthState.AUTHENTICATED) {
@@ -1020,7 +1122,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     }
 
     const { name, arguments: args } = request.params;
-    
+
     logger.info('Tool called', { tool: name, args });
 
     switch (name) {
@@ -1029,30 +1131,30 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           throw new Error('Query parameter is required');
         }
         const { searchTerms, filters } = parseNaturalLanguageQuery(args.query);
-        
+
         // Build Google Drive query
         let q = searchTerms ? `fullText contains '${searchTerms}'` : "";
-        
+
         if (filters.mimeType) {
           q += q ? " and " : "";
           q += `mimeType = '${filters.mimeType}'`;
         }
-        
+
         if (filters.modifiedTime) {
           q += q ? " and " : "";
           q += `modifiedTime > '${filters.modifiedTime}'`;
         }
-        
+
         if (filters.createdTime) {
           q += q ? " and " : "";
           q += `createdTime > '${filters.createdTime}'`;
         }
-        
+
         if (filters.sharedWithMe) {
           q += q ? " and " : "";
           q += "sharedWithMe = true";
         }
-        
+
         if (filters.ownedByMe) {
           q += q ? " and " : "";
           q += "'me' in owners";
@@ -1067,7 +1169,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         }
 
         const response = await drive.files.list({
-          q: q || undefined,
+          q: q ?? undefined,
           pageSize: Math.min(pageSize, 100),
           fields: "files(id, name, mimeType, createdTime, modifiedTime, size, parents, webViewLink, iconLink, owners, permissions)",
           orderBy: "modifiedTime desc",
@@ -1076,13 +1178,13 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const result = {
           content: [{
             type: "text",
-            text: JSON.stringify(response.data.files || [], null, 2),
+            text: JSON.stringify(response.data.files ?? [], null, 2),
           }],
         };
 
         await cacheManager.set(cacheKey, result);
         performanceMonitor.track('search', Date.now() - startTime);
-        
+
         return result;
       }
 
@@ -1091,56 +1193,56 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           throw new Error('Arguments are required');
         }
         const query = args.query as string | undefined;
-        const filters = (args.filters || {}) as Record<string, any>;
+        const filters = (args.filters ?? {}) as SearchFilters;
         const pageSize = (typeof args.pageSize === 'number' ? args.pageSize : 10);
         const orderBy = (typeof args.orderBy === 'string' ? args.orderBy : "modifiedTime desc");
-        
+
         // Build complex query
         let q = "";
-        
+
         if (query) {
           q = `fullText contains '${query}'`;
         }
-        
+
         // Add all filter conditions
         const filterConditions = [];
-        
+
         if (filters.mimeType) {
           filterConditions.push(`mimeType = '${filters.mimeType}'`);
         }
-        
+
         if (filters.modifiedAfter) {
           filterConditions.push(`modifiedTime > '${filters.modifiedAfter}'`);
         }
-        
+
         if (filters.modifiedBefore) {
           filterConditions.push(`modifiedTime < '${filters.modifiedBefore}'`);
         }
-        
+
         if (filters.createdAfter) {
           filterConditions.push(`createdTime > '${filters.createdAfter}'`);
         }
-        
+
         if (filters.createdBefore) {
           filterConditions.push(`createdTime < '${filters.createdBefore}'`);
         }
-        
+
         if (filters.sharedWithMe) {
           filterConditions.push("sharedWithMe = true");
         }
-        
+
         if (filters.ownedByMe) {
           filterConditions.push("'me' in owners");
         }
-        
+
         if (filters.parents) {
           filterConditions.push(`'${filters.parents}' in parents`);
         }
-        
+
         if (!filters.trashed) {
           filterConditions.push("trashed = false");
         }
-        
+
         // Combine query and filters
         if (filterConditions.length > 0) {
           q = q ? `${q} and ${filterConditions.join(" and ")}` : filterConditions.join(" and ");
@@ -1154,7 +1256,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         }
 
         const response = await drive.files.list({
-          q: q || undefined,
+          q: q ?? undefined,
           pageSize: Math.min(pageSize, 100),
           fields: "files(id, name, mimeType, createdTime, modifiedTime, size, parents, webViewLink, iconLink, owners, permissions, description, starred)",
           orderBy,
@@ -1165,15 +1267,15 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             type: "text",
             text: JSON.stringify({
               query: q,
-              totalResults: response.data.files?.length || 0,
-              files: response.data.files || [],
+              totalResults: response.data.files?.length ?? 0,
+              files: response.data.files ?? [],
             }, null, 2),
           }],
         };
 
         await cacheManager.set(cacheKey, result);
         performanceMonitor.track('enhancedSearch', Date.now() - startTime);
-        
+
         return result;
       }
 
@@ -1182,7 +1284,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           throw new Error('fileId parameter is required');
         }
         const { fileId } = args;
-        
+
         const cacheKey = `read:${fileId}`;
         const cached = await cacheManager.get(cacheKey);
         if (cached) {
@@ -1196,11 +1298,11 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         });
 
         let text = "";
-        
+
         if (file.data.mimeType?.startsWith("application/vnd.google-apps.")) {
           // Export Google Workspace files
           let exportMimeType = "text/plain";
-          
+
           if (file.data.mimeType === "application/vnd.google-apps.document") {
             exportMimeType = "text/markdown";
           } else if (file.data.mimeType === "application/vnd.google-apps.spreadsheet") {
@@ -1213,7 +1315,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             fileId,
             mimeType: exportMimeType,
           });
-          
+
           text = response.data as string;
         } else if (file.data.mimeType?.startsWith("text/")) {
           // Download text files
@@ -1221,7 +1323,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             fileId,
             alt: "media",
           });
-          
+
           text = response.data as string;
         } else {
           text = `Binary file (${file.data.mimeType}). Use the resource URI to access the full content.`;
@@ -1236,7 +1338,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
         await cacheManager.set(cacheKey, result);
         performanceMonitor.track('read', Date.now() - startTime);
-        
+
         return result;
       }
 
@@ -1247,12 +1349,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const { name, content } = args;
         const mimeType = (typeof args.mimeType === 'string' ? args.mimeType : "text/plain");
         const parentId = args.parentId as string | undefined;
-        
-        const fileMetadata: any = {
+
+        const fileMetadata: FileMetadata = {
           name,
           mimeType,
         };
-        
+
         if (parentId) {
           fileMetadata.parents = [parentId];
         }
@@ -1271,7 +1373,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         // Invalidate cache
         await cacheManager.invalidate('resources:*');
         await cacheManager.invalidate('search:*');
-        
+
         performanceMonitor.track('createFile', Date.now() - startTime);
         logger.info('File created', { fileId: response.data.id, name });
 
@@ -1288,7 +1390,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           throw new Error('fileId and content parameters are required');
         }
         const { fileId, content } = args;
-        
+
         const media = {
           mimeType: "text/plain",
           body: content,
@@ -1302,7 +1404,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         // Invalidate cache
         await cacheManager.invalidate(`read:${fileId}`);
         await cacheManager.invalidate(`resource:${fileId}`);
-        
+
         performanceMonitor.track('updateFile', Date.now() - startTime);
         logger.info('File updated', { fileId });
 
@@ -1320,12 +1422,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         }
         const { name } = args;
         const parentId = args.parentId as string | undefined;
-        
-        const fileMetadata: any = {
+
+        const fileMetadata: FileMetadata = {
           name,
           mimeType: "application/vnd.google-apps.folder",
         };
-        
+
         if (parentId) {
           fileMetadata.parents = [parentId];
         }
@@ -1338,7 +1440,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         // Invalidate cache
         await cacheManager.invalidate('resources:*');
         await cacheManager.invalidate('search:*');
-        
+
         performanceMonitor.track('createFolder', Date.now() - startTime);
         logger.info('Folder created', { folderId: response.data.id, name });
 
@@ -1355,7 +1457,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           throw new Error('spreadsheetId parameter is required');
         }
         const { spreadsheetId } = args;
-        
+
         const response = await sheets.spreadsheets.get({
           spreadsheetId,
         });
@@ -1366,10 +1468,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           index: sheet.properties?.index,
           rowCount: sheet.properties?.gridProperties?.rowCount,
           columnCount: sheet.properties?.gridProperties?.columnCount,
-        })) || [];
+        })) ?? [];
 
         performanceMonitor.track('listSheets', Date.now() - startTime);
-        
+
         return {
           content: [{
             type: "text",
@@ -1384,7 +1486,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         }
         const { spreadsheetId } = args;
         const range = (typeof args.range === 'string' ? args.range : "Sheet1");
-        
+
         const cacheKey = `sheet:${spreadsheetId}:${range}`;
         const cached = await cacheManager.get(cacheKey);
         if (cached) {
@@ -1402,14 +1504,14 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             type: "text",
             text: JSON.stringify({
               range: response.data.range,
-              values: response.data.values || [],
+              values: response.data.values ?? [],
             }, null, 2),
           }],
         };
 
         await cacheManager.set(cacheKey, result);
         performanceMonitor.track('readSheet', Date.now() - startTime);
-        
+
         return result;
       }
 
@@ -1418,7 +1520,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           throw new Error('spreadsheetId, range, and values parameters are required');
         }
         const { spreadsheetId, range, values } = args;
-        
+
         await sheets.spreadsheets.values.update({
           spreadsheetId,
           range,
@@ -1430,7 +1532,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
         // Invalidate cache
         await cacheManager.invalidate(`sheet:${spreadsheetId}:*`);
-        
+
         performanceMonitor.track('updateCells', Date.now() - startTime);
         logger.info('Cells updated', { spreadsheetId, range });
 
@@ -1448,7 +1550,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         }
         const { spreadsheetId, values } = args;
         const sheetName = (typeof args.sheetName === 'string' ? args.sheetName : "Sheet1");
-        
+
         await sheets.spreadsheets.values.append({
           spreadsheetId,
           range: sheetName,
@@ -1461,7 +1563,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
         // Invalidate cache
         await cacheManager.invalidate(`sheet:${spreadsheetId}:*`);
-        
+
         performanceMonitor.track('appendRows', Date.now() - startTime);
         logger.info('Rows appended', { spreadsheetId, sheetName, rowCount: values.length });
 
@@ -1479,7 +1581,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         }
         const { title } = args;
         const description = args.description as string | undefined;
-        
+
         const createResponse = await forms.forms.create({
           requestBody: {
             info: {
@@ -1524,7 +1626,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           throw new Error('formId parameter is required');
         }
         const { formId } = args;
-        
+
         const response = await forms.forms.get({
           formId,
         });
@@ -1541,12 +1643,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             title: item.title,
             description: item.description,
             type: item.questionItem?.question ? Object.keys(item.questionItem.question)[0] : 'unknown',
-            required: (item.questionItem as any)?.required || false,
-          })) || [],
+            required: Boolean(item.questionItem && 'required' in item.questionItem && item.questionItem.required),
+          })) ?? [],
         };
 
         performanceMonitor.track('getForm', Date.now() - startTime);
-        
+
         return {
           content: [{
             type: "text",
@@ -1566,8 +1668,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const scaleMax = (typeof args.scaleMax === 'number' ? args.scaleMax : 5);
         const scaleMinLabel = args.scaleMinLabel as string | undefined;
         const scaleMaxLabel = args.scaleMaxLabel as string | undefined;
-        
-        let questionItem: any = {
+
+        const questionItem: QuestionItem = {
           required,
           question: {},
         };
@@ -1579,13 +1681,13 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
               paragraph: false,
             };
             break;
-            
+
           case "PARAGRAPH_TEXT":
             questionItem.question.textQuestion = {
               paragraph: true,
             };
             break;
-            
+
           case "MULTIPLE_CHOICE":
             if (!options || options.length === 0) {
               throw new Error("Options required for multiple choice questions");
@@ -1595,7 +1697,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
               options: options.map((option: string) => ({ value: option })),
             };
             break;
-            
+
           case "CHECKBOX":
             if (!options || options.length === 0) {
               throw new Error("Options required for checkbox questions");
@@ -1605,7 +1707,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
               options: options.map((option: string) => ({ value: option })),
             };
             break;
-            
+
           case "DROPDOWN":
             if (!options || options.length === 0) {
               throw new Error("Options required for dropdown questions");
@@ -1615,34 +1717,34 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
               options: options.map((option: string) => ({ value: option })),
             };
             break;
-            
+
           case "LINEAR_SCALE":
             questionItem.question.scaleQuestion = {
               low: scaleMin,
               high: scaleMax,
-              lowLabel: scaleMinLabel,
-              highLabel: scaleMaxLabel,
+              ...(scaleMinLabel ? { lowLabel: scaleMinLabel } : {}),
+              ...(scaleMaxLabel ? { highLabel: scaleMaxLabel } : {}),
             };
             break;
-            
+
           case "DATE":
             questionItem.question.dateQuestion = {
               includeTime: false,
               includeYear: true,
             };
             break;
-            
+
           case "TIME":
             questionItem.question.timeQuestion = {
               duration: false,
             };
             break;
-            
+
           default:
             throw new Error(`Unsupported question type: ${type}`);
         }
 
-        const response = await forms.forms.batchUpdate({
+        await forms.forms.batchUpdate({
           formId,
           requestBody: {
             requests: [{
@@ -1675,7 +1777,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           throw new Error('formId parameter is required');
         }
         const { formId } = args;
-        
+
         const response = await forms.forms.responses.list({
           formId,
         });
@@ -1687,14 +1789,14 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           respondentEmail: resp.respondentEmail,
           answers: resp.answers ? Object.entries(resp.answers).map(([questionId, answer]) => ({
             questionId,
-            answer: answer.textAnswers?.answers?.[0]?.value || 
-                   (answer as any).choiceAnswers?.answers?.map((a: any) => a.value).join(", ") ||
-                   "No answer",
+            answer: answer.textAnswers?.answers?.[0]?.value ??
+              (answer as { choiceAnswers?: { answers?: Array<{ value: string }> } }).choiceAnswers?.answers?.map((a: { value: string }) => a.value).join(", ") ??
+              "No answer",
           })) : [],
-        })) || [];
+        })) ?? [];
 
         performanceMonitor.track('listResponses', Date.now() - startTime);
-        
+
         return {
           content: [{
             type: "text",
@@ -1714,7 +1816,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const { title } = args;
         const content = args.content as string | undefined;
         const parentId = args.parentId as string | undefined;
-        
+
         // Create the document
         const createResponse = await docs.documents.create({
           requestBody: {
@@ -1764,7 +1866,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         }
         const { documentId, text } = args;
         const index = (typeof args.index === 'number' ? args.index : 1);
-        
+
         await docs.documents.batchUpdate({
           documentId,
           requestBody: {
@@ -1794,7 +1896,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         }
         const { documentId, searchText, replaceText } = args;
         const matchCase = (typeof args.matchCase === 'boolean' ? args.matchCase : false);
-        
+
         await docs.documents.batchUpdate({
           documentId,
           requestBody: {
@@ -1830,13 +1932,19 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const italic = args.italic as boolean | undefined;
         const underline = args.underline as boolean | undefined;
         const fontSize = args.fontSize as number | undefined;
-        const foregroundColor = args.foregroundColor as any;
-        
-        const textStyle: any = {};
-        
-        if (bold !== undefined) textStyle.bold = bold;
-        if (italic !== undefined) textStyle.italic = italic;
-        if (underline !== undefined) textStyle.underline = underline;
+        const foregroundColor = args.foregroundColor as { red: number; green: number; blue: number } | undefined;
+
+        const textStyle: Partial<TextStyle> = {};
+
+        if (bold !== undefined) {
+          textStyle.bold = bold;
+        }
+        if (italic !== undefined) {
+          textStyle.italic = italic;
+        }
+        if (underline !== undefined) {
+          textStyle.underline = underline;
+        }
         if (fontSize !== undefined) {
           textStyle.fontSize = {
             magnitude: fontSize,
@@ -1884,7 +1992,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         }
         const { documentId, rows, columns } = args;
         const index = (typeof args.index === 'number' ? args.index : 1);
-        
+
         await docs.documents.batchUpdate({
           documentId,
           requestBody: {
@@ -1915,22 +2023,22 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           throw new Error('scriptId parameter is required');
         }
         const { scriptId } = args;
-        
+
         // Check cache first
         const cached = await cacheManager.get(`script:${scriptId}`);
         if (cached) {
           performanceMonitor.recordCacheHit();
           logger.info('getAppScript cache hit', { scriptId });
-          
+
           // Format the cached response
-          const filesText = cached.files.map((file: AppsScriptFile) => {
+          const filesText = (cached as { files: AppsScriptFile[] }).files.map((file: AppsScriptFile) => {
             let fileInfo = `File: ${file.name} (${file.type})\n`;
             fileInfo += '```' + (file.type === 'HTML' ? 'html' : 'javascript') + '\n';
             fileInfo += file.source;
             fileInfo += '\n```';
             return fileInfo;
           }).join('\n\n');
-          
+
           return {
             content: [{
               type: "text",
@@ -1938,30 +2046,34 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             }],
           };
         }
-        
+
         performanceMonitor.recordCacheMiss();
-        
+
         // Get script content from API
         const response = await script.projects.getContent({
           scriptId: scriptId,
         });
-        
+
         const content = response.data;
-        
+
         // Cache the result
-        await cacheManager.set(`script:${scriptId}`, content);
-        
+        await cacheManager.set(`script:${scriptId}`, content as CacheData);
+
         // Format the response
-        const filesText = content.files!.map((file: any) => {
+        if (!content.files) {
+          throw new Error('No files found in script content');
+        }
+
+        const filesText = (content.files as AppsScriptFile[]).map((file: AppsScriptFile) => {
           let fileInfo = `File: ${file.name} (${file.type})\n`;
           fileInfo += '```' + (file.type === 'HTML' ? 'html' : 'javascript') + '\n';
           fileInfo += file.source;
           fileInfo += '\n```';
           return fileInfo;
         }).join('\n\n');
-        
+
         performanceMonitor.track('getAppScript', Date.now() - startTime);
-        
+
         return {
           content: [{
             type: "text",
@@ -1982,11 +2094,11 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           try {
             switch (op.type) {
               case "create": {
-                const fileMetadata: any = {
+                const fileMetadata: FileMetadata = {
                   name: op.name,
-                  mimeType: op.mimeType || "text/plain",
+                  mimeType: op.mimeType ?? "text/plain",
                 };
-                
+
                 if (op.parentId) {
                   fileMetadata.parents = [op.parentId];
                 }
@@ -1994,7 +2106,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                 const response = await drive.files.create({
                   requestBody: fileMetadata,
                   media: {
-                    mimeType: op.mimeType || "text/plain",
+                    mimeType: op.mimeType ?? "text/plain",
                     body: op.content,
                   },
                   fields: "id, name",
@@ -2010,14 +2122,23 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
               }
 
               case "update": {
-                await drive.files.update({
+                const updateParams: {
+                  fileId: string;
+                  requestBody?: { name?: string };
+                  media?: { mimeType: string; body: string };
+                } = {
                   fileId: op.fileId,
-                  requestBody: op.name ? { name: op.name } : undefined,
-                  media: op.content ? {
+                  requestBody: op.name ? { name: op.name } : {},
+                };
+
+                if (op.content) {
+                  updateParams.media = {
                     mimeType: "text/plain",
                     body: op.content,
-                  } : undefined,
-                });
+                  };
+                }
+
+                await drive.files.update(updateParams);
 
                 results.push({
                   type: "update",
@@ -2047,7 +2168,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                   fields: "parents",
                 });
 
-                const previousParents = file.data.parents?.join(",") || "";
+                const previousParents = file.data.parents?.join(",") ?? "";
 
                 await drive.files.update({
                   fileId: op.fileId,
@@ -2070,10 +2191,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                   error: `Unknown operation type: ${op.type}`,
                 });
             }
-          } catch (error: any) {
+          } catch (error: unknown) {
             errors.push({
               operation: op,
-              error: error.message,
+              error: error instanceof Error ? error.message : String(error),
             });
           }
         }
@@ -2081,12 +2202,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         // Invalidate cache
         await cacheManager.invalidate('resources:*');
         await cacheManager.invalidate('search:*');
-        
+
         performanceMonitor.track('batchFileOperations', Date.now() - startTime);
-        logger.info('Batch operations completed', { 
-          total: operations.length, 
-          successful: results.length, 
-          failed: errors.length 
+        logger.info('Batch operations completed', {
+          total: operations.length,
+          successful: results.length,
+          failed: errors.length
         });
 
         return {
@@ -2110,36 +2231,31 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     }
   } catch (error) {
     performanceMonitor.track(request.params.name, Date.now() - startTime, true);
-    logger.error('Tool execution failed', { 
-      tool: request.params.name, 
-      error: error instanceof Error ? error.message : 'Unknown error' 
+    logger.error('Tool execution failed', {
+      tool: request.params.name,
+      error: error instanceof Error ? error.message : 'Unknown error'
     });
     throw error;
   }
 });
 
 // OAuth key path handling
-const oauthPath = process.env.GDRIVE_OAUTH_PATH || path.join(
+const oauthPath = process.env.GDRIVE_OAUTH_PATH ?? path.join(
   path.dirname(new URL(import.meta.url).pathname),
   "../credentials/gcp-oauth.keys.json",
 );
 
-// Credentials path handling
-const credentialsPath = process.env.GDRIVE_CREDENTIALS_PATH || path.join(
-  path.dirname(new URL(import.meta.url).pathname),
-  "../credentials/.gdrive-server-credentials.json",
-);
 
 async function authenticateAndSaveCredentials() {
   logger.info("Launching auth flow…");
-  
+
   // Ensure encryption key is set for token storage
   if (!process.env.GDRIVE_TOKEN_ENCRYPTION_KEY) {
-    console.error("GDRIVE_TOKEN_ENCRYPTION_KEY environment variable is required for secure token storage.");
-    console.error("Generate a key with: openssl rand -base64 32");
+    logger.error("GDRIVE_TOKEN_ENCRYPTION_KEY environment variable is required for secure token storage.");
+    logger.error("Generate a key with: openssl rand -base64 32");
     process.exit(1);
   }
-  
+
   const auth = await authenticate({
     keyfilePath: oauthPath,
     scopes: [
@@ -2150,20 +2266,24 @@ async function authenticateAndSaveCredentials() {
       "https://www.googleapis.com/auth/script.projects.readonly"
     ],
   });
-  
+
   // Initialize token manager and save credentials
   tokenManager = TokenManager.getInstance(logger);
-  
+
+  if (!auth.credentials.access_token || !auth.credentials.refresh_token || !auth.credentials.expiry_date || !auth.credentials.token_type || !auth.credentials.scope) {
+    throw new Error('Missing required authentication credentials');
+  }
+
   const tokenData = {
-    access_token: auth.credentials.access_token!,
-    refresh_token: auth.credentials.refresh_token!,
-    expiry_date: auth.credentials.expiry_date!,
-    token_type: auth.credentials.token_type!,
-    scope: auth.credentials.scope!,
+    access_token: auth.credentials.access_token,
+    refresh_token: auth.credentials.refresh_token,
+    expiry_date: auth.credentials.expiry_date,
+    token_type: auth.credentials.token_type,
+    scope: auth.credentials.scope,
   };
-  
+
   await tokenManager.saveTokens(tokenData);
-  
+
   logger.info("Credentials saved securely with encryption.");
   logger.info("You can now run the server.");
   process.exit(0);
@@ -2173,57 +2293,179 @@ async function loadCredentialsAndRunServer() {
   try {
     // Ensure encryption key is set
     if (!process.env.GDRIVE_TOKEN_ENCRYPTION_KEY) {
-      console.error("GDRIVE_TOKEN_ENCRYPTION_KEY environment variable is required.");
-      console.error("Generate a key with: openssl rand -base64 32");
+      logger.error("GDRIVE_TOKEN_ENCRYPTION_KEY environment variable is required.");
+      logger.error("Generate a key with: openssl rand -base64 32");
       process.exit(1);
     }
-    
+
     // Load OAuth keys
     if (!fs.existsSync(oauthPath)) {
-      console.error(`OAuth keys not found at: ${oauthPath}`);
-      console.error("Please ensure gcp-oauth.keys.json is present.");
+      logger.error(`OAuth keys not found at: ${oauthPath}`);
+      logger.error("Please ensure gcp-oauth.keys.json is present.");
       process.exit(1);
     }
-    
+
     const keysContent = fs.readFileSync(oauthPath, "utf-8");
     const keys = JSON.parse(keysContent);
-    const oauthKeys = keys.web || keys.installed;
-    
+    const oauthKeys = keys.web ?? keys.installed;
+
     if (!oauthKeys) {
-      console.error("Invalid OAuth keys format. Expected 'web' or 'installed' configuration.");
+      logger.error("Invalid OAuth keys format. Expected 'web' or 'installed' configuration.");
       process.exit(1);
     }
-    
+
     // Initialize managers
     tokenManager = TokenManager.getInstance(logger);
     authManager = AuthManager.getInstance(oauthKeys, logger);
-    
+
     // Initialize authentication
     await authManager.initialize();
-    
+
     // Check authentication state
     if (authManager.getState() === AuthState.UNAUTHENTICATED) {
-      console.error("Authentication required. Please run with 'auth' argument first.");
+      logger.error("Authentication required. Please run with 'auth' argument first.");
       process.exit(1);
     }
-    
+
     // Set up Google API authentication
     const oauth2Client = authManager.getOAuth2Client();
     google.options({ auth: oauth2Client });
-    
+
     logger.info("Authentication initialized with automatic token refresh.");
-    
+
     // Connect to Redis cache
     await cacheManager.connect();
-    
+
     // Start MCP server
     const transport = new StdioServerTransport();
     await server.connect(transport);
-    
+
     logger.info("MCP server started successfully.");
   } catch (error) {
     logger.error("Failed to start server", { error });
-    console.error("Failed to start server:", error);
+    process.exit(1);
+  }
+}
+
+// CLI command implementations
+async function rotateKey(): Promise<void> {
+  try {
+    logger.info('🔄 Google Drive MCP Key Rotation Tool');
+    logger.info('====================================');
+
+    // Initialize logger and managers
+    const tokenManager = TokenManager.getInstance(logger);
+    const keyRotationManager = KeyRotationManager.getInstance(logger);
+
+    // Get current key version
+    const currentKey = keyRotationManager.getCurrentKey();
+    const currentVersionNum = parseInt(currentKey.version.substring(1));
+    const newVersionNum = currentVersionNum + 1;
+    const newVersion = `v${newVersionNum}`;
+
+    logger.info(`📍 Current key version: ${currentKey.version}`);
+    logger.info(`🔑 Generating new key version: ${newVersion}`);
+
+    // Check if new key already exists in environment
+    const newKeyEnv = newVersionNum === 2 ? 'GDRIVE_TOKEN_ENCRYPTION_KEY_V2' : `GDRIVE_TOKEN_ENCRYPTION_KEY_V${newVersionNum}`;
+    const existingNewKey = process.env[newKeyEnv];
+
+    if (!existingNewKey) {
+      logger.error(`❌ Error: ${newKeyEnv} environment variable not found`);
+      logger.info('\n💡 To rotate keys:');
+      logger.info(`   1. Generate a new 32-byte key: openssl rand -base64 32`);
+      logger.info(`   2. Set environment variable: export ${newKeyEnv}="<your-new-key>"`);
+      logger.info(`   3. Run this command again`);
+      process.exit(1);
+    }
+
+    // Load tokens
+    logger.info('📖 Loading current tokens...');
+    const tokens = await tokenManager.loadTokens();
+    if (!tokens) {
+      logger.info('ℹ️  No tokens found to rotate');
+      return;
+    }
+
+    // The TokenManager will automatically use the new key if we update the current version
+    logger.info(`🔐 Setting current key version to ${newVersion}...`);
+    process.env.GDRIVE_TOKEN_CURRENT_KEY_VERSION = newVersion;
+
+    // Re-save tokens with new key
+    logger.info('💾 Re-encrypting tokens with new key...');
+    await tokenManager.saveTokens(tokens);
+
+    logger.info(`✅ Key rotation complete!`);
+    logger.info(`📊 Summary:`);
+    logger.info(`   - Previous key version: ${currentKey.version}`);
+    logger.info(`   - New key version: ${newVersion}`);
+    logger.info(`   - Tokens re-encrypted successfully`);
+    logger.info(`💡 Next steps:`);
+    logger.info(`   1. Update GDRIVE_TOKEN_CURRENT_KEY_VERSION=${newVersion} in your environment`);
+    logger.info(`   2. Test the application to ensure tokens work correctly`);
+    logger.info(`   3. Keep the old key (${currentKey.version}) until you're certain the rotation succeeded`);
+
+  } catch (error) {
+    logger.error('❌ Key rotation failed', { error: error instanceof Error ? error.message : error });
+    process.exit(1);
+  }
+}
+
+async function migrateTokens(): Promise<void> {
+  try {
+    // Dynamically import the migration script
+    const { migrateTokens: runMigration } = await import('./scripts/migrate-tokens.js');
+    await runMigration();
+  } catch (error) {
+    logger.error('❌ Migration failed', { error: error instanceof Error ? error.message : error });
+    process.exit(1);
+  }
+}
+
+async function verifyKeys(): Promise<void> {
+  try {
+    logger.info('🔍 Google Drive MCP Key Verification Tool');
+    logger.info('========================================');
+
+    // Initialize managers
+    const tokenManager = TokenManager.getInstance(logger);
+    const keyRotationManager = KeyRotationManager.getInstance(logger);
+
+    // Get current key info
+    const currentKey = keyRotationManager.getCurrentKey();
+    logger.info(`📍 Current key version: ${currentKey.version}`);
+    logger.info(`🔑 Registered key versions: ${keyRotationManager.getVersions().join(', ')}`);
+
+    // Try to load and decrypt tokens
+    logger.info('🔓 Attempting to decrypt tokens...');
+    const tokens = await tokenManager.loadTokens();
+
+    if (!tokens) {
+      logger.error('❌ No tokens found or unable to decrypt');
+      process.exit(1);
+    }
+
+    // Verify token structure
+    logger.info('✓ Tokens successfully decrypted');
+    logger.info('📋 Token validation:');
+    logger.info(`   - Access token: ${tokens.access_token ? '✓ Present' : '❌ Missing'}`);
+    logger.info(`   - Refresh token: ${tokens.refresh_token ? '✓ Present' : '❌ Missing'}`);
+    logger.info(`   - Expiry date: ${tokens.expiry_date ? '✓ Present' : '❌ Missing'}`);
+    logger.info(`   - Token type: ${tokens.token_type ? '✓ Present' : '❌ Missing'}`);
+    logger.info(`   - Scope: ${tokens.scope ? '✓ Present' : '❌ Missing'}`);
+
+    // Check token expiry
+    if (tokens.expiry_date) {
+      const isExpired = tokenManager.isTokenExpired(tokens);
+      const expiryDate = new Date(tokens.expiry_date);
+      logger.info(`⏰ Token expiry: ${expiryDate.toISOString()}`);
+      logger.info(`   Status: ${isExpired ? '❌ Expired' : '✓ Valid'}`);
+    }
+
+    logger.info('✅ All tokens successfully verified with current key');
+
+  } catch (error) {
+    logger.error('❌ Verification failed', { error: error instanceof Error ? error.message : error });
     process.exit(1);
   }
 }
@@ -2232,15 +2474,37 @@ async function loadCredentialsAndRunServer() {
 if (process.argv[2] === "health") {
   performHealthCheck()
     .then((result) => {
-      console.log(JSON.stringify(result, null, 2));
+      process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
       process.exit(result.status === HealthStatus.HEALTHY ? 0 : 1);
     })
     .catch((error) => {
-      console.error("Health check failed:", error);
+      const msg = `Health check failed: ${error instanceof Error ? error.message : String(error)}\n`;
+      process.stderr.write(msg);
       process.exit(2);
     });
 } else if (process.argv[2] === "auth") {
-  authenticateAndSaveCredentials().catch(console.error);
+  authenticateAndSaveCredentials().catch((error) => {
+    logger.error('Unhandled error in auth flow', { error });
+    process.exit(1);
+  });
+} else if (process.argv[2] === "rotate-key") {
+  rotateKey().catch((error) => {
+    logger.error('Unhandled error in rotate-key', { error });
+    process.exit(1);
+  });
+} else if (process.argv[2] === "migrate-tokens") {
+  migrateTokens().catch((error) => {
+    logger.error('Unhandled error in migrate-tokens', { error });
+    process.exit(1);
+  });
+} else if (process.argv[2] === "verify-keys") {
+  verifyKeys().catch((error) => {
+    logger.error('Unhandled error in verify-keys', { error });
+    process.exit(1);
+  });
 } else {
-  loadCredentialsAndRunServer().catch(console.error);
+  loadCredentialsAndRunServer().catch((error) => {
+    logger.error('Unhandled error starting server', { error });
+    process.exit(1);
+  });
 }
