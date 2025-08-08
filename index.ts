@@ -130,11 +130,80 @@ interface TextStyle {
 }
 
 // Structured logging with Winston
+// Ensure Error instances inside metadata are serialized with details
+const errorSerializer = winston.format((info) => {
+  const serialize = (value: unknown): unknown => {
+    if (value instanceof Error) {
+      const plain: Record<string, unknown> = {
+        name: value.name,
+        message: value.message,
+        stack: value.stack,
+      };
+      // Include enumerable and non-enumerable own props
+      try {
+        for (const key of Object.getOwnPropertyNames(value)) {
+          const valAsRecord = value as unknown as Record<string, unknown>;
+          plain[key] = valAsRecord[key];
+        }
+      } catch { }
+      // Common Node error fields
+      const nodeErr = value as unknown as { code?: unknown; cause?: unknown };
+      if (nodeErr.code !== undefined) plain.code = nodeErr.code;
+      if (nodeErr.cause !== undefined) plain.cause = serialize(nodeErr.cause);
+      return plain;
+    }
+    if (Array.isArray(value)) {
+      return value.map(serialize);
+    }
+    if (value && typeof value === 'object') {
+      const obj: Record<string, unknown> = value as Record<string, unknown>;
+      for (const key of Object.keys(obj)) {
+        obj[key] = serialize(obj[key]);
+      }
+      return obj;
+    }
+    return value;
+  };
+
+  for (const key of Object.keys(info)) {
+    const record = info as unknown as Record<string, unknown>;
+    record[key] = serialize(record[key]);
+  }
+  return info;
+});
+
+const safeStringify = (value: unknown): string => {
+  const getCircularReplacer = () => {
+    const seen = new WeakSet();
+    return (_key: string, val: unknown) => {
+      if (typeof val === 'object' && val !== null) {
+        if (seen.has(val as object)) return '[Circular]';
+        seen.add(val as object);
+      }
+      if (val instanceof Error) {
+        return {
+          name: val.name,
+          message: val.message,
+          stack: val.stack,
+          ...Object.fromEntries(Object.getOwnPropertyNames(val).map(k => [k, (val as unknown as Record<string, unknown>)[k]])),
+        };
+      }
+      return val;
+    };
+  };
+  try {
+    return JSON.stringify(value, getCircularReplacer());
+  } catch {
+    return String(value);
+  }
+};
+
 const logger = winston.createLogger({
   level: process.env.LOG_LEVEL ?? 'info',
   format: winston.format.combine(
     winston.format.timestamp(),
     winston.format.errors({ stack: true }),
+    errorSerializer(),
     winston.format.json()
   ),
   defaultMeta: { service: 'gdrive-mcp-server' },
@@ -157,7 +226,7 @@ const logger = winston.createLogger({
         winston.format.colorize(),
         winston.format.timestamp(),
         winston.format.printf(({ timestamp, level, message, ...meta }) => {
-          return `${timestamp} [${level}]: ${message} ${Object.keys(meta).length ? JSON.stringify(meta) : ''}`;
+          return `${timestamp} [${level}]: ${message} ${Object.keys(meta).length ? safeStringify(meta) : ''}`;
         })
       )
     })
