@@ -153,13 +153,27 @@ You'll need a Google account and Node.js 18+ installed.
 ### 🐳 Docker Setup (Recommended)
 
 ```bash
-# Prepare credentials and authenticate
-mkdir -p credentials
+# 1) Prepare bind mounts on the HOST
+mkdir -p credentials logs data
 cp /path/to/gcp-oauth.keys.json credentials/
-./scripts/auth.sh
 
-# Start with Docker Compose (includes Redis)
-docker-compose up -d
+# 2) Ensure encryption key is set (32-byte base64)
+# Option A: put it in .env at the project root
+#   GDRIVE_TOKEN_ENCRYPTION_KEY=<your-32-byte-base64>
+# Option B: export in your shell before compose
+#   export GDRIVE_TOKEN_ENCRYPTION_KEY=$(openssl rand -base64 32)
+
+# 3) Start with Docker Compose (includes Redis)
+docker compose up -d --build   # or: docker-compose up -d --build
+
+# 4) Verify containers
+docker compose ps              # expect both services to be 'Up (healthy)'
+
+# 5) Check recent server logs (now include full error details)
+docker compose logs gdrive-mcp -n 100 --no-color | cat
+
+# 6) Health check (inside container)
+docker compose exec gdrive-mcp-server node dist/index.js health
 ```
 
 **📖 [Complete Docker Guide →](./docs/Deployment/DOCKER.md)**
@@ -369,9 +383,28 @@ node dist/index.js health
 **Docker Issues:**
 ```bash
 # Check logs and verify mounts
-docker-compose logs gdrive-mcp
-docker-compose exec gdrive-mcp ls -la /credentials/
+docker compose logs gdrive-mcp -n 100 --no-color | cat
+docker compose exec gdrive-mcp-server ls -la /credentials/
+docker compose exec gdrive-mcp-server ls -la /app/logs/
+
+# If the server restarts repeatedly:
+# - Confirm key present in container env
+docker inspect gdrive-mcp-server --format='{{range .Config.Env}}{{println .}}{{end}}' | grep GDRIVE_TOKEN_ENCRYPTION_KEY
+
+# - Ensure host bind-mount directories exist
+ls -la credentials logs data
+
+# - Health check from inside the container
+docker compose exec gdrive-mcp-server node dist/index.js health
 ```
+
+**Notes on Logging:**
+- Error objects are fully serialized (name, message, stack) and written to `logs/error.log` and `logs/combined.log`.
+- Audit trail is written to `logs/gdrive-mcp-audit.log`. Directories are auto-created if missing.
+
+**Token Decryption Compatibility:**
+- Tokens are encrypted with AES-256-GCM using a key derived (PBKDF2) from your base key in `GDRIVE_TOKEN_ENCRYPTION_KEY`.
+- As long as the same base key is provided, tokens can be decrypted across host and Docker.
 
 **Performance Issues:**
 ```bash
