@@ -27,7 +27,7 @@ export interface VersionedTokenStorage {
   keyId: string;
 }
 
-export type AuditEvent = 
+export type AuditEvent =
   | 'TOKEN_ACQUIRED'
   | 'TOKEN_REFRESHED'
   | 'TOKEN_REFRESH_FAILED'
@@ -58,24 +58,79 @@ export class TokenManager {
 
   private constructor(logger: Logger) {
     this.logger = logger;
-    
-    // Load configuration from environment
-    this.tokenPath = process.env.GDRIVE_TOKEN_STORAGE_PATH ?? 
-      path.join(os.homedir(), '.gdrive-mcp-tokens.json');
-    
-    this.auditPath = process.env.GDRIVE_TOKEN_AUDIT_LOG_PATH ?? 
-      path.join(os.homedir(), '.gdrive-mcp-audit.log');
-    
+
+    // Load configuration from environment with sanitization
+    const defaultTokenPath = path.join(os.homedir(), '.gdrive-mcp-tokens.json');
+    const defaultAuditPath = path.join(os.homedir(), '.gdrive-mcp-audit.log');
+
+    this.tokenPath = TokenManager.sanitizePathEnv(
+      process.env.GDRIVE_TOKEN_STORAGE_PATH,
+      defaultTokenPath,
+      this.logger,
+      'GDRIVE_TOKEN_STORAGE_PATH'
+    );
+
+    this.auditPath = TokenManager.sanitizePathEnv(
+      process.env.GDRIVE_TOKEN_AUDIT_LOG_PATH,
+      defaultAuditPath,
+      this.logger,
+      'GDRIVE_TOKEN_AUDIT_LOG_PATH'
+    );
+
+    // Ensure directories exist (best effort)
+    void this.ensureDirectoryExists(path.dirname(this.tokenPath)).catch((err) => {
+      this.logger.error('Failed to ensure token directory exists', { error: err, dir: path.dirname(this.tokenPath) });
+    });
+    void this.ensureDirectoryExists(path.dirname(this.auditPath)).catch((err) => {
+      this.logger.error('Failed to ensure audit directory exists', { error: err, dir: path.dirname(this.auditPath) });
+    });
+
     // Initialize key rotation manager
     this.keyRotationManager = KeyRotationManager.getInstance(logger);
-    
+
     // Load and register keys from environment
     this.loadKeysFromEnvironment();
-    
+
     this.logger.debug('TokenManager initialized', {
       tokenPath: this.tokenPath,
       auditPath: this.auditPath,
     });
+  }
+
+  /**
+   * Sanitize a path provided via environment variables to avoid accidental concatenation
+   * from malformed .env entries (e.g., missing newline causing "...logGDRIVE_TOKEN_ENCRYPTION_KEY=...").
+   */
+  private static sanitizePathEnv(
+    value: string | undefined,
+    fallback: string,
+    logger: Logger,
+    envName: string
+  ): string {
+    if (!value) {
+      return fallback;
+    }
+    const firstLine = value.split(/\r?\n/)[0]?.trim() ?? '';
+    if (!firstLine) {
+      logger.warn(`${envName} is empty after trimming; falling back to default`, { fallback });
+      return fallback;
+    }
+    if (firstLine.includes('=')) {
+      // Likely a malformed .env where another VAR=... got appended
+      logger.warn(`${envName} appears malformed (contains '='); falling back to default`, { provided: firstLine, fallback });
+      return fallback;
+    }
+    return firstLine;
+  }
+
+  /** Ensure directory exists for a given path */
+  private async ensureDirectoryExists(dirPath: string): Promise<void> {
+    try {
+      await fs.mkdir(dirPath, { recursive: true });
+    } catch (error) {
+      // Re-throw for caller to handle/log
+      throw error;
+    }
   }
 
   private loadKeysFromEnvironment(): void {
@@ -84,14 +139,14 @@ export class TokenManager {
     if (!keyBase64) {
       throw new Error('GDRIVE_TOKEN_ENCRYPTION_KEY environment variable is required');
     }
-    
+
     let keyBuffer: Buffer;
     try {
       keyBuffer = Buffer.from(keyBase64, 'base64');
     } catch {
       throw new Error('Invalid base64 encoding for GDRIVE_TOKEN_ENCRYPTION_KEY');
     }
-    
+
     if (keyBuffer.length !== 32) {
       throw new Error(`Invalid encryption key length: ${keyBuffer.length} bytes. Must be 32-byte base64-encoded key.`);
     }
@@ -99,10 +154,10 @@ export class TokenManager {
     // Generate salt for v1 key
     const salt = KeyDerivation.generateSalt();
     const derivedKey = KeyDerivation.deriveKey(keyBuffer, salt);
-    
+
     // Clear original key buffer for security
     keyBuffer.fill(0);
-    
+
     // Register v1 key
     try {
       this.keyRotationManager.registerKey('v1', derivedKey.key, {
@@ -117,14 +172,14 @@ export class TokenManager {
       derivedKey.key.fill(0);
       throw error;
     }
-    
+
     // Log audit event
     this.logAuditEvent('KEY_REGISTERED', true, {
       keyVersion: 'v1',
       algorithm: 'aes-256-gcm',
       iterations: derivedKey.iterations
     }).catch(err => this.logger.error('Failed to log audit event', { error: err }));
-    
+
     // Load additional keys if present (v2, v3, etc.)
     for (let i = 2; i <= 10; i++) {
       const envKey = `GDRIVE_TOKEN_ENCRYPTION_KEY_V${i}`;
@@ -137,19 +192,19 @@ export class TokenManager {
           this.logger.warn(`Invalid base64 encoding for ${envKey}, skipping`);
           continue;
         }
-        
+
         if (keyBuffer.length !== 32) {
           this.logger.warn(`Invalid key length for ${envKey}: ${keyBuffer.length} bytes, skipping`);
           keyBuffer.fill(0);
           continue;
         }
-        
+
         const salt = KeyDerivation.generateSalt();
         const derivedKey = KeyDerivation.deriveKey(keyBuffer, salt);
-        
+
         // Clear original key buffer for security
         keyBuffer.fill(0);
-        
+
         try {
           this.keyRotationManager.registerKey(`v${i}`, derivedKey.key, {
             version: `v${i}`,
@@ -158,7 +213,7 @@ export class TokenManager {
             iterations: derivedKey.iterations,
             salt: derivedKey.salt.toString('base64')
           });
-          
+
           // Log audit event
           this.logAuditEvent('KEY_REGISTERED', true, {
             keyVersion: `v${i}`,
@@ -176,7 +231,7 @@ export class TokenManager {
     // Set current version from environment or default to v1
     const currentVersion = process.env.GDRIVE_TOKEN_CURRENT_KEY_VERSION ?? 'v1';
     this.keyRotationManager.setCurrentVersion(currentVersion);
-    
+
     // Log audit event
     this.logAuditEvent('KEY_VERSION_CHANGED', true, {
       newVersion: currentVersion,
@@ -197,25 +252,25 @@ export class TokenManager {
   public async saveTokens(tokens: TokenData): Promise<void> {
     try {
       this.logger.debug('Saving tokens to persistent storage');
-      
+
       // Validate token data
       if (!this.isValidTokenData(tokens)) {
         throw new Error('Invalid token data');
       }
-      
+
       // Encrypt tokens with versioned format
       const encrypted = await this.encrypt(JSON.stringify(tokens));
-      
+
       // Write to file with secure permissions
       await fs.writeFile(this.tokenPath, JSON.stringify(encrypted, null, 2), { encoding: 'utf8' });
       await fs.chmod(this.tokenPath, 0o600);
-      
+
       // Log audit event
       await this.logAuditEvent('TOKEN_ENCRYPTED', true, {
         tokenId: this.hashTokenId(tokens.access_token),
         keyVersion: encrypted.version,
       });
-      
+
       this.logger.info('Tokens saved successfully');
     } catch (error) {
       this.logger.error('Failed to save tokens', { error });
@@ -229,9 +284,9 @@ export class TokenManager {
   public async loadTokens(): Promise<TokenData | null> {
     try {
       this.logger.debug('Loading tokens from persistent storage');
-      
+
       const fileContent = await fs.readFile(this.tokenPath, 'utf8');
-      
+
       // Check if it's the new versioned format
       let decrypted: string;
       try {
@@ -255,15 +310,15 @@ export class TokenManager {
         // Other parse error
         throw parseError;
       }
-      
+
       const tokens = JSON.parse(decrypted);
-      
+
       // Log audit event
       await this.logAuditEvent('TOKEN_DECRYPTED', true, {
         tokenId: this.hashTokenId(tokens.access_token),
         keyVersion: typeof fileContent === 'string' ? 'unknown' : (JSON.parse(fileContent) as VersionedTokenStorage).version,
       });
-      
+
       this.logger.info('Tokens loaded successfully');
       return tokens;
     } catch (error: unknown) {
@@ -272,7 +327,7 @@ export class TokenManager {
         this.logger.debug('No saved tokens found', { path: this.tokenPath });
         return null;
       }
-      
+
       this.logger.error('Failed to load tokens', { error: nodeError });
       return null;
     }
@@ -284,11 +339,11 @@ export class TokenManager {
   public async deleteTokensOnInvalidGrant(): Promise<void> {
     try {
       await fs.unlink(this.tokenPath);
-      
+
       await this.logAuditEvent('TOKEN_DELETED_INVALID_GRANT', true, {
         reason: 'invalid_grant error from Google OAuth',
       });
-      
+
       this.logger.warn('Deleted invalid tokens due to invalid_grant error');
     } catch (error) {
       this.logger.error('Failed to delete invalid tokens', { error });
@@ -322,7 +377,7 @@ export class TokenManager {
     if (!data || typeof data !== 'object') {
       return false;
     }
-    
+
     const tokenData = data as Record<string, unknown>;
     return (
       typeof tokenData.access_token === 'string' &&
@@ -340,17 +395,17 @@ export class TokenManager {
     const currentKey = this.keyRotationManager.getCurrentKey();
     const iv = crypto.randomBytes(16);
     const cipher = crypto.createCipheriv('aes-256-gcm', currentKey.key, iv);
-    
+
     let encrypted = cipher.update(data, 'utf8', 'hex');
     encrypted += cipher.final('hex');
-    
+
     const authTag = cipher.getAuthTag();
-    
+
     // Clear sensitive data from memory
     // Note: Cannot clear the string data parameter as it's immutable
     // This is a limitation of JavaScript - strings cannot be cleared from memory
     // The caller should ensure sensitive data is handled appropriately
-    
+
     // Return versioned format
     return {
       version: currentKey.version,
@@ -370,9 +425,9 @@ export class TokenManager {
    * Decrypt data using AES-256-GCM with version support
    */
   private async decrypt(versionedData: VersionedTokenStorage): Promise<string> {
-    // Get the appropriate key for this version
-    const key = this.keyRotationManager.getKey(versionedData.version);
-    if (!key) {
+    // Resolve the appropriate base key from environment by version
+    const baseKey = this.getBaseKeyForVersion(versionedData.version);
+    if (!baseKey) {
       throw new Error(`Key version ${versionedData.version} not found`);
     }
 
@@ -381,26 +436,58 @@ export class TokenManager {
     if (parts.length !== 3) {
       throw new Error('Invalid encrypted data format');
     }
-    
+
     // Ensure parts are defined before using them
     const ivPart = parts[0];
     const authTagPart = parts[1];
     const encryptedData = parts[2];
-    
+
     if (!ivPart || !authTagPart || !encryptedData) {
       throw new Error('Missing encryption components');
     }
-    
+
     const iv = Buffer.from(ivPart, 'hex');
     const authTag = Buffer.from(authTagPart, 'hex');
-    
-    const decipher = crypto.createDecipheriv('aes-256-gcm', key.key, iv);
+
+    // Derive the encryption key deterministically from base key and stored derivation params
+    let aesKey: Buffer;
+    if (versionedData.keyDerivation?.method === 'pbkdf2') {
+      const iterations = versionedData.keyDerivation.iterations;
+      const saltB64 = versionedData.keyDerivation.salt;
+      const salt = Buffer.from(saltB64, 'base64');
+      aesKey = KeyDerivation.deriveKey(baseKey, salt, iterations).key;
+    } else {
+      // Fallback: use base key directly when no derivation info exists
+      aesKey = baseKey;
+    }
+
+    const decipher = crypto.createDecipheriv('aes-256-gcm', aesKey, iv);
     decipher.setAuthTag(authTag);
-    
+
     let decrypted = decipher.update(encryptedData, 'hex', 'utf8');
     decrypted += decipher.final('utf8');
-    
+
     return decrypted;
+  }
+
+  /**
+   * Retrieve the base encryption key for a given version from environment variables
+   */
+  private getBaseKeyForVersion(version: string): Buffer {
+    const envName = version === 'v1' ? 'GDRIVE_TOKEN_ENCRYPTION_KEY' : `GDRIVE_TOKEN_ENCRYPTION_KEY_${version.toUpperCase()}`;
+    const value = process.env[envName] ?? (version.startsWith('v') ? process.env[`GDRIVE_TOKEN_ENCRYPTION_KEY_V${version.substring(1)}`] : undefined);
+    if (!value) {
+      return Buffer.alloc(0);
+    }
+    try {
+      const buf = Buffer.from(value, 'base64');
+      if (buf.length !== 32) {
+        throw new Error(`Invalid base key length for ${envName}: ${buf.length}`);
+      }
+      return buf;
+    } catch {
+      return Buffer.alloc(0);
+    }
   }
 
 
@@ -426,7 +513,7 @@ export class TokenManager {
       success,
       metadata: metadata ?? {},  // Use empty object if metadata is undefined
     };
-    
+
     try {
       await fs.appendFile(
         this.auditPath,
@@ -434,7 +521,23 @@ export class TokenManager {
         'utf8'
       );
     } catch (error) {
-      this.logger.error('Failed to write audit log', { error });
+      const err = error as NodeJS.ErrnoException;
+      if (err.code === 'ENOENT') {
+        // Attempt to create directory and retry once
+        try {
+          await this.ensureDirectoryExists(path.dirname(this.auditPath));
+          await fs.appendFile(
+            this.auditPath,
+            JSON.stringify(auditLog) + '\n',
+            'utf8'
+          );
+          return;
+        } catch (retryError) {
+          this.logger.error('Failed to write audit log after creating directory', { error: retryError, path: this.auditPath });
+          return;
+        }
+      }
+      this.logger.error('Failed to write audit log', { error: err, path: this.auditPath });
     }
   }
 }
