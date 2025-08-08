@@ -10,7 +10,6 @@ services:
       - NODE_ENV=production
       - LOG_LEVEL=silent
       - REDIS_URL=redis://redis:6379
-      - GDRIVE_CREDENTIALS_PATH=/credentials/.gdrive-server-credentials.json
       - GDRIVE_OAUTH_PATH=/credentials/gcp-oauth.keys.json
       - GDRIVE_TOKEN_STORAGE_PATH=/credentials/.gdrive-mcp-tokens.json
       - GDRIVE_TOKEN_AUDIT_LOG_PATH=/app/logs/gdrive-mcp-audit.log

@@ -19,8 +19,8 @@ RUN npm ci --ignore-scripts
 # Copy source code
 COPY . .
 
-# Build TypeScript now that source files are available
-RUN npm run build
+# Build TypeScript now that source files are available with increased memory limit
+RUN NODE_OPTIONS="--max-old-space-size=4096" npm run build
 
 # Create necessary directories with appropriate permissions
 RUN mkdir -p /credentials /app/logs && \
@@ -31,7 +31,6 @@ RUN mkdir -p /credentials /app/logs && \
 VOLUME ["/credentials"]
 
 # Environment variables
-ENV GDRIVE_CREDENTIALS_PATH=/credentials/.gdrive-server-credentials.json
 ENV GDRIVE_OAUTH_PATH=/credentials/gcp-oauth.keys.json
 ENV GDRIVE_TOKEN_STORAGE_PATH=/credentials/.gdrive-mcp-tokens.json
 ENV GDRIVE_TOKEN_AUDIT_LOG_PATH=/app/logs/gdrive-mcp-audit.log
