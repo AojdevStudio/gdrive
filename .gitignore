@@ -33,6 +33,7 @@ coverage/
 # IDE
 .vscode/
 .idea/
+.cursor/
 
 # Redis dump
 dump.rdb
