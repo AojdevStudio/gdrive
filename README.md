@@ -27,8 +27,8 @@ You'll need a Google account and Node.js 18+ installed.
 2. **Installation & Authentication**
    ```bash
    # Clone and install
-   git clone <repository-url>
-   cd gdrive-mcp-server
+   git clone https://github.com/AojdevStudio/gdrive.git
+   cd gdrive
    npm install && npm run build
    
    # Set up credentials
