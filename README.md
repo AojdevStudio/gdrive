@@ -7,6 +7,91 @@
 
 A powerful **Model Context Protocol (MCP) server** that provides comprehensive integration with **Google Workspace** (Drive, Sheets, Docs, Forms, and Apps Script). This server enables AI assistants and applications to seamlessly interact with Google services through a standardized, secure interface.
 
+## 🚀 Quick Start
+
+### 📋 Prerequisites
+
+You'll need a Google account and Node.js 18+ installed.
+
+**📖 [Complete Setup Guide →](./docs/Guides/README.md)**
+
+### ⚡ Fast Track Setup
+
+1. **Google Cloud Setup**
+   - Create project at [Google Cloud Console](https://console.cloud.google.com/projectcreate)
+   - Enable APIs: Drive, Sheets, Docs, Forms, Apps Script
+   - Create OAuth credentials and download as `gcp-oauth.keys.json`
+   
+   **📖 [Detailed Google Cloud Setup →](./docs/Guides/01-initial-setup.md)**
+
+2. **Installation & Authentication**
+   ```bash
+   # Clone and install
+   git clone <repository-url>
+   cd gdrive-mcp-server
+   npm install && npm run build
+   
+   # Set up credentials
+   mkdir -p credentials
+   cp /path/to/gcp-oauth.keys.json credentials/
+   
+   # Generate encryption key and authenticate
+   export GDRIVE_TOKEN_ENCRYPTION_KEY=$(openssl rand -base64 32)
+   node ./dist/index.js auth
+   ```
+   
+   **📖 [Complete Authentication Guide →](./docs/Guides/02-authentication-flow.md)**
+
+3. **Start Server**
+   ```bash
+   node ./dist/index.js
+   ```
+
+### 🐳 Docker Setup (Recommended)
+
+```bash
+# 1) Prepare bind mounts on the HOST
+mkdir -p credentials logs data
+cp /path/to/gcp-oauth.keys.json credentials/
+
+# 2) Ensure encryption key is set (32-byte base64)
+# Option A: put it in .env at the project root
+#   GDRIVE_TOKEN_ENCRYPTION_KEY=<your-32-byte-base64>
+# Option B: export in your shell before compose
+#   export GDRIVE_TOKEN_ENCRYPTION_KEY=$(openssl rand -base64 32)
+
+# 3) Start with Docker Compose (includes Redis)
+docker compose up -d --build   # or: docker-compose up -d --build
+
+# 4) Verify containers
+docker compose ps              # expect both services to be 'Up (healthy)'
+
+# 5) Check recent server logs (now include full error details)
+docker compose logs gdrive-mcp -n 100 --no-color | cat
+
+# 6) Health check (inside container)
+docker compose exec gdrive-mcp-server node dist/index.js health
+```
+
+**📖 [Complete Docker Guide →](./docs/Deployment/DOCKER.md)**
+
+## 🔐 Authentication
+
+The server features **automatic OAuth token refresh** with enterprise-grade encryption - authenticate once, works forever.
+
+### ⚡ Quick Authentication
+
+```bash
+# Local setup
+export GDRIVE_TOKEN_ENCRYPTION_KEY=$(openssl rand -base64 32)
+node ./dist/index.js auth
+
+# Docker setup
+./scripts/auth.sh
+```
+
+**📖 [Complete Authentication Guide →](./docs/Guides/02-authentication-flow.md)**
+
 ## 🚀 Key Features
 
 ### 🔐 **Enterprise-Grade Security**
@@ -109,91 +194,6 @@ The server provides **22 comprehensive tools** for Google Workspace integration 
 - **Rich Text Editing**: Full document formatting with styles, tables, and positioning
 - **Form Builder**: Complete form creation with 8+ question types and validation
 - **Apps Script**: Read-only access to Google Apps Script project source code
-
-## 🚀 Quick Start
-
-### 📋 Prerequisites
-
-You'll need a Google account and Node.js 18+ installed.
-
-**📖 [Complete Setup Guide →](./docs/Guides/README.md)**
-
-### ⚡ Fast Track Setup
-
-1. **Google Cloud Setup**
-   - Create project at [Google Cloud Console](https://console.cloud.google.com/projectcreate)
-   - Enable APIs: Drive, Sheets, Docs, Forms, Apps Script
-   - Create OAuth credentials and download as `gcp-oauth.keys.json`
-   
-   **📖 [Detailed Google Cloud Setup →](./docs/Guides/01-initial-setup.md)**
-
-2. **Installation & Authentication**
-   ```bash
-   # Clone and install
-   git clone <repository-url>
-   cd gdrive-mcp-server
-   npm install && npm run build
-   
-   # Set up credentials
-   mkdir -p credentials
-   cp /path/to/gcp-oauth.keys.json credentials/
-   
-   # Generate encryption key and authenticate
-   export GDRIVE_TOKEN_ENCRYPTION_KEY=$(openssl rand -base64 32)
-   node ./dist/index.js auth
-   ```
-   
-   **📖 [Complete Authentication Guide →](./docs/Guides/02-authentication-flow.md)**
-
-3. **Start Server**
-   ```bash
-   node ./dist/index.js
-   ```
-
-### 🐳 Docker Setup (Recommended)
-
-```bash
-# 1) Prepare bind mounts on the HOST
-mkdir -p credentials logs data
-cp /path/to/gcp-oauth.keys.json credentials/
-
-# 2) Ensure encryption key is set (32-byte base64)
-# Option A: put it in .env at the project root
-#   GDRIVE_TOKEN_ENCRYPTION_KEY=<your-32-byte-base64>
-# Option B: export in your shell before compose
-#   export GDRIVE_TOKEN_ENCRYPTION_KEY=$(openssl rand -base64 32)
-
-# 3) Start with Docker Compose (includes Redis)
-docker compose up -d --build   # or: docker-compose up -d --build
-
-# 4) Verify containers
-docker compose ps              # expect both services to be 'Up (healthy)'
-
-# 5) Check recent server logs (now include full error details)
-docker compose logs gdrive-mcp -n 100 --no-color | cat
-
-# 6) Health check (inside container)
-docker compose exec gdrive-mcp-server node dist/index.js health
-```
-
-**📖 [Complete Docker Guide →](./docs/Deployment/DOCKER.md)**
-
-## 🔐 Authentication
-
-The server features **automatic OAuth token refresh** with enterprise-grade encryption - authenticate once, works forever.
-
-### ⚡ Quick Authentication
-
-```bash
-# Local setup
-export GDRIVE_TOKEN_ENCRYPTION_KEY=$(openssl rand -base64 32)
-node ./dist/index.js auth
-
-# Docker setup
-./scripts/auth.sh
-```
-
-**📖 [Complete Authentication Guide →](./docs/Guides/02-authentication-flow.md)**
 
 ### 🔒 Security Features
 - **AES-256-GCM Encryption** - All tokens encrypted at rest
