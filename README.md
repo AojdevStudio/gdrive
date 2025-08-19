@@ -488,6 +488,6 @@ This project is licensed under the **MIT License**.
 
 **Built with ❤️ for the MCP ecosystem**
 
-[⭐ Star this repo](https://github.com/modelcontextprotocol/servers) | [🐛 Report Bug](https://github.com/modelcontextprotocol/servers/issues) | [💡 Request Feature](https://github.com/modelcontextprotocol/servers/issues)
+[⭐ Star this repo](https://github.com/AojdevStudio/gdrive) | [🐛 Report Bug](https://github.com/AojdevStudio/gdrive/issues) | [💡 Request Feature](https://github.com/AojdevStudio/gdrive/issues)
 
 </div>
