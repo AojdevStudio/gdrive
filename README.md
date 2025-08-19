@@ -92,6 +92,37 @@ node ./dist/index.js auth
 
 **📖 [Complete Authentication Guide →](./docs/Guides/02-authentication-flow.md)**
 
+## 🔗 Claude Desktop Integration
+
+### ⚡ Quick Integration
+
+**Local Setup:**
+```json
+{
+  "mcpServers": {
+    "gdrive": {
+      "command": "node",
+      "args": ["/absolute/path/to/gdrive-mcp/dist/index.js"],
+      "env": { "GDRIVE_TOKEN_ENCRYPTION_KEY": "your-key" }
+    }
+  }
+}
+```
+
+**Docker Setup (Recommended):**
+```json
+{
+  "mcpServers": {
+    "gdrive": {
+      "command": "docker",
+      "args": ["exec", "-i", "gdrive-mcp-server", "node", "dist/index.js"]
+    }
+  }
+}
+```
+
+**📖 [Complete Integration Guide →](./docs/Guides/05-claude-desktop-integration.md)**
+
 ## 🚀 Key Features
 
 ### 🔐 **Enterprise-Grade Security**
@@ -305,36 +336,6 @@ await callTool("batchFileOperations", {
 
 **📖 [Complete Examples & Code Samples →](./docs/Examples/README.md)**
 
-## 🔗 Claude Desktop Integration
-
-### ⚡ Quick Integration
-
-**Local Setup:**
-```json
-{
-  "mcpServers": {
-    "gdrive": {
-      "command": "node",
-      "args": ["/absolute/path/to/gdrive-mcp/dist/index.js"],
-      "env": { "GDRIVE_TOKEN_ENCRYPTION_KEY": "your-key" }
-    }
-  }
-}
-```
-
-**Docker Setup (Recommended):**
-```json
-{
-  "mcpServers": {
-    "gdrive": {
-      "command": "docker",
-      "args": ["exec", "-i", "gdrive-mcp-server", "node", "dist/index.js"]
-    }
-  }
-}
-```
-
-**📖 [Complete Integration Guide →](./docs/Guides/05-claude-desktop-integration.md)**
 
 ## 🛡️ Security Features
 
