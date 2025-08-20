@@ -7,6 +7,68 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.0] - 2025-08-19
+
+### Added
+
+- 🔐 **Key Rotation Infrastructure**: Complete authentication key rotation system with automated scripts
+  - New `scripts/rotate-keys.sh` script supporting OAuth, encryption, and token rotation
+  - Automated key rotation workflows for enhanced security
+  - Support for encryption key rotation without service downtime
+- 📚 **Enhanced Documentation**: Comprehensive README improvements with step-by-step guides
+  - Claude Desktop Integration section with detailed setup instructions
+  - Enhanced Quick Start guide with prerequisites and authentication flow
+  - Updated repository URLs and directory structure documentation
+  - Docker setup guide with troubleshooting and logging details
+- 📁 **Infrastructure Improvements**: Enhanced Docker and filesystem support
+  - Data directory placeholder with `.gitkeep` for proper Docker bind mounts
+  - Improved container deployment structure
+
+### Changed
+
+- 🔄 **Authentication System**: Major enhancements to token management robustness
+  - Enhanced TokenManager with path sanitization and directory management
+  - Deterministic key derivation for encrypted token decryption across environments
+  - Improved audit log directory creation with retry logic
+  - Comprehensive validation for environment variable paths
+- 📚 **Documentation Structure**: Repository organization and link updates
+  - Updated repository URLs from legacy references to current GitHub location
+  - Consistent directory naming (`gdrive` instead of `gdrive-mcp-server`)
+  - Reorganized documentation for better user experience
+
+### Fixed
+
+- 🐳 **Docker Configuration**: Resolved container startup and deployment issues
+  - Fixed JavaScript heap out of memory error with `NODE_OPTIONS="--max-old-space-size=4096"`
+  - Removed read-only flag from credentials volume mount for token updates
+  - Eliminated obsolete `GDRIVE_CREDENTIALS_PATH` environment variable
+  - Modernized Docker configuration for current authentication architecture
+- 🔧 **Logging System**: Enhanced error handling and protocol compliance
+  - Comprehensive Error object serialization in Winston logger
+  - Routed all Winston console output to stderr for MCP protocol integrity
+  - Improved structured logging capabilities with audit trail support
+- 🛡️ **Authentication Robustness**: Enhanced token management reliability
+  - Path sanitization for malformed environment variables
+  - Automatic directory creation with proper error handling
+  - Prevention of Docker container failures due to configuration issues
+
+### Security
+
+- 🔒 **Encryption Key Management**: Production-ready encryption key rotation
+  - Complete GDRIVE-3 encryption key rotation epic implementation
+  - Enhanced security through automated key rotation capabilities
+  - Improved token encryption and decryption across host and container environments
+- 🛡️ **Authentication Security**: Strengthened authentication system
+  - Robust path validation and sanitization
+  - Enhanced directory management with secure file operations
+  - Improved error handling for security-related operations
+
+### Removed
+
+- 🗑️ **Cleanup Operations**: Repository maintenance and obsolete file removal
+  - Removed `.github/README.md` (documentation consolidated to main README)
+  - Cleaned up deprecated AuthManager backup files
+  - Added `.cursor/` IDE files to `.gitignore` for cleaner repository
 
 ## [0.7.0] - 2025-08-05
 
@@ -136,11 +198,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Development environment configuration
 - Project documentation foundation
 
-[unreleased]: https://github.com/modelcontextprotocol/servers/compare/v0.7.0...HEAD
-[0.7.0]: https://github.com/modelcontextprotocol/servers/compare/v0.6.2...v0.7.0
-[0.6.2]: https://github.com/modelcontextprotocol/servers/compare/v0.1.0...v0.6.2
-[0.1.0]: https://github.com/modelcontextprotocol/servers/releases/tag/v0.1.0
+[unreleased]: https://github.com/AojdevStudio/gdrive/compare/v0.8.0...HEAD
+[0.8.0]: https://github.com/AojdevStudio/gdrive/compare/v0.7.0...v0.8.0
+[0.7.0]: https://github.com/AojdevStudio/gdrive/compare/v0.6.2...v0.7.0
+[0.6.2]: https://github.com/AojdevStudio/gdrive/compare/v0.1.0...v0.6.2
+[0.1.0]: https://github.com/AojdevStudio/gdrive/releases/tag/v0.1.0
 
 ## Links
-[Unreleased]: https://github.com/org/repo/compare/v0.7.0...HEAD
-[0.7.0]: https://github.com/org/repo/releases/tag/v0.7.0
+[Unreleased]: https://github.com/AojdevStudio/gdrive/compare/v0.8.0...HEAD
+[0.8.0]: https://github.com/AojdevStudio/gdrive/releases/tag/v0.8.0
+[0.7.0]: https://github.com/AojdevStudio/gdrive/releases/tag/v0.7.0
