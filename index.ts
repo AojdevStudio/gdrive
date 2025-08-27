@@ -145,11 +145,17 @@ const errorSerializer = winston.format((info) => {
           const valAsRecord = value as unknown as Record<string, unknown>;
           plain[key] = valAsRecord[key];
         }
-      } catch { }
+      } catch {
+        // Ignore property access errors
+      }
       // Common Node error fields
       const nodeErr = value as unknown as { code?: unknown; cause?: unknown };
-      if (nodeErr.code !== undefined) plain.code = nodeErr.code;
-      if (nodeErr.cause !== undefined) plain.cause = serialize(nodeErr.cause);
+      if (nodeErr.code !== undefined) {
+        plain.code = nodeErr.code;
+      }
+      if (nodeErr.cause !== undefined) {
+        plain.cause = serialize(nodeErr.cause);
+      }
       return plain;
     }
     if (Array.isArray(value)) {
@@ -177,8 +183,8 @@ const safeStringify = (value: unknown): string => {
     const seen = new WeakSet();
     return (_key: string, val: unknown) => {
       if (typeof val === 'object' && val !== null) {
-        if (seen.has(val as object)) return '[Circular]';
-        seen.add(val as object);
+        if (seen.has(val)) {return '[Circular]';}
+        seen.add(val);
       }
       if (val instanceof Error) {
         return {
@@ -596,7 +602,7 @@ server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
       }
     } catch (error) {
       logger.error('Failed to read file content', { error, fileId });
-      text = `Error reading file: ${error}`;
+      text = `Error reading file: ${String(error)}`;
     }
 
     const result = {

@@ -125,12 +125,7 @@ export class TokenManager {
 
   /** Ensure directory exists for a given path */
   private async ensureDirectoryExists(dirPath: string): Promise<void> {
-    try {
       await fs.mkdir(dirPath, { recursive: true });
-    } catch (error) {
-      // Re-throw for caller to handle/log
-      throw error;
-    }
   }
 
   private loadKeysFromEnvironment(): void {
