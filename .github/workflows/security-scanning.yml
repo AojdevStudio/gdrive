@@ -84,7 +84,7 @@ jobs:
           npm install --no-save eslint-plugin-security eslint-plugin-node-security
           
           # Create security-focused ESLint config
-          cat > .eslintrc.security.js << 'EOF'
+          cat > .eslintrc.security.mjs << 'EOF'
           module.exports = {
             extends: ['plugin:security/recommended-legacy'],
             plugins: ['security'],
@@ -106,14 +106,14 @@ jobs:
           EOF
           
           # Run security linting
-          npx eslint src/ --config .eslintrc.security.js --format json --output-file security-lint-results.json || true
+          npx eslint src/ --config .eslintrc.security.mjs --format json --output-file security-lint-results.mjson || true
           
           # Process results
-          if [ -f "security-lint-results.json" ]; then
-            echo "Security linting completed. Results saved to security-lint-results.json"
+          if [ -f "security-lint-results.mjson" ]; then
+            echo "Security linting completed. Results saved to security-lint-results.mjson"
             # Display summary
             node -e "
-              const results = JSON.parse(require('fs').readFileSync('security-lint-results.json', 'utf8'));
+              const results = JSON.parse(fs.readFileSync('security-lint-results.mjson', 'utf8'));
               const totalIssues = results.reduce((sum, file) => sum + file.errorCount + file.warningCount, 0);
               console.log('Security issues found:', totalIssues);
               if (totalIssues > 0) {
@@ -134,7 +134,7 @@ jobs:
         with:
           name: sast-results-${{ github.run_id }}
           path: |
-            security-lint-results.json
+            security-lint-results.mjson
           retention-days: 30
 
   # Job 2: Dependency vulnerability scanning
@@ -159,15 +159,15 @@ jobs:
       - name: Run npm audit
         run: |
           echo "Running npm audit..."
-          npm audit --audit-level=low --json > npm-audit-results.json || true
+          npm audit --audit-level=low --json > npm-audit-results.mjson || true
           
           # Process and display results
-          if [ -f "npm-audit-results.json" ]; then
+          if [ -f "npm-audit-results.mjson" ]; then
             echo "## NPM Audit Results" > audit-summary.md
             echo "" >> audit-summary.md
             
             node -e "
-              const audit = JSON.parse(require('fs').readFileSync('npm-audit-results.json', 'utf8'));
+              const audit = JSON.parse(fs.readFileSync('npm-audit-results.mjson', 'utf8'));
               if (audit.vulnerabilities && Object.keys(audit.vulnerabilities).length > 0) {
                 console.log('Vulnerabilities found:');
                 const vulns = audit.vulnerabilities;
@@ -204,11 +204,11 @@ jobs:
           # Test for vulnerabilities (requires auth token for full functionality)
           if [ -n "${{ secrets.SNYK_TOKEN }}" ]; then
             snyk auth ${{ secrets.SNYK_TOKEN }}
-            snyk test --json > snyk-results.json || true
+            snyk test --json > snyk-results.mjson || true
             snyk monitor || true
           else
             echo "Snyk token not configured, skipping Snyk scan"
-            echo '{"vulnerabilities": [], "summary": "Snyk scan skipped - no token"}' > snyk-results.json
+            echo '{"vulnerabilities": [], "summary": "Snyk scan skipped - no token"}' > snyk-results.mjson
           fi
 
       - name: Check for known security advisories
@@ -216,9 +216,9 @@ jobs:
           echo "Checking GitHub Security Advisories..."
           
           # Create a script to check against known advisories
-          cat > check-advisories.js << 'EOF'
-          const fs = require('fs');
-          const https = require('https');
+          cat > check-advisories.mjs << 'EOF'
+          import fs from 'fs';
+          import https from 'https';
           
           // Read package.json to get dependencies
           const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
@@ -236,21 +236,21 @@ jobs:
             summary: 'Manual review recommended for security advisories'
           };
           
-          fs.writeFileSync('security-advisories.json', JSON.stringify(report, null, 2));
+          fs.writeFileSync('security-advisories.mjson', JSON.stringify(report, null, 2));
           console.log('Advisory check completed. Manual review recommended.');
           EOF
           
-          node check-advisories.js
+          node node check-advisories.mjs
 
       - name: Upload dependency scan results
         uses: actions/upload-artifact@v4
         with:
           name: dependency-scan-results-${{ github.run_id }}
           path: |
-            npm-audit-results.json
+            npm-audit-results.mjson
             audit-summary.md
-            snyk-results.json
-            security-advisories.json
+            snyk-results.mjson
+            security-advisories.mjson
           retention-days: 30
 
   # Job 3: Secret scanning
@@ -303,7 +303,7 @@ jobs:
           echo "" >> secret-scan-results.txt
           
           # Search for patterns in source files
-          if grep -r -f secret-patterns.txt src/ --include="*.ts" --include="*.js" --include="*.json" --exclude-dir=node_modules || true; then
+          if grep -r -f secret-patterns.txt src/ --include="*.ts" --include="*.js" --include="*.mjson" --exclude-dir=node_modules || true; then
             echo "⚠️ Potential secrets found in source files" >> secret-scan-results.txt
           else
             echo "✅ No obvious secrets found in source files" >> secret-scan-results.txt
@@ -317,7 +317,7 @@ jobs:
             echo "⚠️ .env file present - ensure it's in .gitignore" >> secret-scan-results.txt
           fi
           
-          if [ -f "credentials.json" ] || [ -f "service-account.json" ]; then
+          if [ -f "credentials.mjson" ] || [ -f "service-account.mjson" ]; then
             echo "⚠️ Credential files present - ensure they're in .gitignore" >> secret-scan-results.txt
           fi
           
@@ -378,7 +378,7 @@ jobs:
           scan-type: 'fs'
           scan-ref: '.'
           format: 'json'
-          output: 'trivy-fs-results.json'
+          output: 'trivy-fs-results.mjson'
 
       - name: Analyze Docker security best practices
         run: |
@@ -449,7 +449,7 @@ jobs:
           name: docker-security-scan-results-${{ github.run_id }}
           path: |
             trivy-results.sarif
-            trivy-fs-results.json
+            trivy-fs-results.mjson
             docker-security-report.md
           retention-days: 30
 
@@ -478,14 +478,14 @@ jobs:
           npm install -g license-checker license-checker-rseidelsohn
           
           # Generate detailed license report
-          license-checker --json --out license-report.json
+          license-checker --json --out license-report.mjson
           license-checker --csv --out license-report.csv
           
           # Check for problematic licenses
-          cat > check-licenses.js << 'EOF'
-          const fs = require('fs');
+          cat > check-licenses.mjs << 'EOF'
+          import fs from 'fs';
           
-          const licenses = JSON.parse(fs.readFileSync('license-report.json', 'utf8'));
+          const licenses = JSON.parse(fs.readFileSync('license-report.mjson', 'utf8'));
           
           // Define license categories
           const restrictive = ['GPL-2.0', 'GPL-3.0', 'AGPL', 'LGPL'];
@@ -558,7 +558,7 @@ jobs:
             console.log('✅ No license issues found');
           }
           
-          fs.writeFileSync('license-compliance-report.json', JSON.stringify(report, null, 2));
+          fs.writeFileSync('license-compliance-report.mjson', JSON.stringify(report, null, 2));
           
           // Exit with error if critical issues found
           const criticalIssues = report.issues.filter(i => i.severity === 'critical');
@@ -569,16 +569,16 @@ jobs:
           }
           EOF
           
-          node check-licenses.js > license-compliance-summary.md
+          node node check-licenses.mjs > license-compliance-summary.md
 
       - name: Upload license scan results
         uses: actions/upload-artifact@v4
         with:
           name: license-scan-results-${{ github.run_id }}
           path: |
-            license-report.json
+            license-report.mjson
             license-report.csv
-            license-compliance-report.json
+            license-compliance-report.mjson
             license-compliance-summary.md
           retention-days: 30
 
@@ -648,7 +648,7 @@ jobs:
         uses: actions/github-script@v7
         with:
           script: |
-            const fs = require('fs');
+            import fs from 'fs';
             const summary = fs.readFileSync('security-summary.md', 'utf8');
             
             // Find existing security comment

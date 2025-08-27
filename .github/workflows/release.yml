@@ -123,8 +123,8 @@ jobs:
       - name: Validate package integrity
         run: |
           # Check that all required files are present
-          if [ ! -f "dist/index.js" ]; then
-            echo "❌ Build artifact dist/index.js not found"
+          if [ ! -f "dist/index.mjs" ]; then
+            echo "❌ Build artifact dist/index.mjs not found"
             exit 1
           fi
           
@@ -337,7 +337,7 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
           build-args: |
-            BUILD_DATE=${{ fromJSON(steps.meta.outputs.json).labels['org.opencontainers.image.created'] }}
+            BUILD_DATE=${{ fromJSON(steps.meta.outputs.mjson).labels['org.opencontainers.image.created'] }}
             VERSION=${{ needs.validate-release.outputs.version }}
             VCS_REF=${{ github.sha }}
 

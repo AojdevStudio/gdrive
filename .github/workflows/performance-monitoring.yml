@@ -35,6 +35,8 @@ permissions:
   contents: read
   actions: write
   checks: write
+  pull-requests: write
+  issues: write
 
 env:
   NODE_VERSION: '20'
@@ -93,9 +95,9 @@ jobs:
           echo "Running performance baseline tests..."
           
           # Create performance test script
-          cat > performance-test.js << 'EOF'
-          const { performance } = require('perf_hooks');
-          const fs = require('fs');
+          cat > performance-test.mjs << 'EOF'
+          import { performance } from 'perf_hooks';
+          import fs from 'fs';
           
           // Mock Google Drive operations for baseline testing
           const mockOperations = {
@@ -182,7 +184,7 @@ jobs:
           EOF
           
           # Run the baseline test
-          node performance-test.js
+          node performance-test.mjs
           
           # Set output
           echo "results<<EOF" >> $GITHUB_OUTPUT
@@ -194,8 +196,9 @@ jobs:
           echo "Analyzing memory usage..."
           
           # Create memory test
-          cat > memory-test.js << 'EOF'
-          const { performance } = require('perf_hooks');
+          cat > memory-test.mjs << 'EOF'
+          import { performance } from 'perf_hooks';
+          import fs from 'fs';
           
           function measureMemory(label) {
             const usage = process.memoryUsage();
@@ -236,10 +239,10 @@ jobs:
           };
           
           console.log('\nMemory Report:', JSON.stringify(report, null, 2));
-          require('fs').writeFileSync('memory-report.json', JSON.stringify(report, null, 2));
+          fs.writeFileSync('memory-report.json', JSON.stringify(report, null, 2));
           EOF
           
-          node --expose-gc memory-test.js || node memory-test.js
+          node --expose-gc memory-test.mjs || node memory-test.mjs
           
       - name: Upload performance artifacts
         uses: actions/upload-artifact@v4
@@ -289,9 +292,9 @@ jobs:
       - name: Setup mock server for load testing
         run: |
           # Create a simple HTTP server that mimics MCP behavior
-          cat > mock-server.js << 'EOF'
-          const http = require('http');
-          const { performance } = require('perf_hooks');
+          cat > mock-server.mjs << 'EOF'
+          import http from 'http';
+          import { performance } from 'perf_hooks';
           
           let requestCount = 0;
           const startTime = performance.now();
@@ -326,7 +329,7 @@ jobs:
           EOF
           
           # Start mock server in background
-          node mock-server.js &
+          node mock-server.mjs &
           MOCK_PID=$!
           echo "MOCK_PID=$MOCK_PID" >> $GITHUB_ENV
           
@@ -356,8 +359,8 @@ jobs:
         run: |
           echo "Analyzing load test results..."
           
-          cat > analyze-load.js << 'EOF'
-          const fs = require('fs');
+          cat > analyze-load.mjs << 'EOF'
+          import fs from 'fs';
           
           function parseAutocannon(filename) {
             const content = fs.readFileSync(filename, 'utf8');
@@ -408,7 +411,7 @@ jobs:
           fs.writeFileSync('load-test-analysis.json', JSON.stringify(results, null, 2));
           EOF
           
-          node analyze-load.js
+          node analyze-load.mjs
           
       - name: Stop mock server
         if: always()
@@ -472,8 +475,8 @@ jobs:
           
       - name: Compare performance
         run: |
-          cat > compare-performance.js << 'EOF'
-          const fs = require('fs');
+          cat > compare-performance.mjs << 'EOF'
+          import fs from 'fs';
           
           const baseline = JSON.parse(fs.readFileSync('./baseline-results/baseline-results.json', 'utf8'));
           const current = JSON.parse(fs.readFileSync('./current-results/baseline-results.json', 'utf8'));
@@ -547,15 +550,15 @@ jobs:
           }
           EOF
           
-          node compare-performance.js > performance-report.md
+          node compare-performance.mjs > performance-report.md
           
       - name: Comment PR with performance report
         if: github.event_name == 'pull_request'
         uses: actions/github-script@v7
         with:
           script: |
-            const fs = require('fs');
-            const report = fs.readFileSync('performance-report.md', 'utf8');
+            const fs = await import('fs');
+            const report = fs.default.readFileSync('performance-report.md', 'utf8');
             
             // Find existing performance comment
             const comments = await github.rest.issues.listComments({

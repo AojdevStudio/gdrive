@@ -52,17 +52,17 @@ jobs:
           
           # Analyze complexity (if tool exists)
           if command -v ts-complexity &> /dev/null; then
-            ts-complexity src/ --format json > complexity-report.json
+            ts-complexity src/ --format json > complexity-report.mjson
           else
             echo "Complexity analysis tool not available, creating placeholder report"
-            echo '{"summary": "Manual review needed"}' > complexity-report.json
+            echo '{"summary": "Manual review needed"}' > complexity-report.mjson
           fi
 
       - name: Upload complexity report
         uses: actions/upload-artifact@v4
         with:
           name: complexity-report
-          path: complexity-report.json
+          path: complexity-report.mjson
           retention-days: 30
 
   # Job 2: Dependency Analysis
@@ -89,19 +89,19 @@ jobs:
           npm install -g bundlesize webpack-bundle-analyzer
           
           # Create a simple webpack config for analysis
-          cat > webpack.config.js << 'EOF'
-          const path = require('path');
+          cat > webpack.config.mjs << 'EOF'
+          import path from 'path';
           
           module.exports = {
-            entry: './dist/index.js',
+            entry: './dist/index.mjs',
             target: 'node',
             mode: 'production',
             output: {
               path: path.resolve(__dirname, 'bundle-analysis'),
-              filename: 'bundle.js'
+              filename: 'bundle.mjs'
             },
             resolve: {
-              extensions: ['.js', '.json']
+              extensions: ['.mjs', '.mjson']
             }
           };
           EOF
@@ -111,7 +111,7 @@ jobs:
           
           # Analyze if webpack is available
           if npm list webpack &> /dev/null; then
-            npx webpack --config webpack.config.js --json > bundle-stats.json
+            npx webpack --config webpack.config.mjs --json > bundle-stats.mjson
             echo "Bundle analysis completed"
           else
             echo "Bundle analysis skipped - webpack not available"
@@ -131,21 +131,21 @@ jobs:
       - name: Generate dependency tree
         run: |
           # Generate dependency tree
-          npm list --all --json > dependency-tree.json
+          npm list --all --json > dependency-tree.mjson
           
           # Generate license report
           npm install -g license-checker
-          license-checker --json > license-report.json
+          license-checker --json > license-report.mjson
 
       - name: Upload dependency analysis
         uses: actions/upload-artifact@v4
         with:
           name: dependency-analysis
           path: |
-            bundle-stats.json
+            bundle-stats.mjson
             circular-deps.txt
-            dependency-tree.json
-            license-report.json
+            dependency-tree.mjson
+            license-report.mjson
           retention-days: 30
 
   # Job 3: Code Duplication Detection
@@ -172,10 +172,10 @@ jobs:
           npm install -g jscpd
           
           # Run duplication analysis on TypeScript files
-          jscpd src/ --format "json" --output "./duplication-report.json" --min-tokens 50 --reporters json,html || echo "Duplication analysis completed"
+          jscpd src/ --format "json" --output "./duplication-report.mjson" --min-tokens 50 --reporters json,html || echo "Duplication analysis completed"
           
           # Create summary
-          if [ -f "duplication-report.json" ]; then
+          if [ -f "duplication-report.mjson" ]; then
             echo "## Code Duplication Report" > duplication-summary.md
             echo "Duplication analysis completed. Check artifacts for detailed report." >> duplication-summary.md
           fi
@@ -185,9 +185,9 @@ jobs:
         with:
           name: duplication-report
           path: |
-            duplication-report.json
+            duplication-report.mjson
             duplication-summary.md
-            .jscpd/
+            .mjscpd/
           retention-days: 30
 
   # Job 4: Type Coverage Analysis
@@ -227,7 +227,7 @@ jobs:
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
-            const fs = require('fs');
+            import fs from 'fs';
             const coverage = process.env.TYPE_COVERAGE;
             
             const comment = `## 📊 Type Coverage Report
@@ -275,16 +275,16 @@ jobs:
       - name: Check bundle size
         run: |
           # Create performance budget configuration
-          cat > performance-budget.json << 'EOF'
+          cat > performance-budget.mjson << 'EOF'
           {
             "budgets": [
               {
-                "path": "dist/**/*.js",
+                "path": "dist/**/*.mjs",
                 "maxSize": "500kb",
                 "type": "bundle"
               },
               {
-                "path": "dist/index.js",
+                "path": "dist/index.mjs",
                 "maxSize": "200kb",
                 "type": "initial"
               }
@@ -296,7 +296,7 @@ jobs:
           echo "## Performance Budget Check" > budget-report.md
           echo "" >> budget-report.md
           
-          for file in dist/*.js; do
+          for file in dist/*.mjs; do
             if [ -f "$file" ]; then
               size=$(stat -c%s "$file" 2>/dev/null || stat -f%z "$file" 2>/dev/null || echo "0")
               size_kb=$((size / 1024))

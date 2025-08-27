@@ -54,17 +54,17 @@ jobs:
         id: audit
         run: |
           # Run npm audit and capture output
-          if npm audit --audit-level=moderate --json > audit-report.json 2>&1; then
+          if npm audit --audit-level=moderate --json > audit-report.mjson 2>&1; then
             echo "vulnerabilities-found=false" >> $GITHUB_OUTPUT
           else
             echo "vulnerabilities-found=true" >> $GITHUB_OUTPUT
           fi
           
           # Create human-readable summary
-          if [ -f "audit-report.json" ]; then
+          if [ -f "audit-report.mjson" ]; then
             echo "audit-report<<EOF" >> $GITHUB_OUTPUT
             node -e "
-              const audit = JSON.parse(require('fs').readFileSync('audit-report.json', 'utf8'));
+              const audit = JSON.parse(fs.readFileSync('audit-report.mjson', 'utf8'));
               if (audit.vulnerabilities) {
                 console.log('## Security Vulnerabilities Found');
                 Object.entries(audit.vulnerabilities).forEach(([pkg, vuln]) => {
@@ -81,7 +81,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: security-audit-report
-          path: audit-report.json
+          path: audit-report.mjson
           retention-days: 30
 
   # Job 2: Check for dependency updates
@@ -129,8 +129,8 @@ jobs:
           esac
           
           # Check what would be updated
-          if ncu $NCU_ARGS --jsonUpgraded > updates.json; then
-            if [ -s updates.json ] && [ "$(cat updates.json)" != "{}" ]; then
+          if ncu $NCU_ARGS --jsonUpgraded > updates.mjson; then
+            if [ -s updates.mjson ] && [ "$(cat updates.mjson)" != "{}" ]; then
               echo "updates-available=true" >> $GITHUB_OUTPUT
               
               # Create summary
@@ -138,7 +138,7 @@ jobs:
               echo "## Available Updates ($UPDATE_TYPE)" >> $GITHUB_OUTPUT
               echo "" >> $GITHUB_OUTPUT
               node -e "
-                const updates = JSON.parse(require('fs').readFileSync('updates.json', 'utf8'));
+                const updates = JSON.parse(fs.readFileSync('updates.mjson', 'utf8'));
                 Object.entries(updates).forEach(([pkg, version]) => {
                   console.log('- **' + pkg + '**: ' + version);
                 });
@@ -157,7 +157,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: updates-report
-          path: updates.json
+          path: updates.mjson
           retention-days: 7
 
   # Job 3: Create update pull request
@@ -215,7 +215,7 @@ jobs:
           
       - name: Install updated dependencies
         run: |
-          rm -f package-lock.json
+          rm -f package-lock.mjson
           npm install
           
       - name: Run tests
@@ -265,7 +265,7 @@ jobs:
           
           ### Changes Made
           - Updated dependencies based on the **${{ github.event.inputs.update-type || 'patch' }}** update strategy
-          - Regenerated package-lock.json
+          - Regenerated package-lock.mjson
           - Verified that tests still pass
           
           ### Testing Checklist
@@ -332,12 +332,12 @@ jobs:
           # NPM outdated
           echo "## Outdated Packages" >> outdated-report.md
           echo "" >> outdated-report.md
-          if npm outdated --json > outdated.json 2>/dev/null; then
-            if [ -s outdated.json ] && [ "$(cat outdated.json)" != "{}" ]; then
+          if npm outdated --json > outdated.mjson 2>/dev/null; then
+            if [ -s outdated.mjson ] && [ "$(cat outdated.mjson)" != "{}" ]; then
               echo "| Package | Current | Wanted | Latest |" >> outdated-report.md
               echo "|---------|---------|--------|--------|" >> outdated-report.md
               node -e "
-                const outdated = JSON.parse(require('fs').readFileSync('outdated.json', 'utf8'));
+                const outdated = JSON.parse(fs.readFileSync('outdated.mjson', 'utf8'));
                 Object.entries(outdated).forEach(([pkg, info]) => {
                   console.log('| ' + pkg + ' | ' + info.current + ' | ' + info.wanted + ' | ' + info.latest + ' |');
                 });
@@ -352,11 +352,11 @@ jobs:
           echo "" >> outdated-report.md
           echo "## Security Audit" >> outdated-report.md
           echo "" >> outdated-report.md
-          if npm audit --json > audit.json 2>&1; then
+          if npm audit --json > audit.mjson 2>&1; then
             echo "No security vulnerabilities found! ✅" >> outdated-report.md
           else
             node -e "
-              const audit = JSON.parse(require('fs').readFileSync('audit.json', 'utf8'));
+              const audit = JSON.parse(fs.readFileSync('audit.mjson', 'utf8'));
               if (audit.vulnerabilities && Object.keys(audit.vulnerabilities).length > 0) {
                 console.log('**⚠️ Security vulnerabilities found:**');
                 console.log('');

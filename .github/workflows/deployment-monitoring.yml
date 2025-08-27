@@ -36,6 +36,8 @@ permissions:
   actions: read
   checks: write
   deployments: write
+  issues: write
+  pull-requests: write
 
 env:
   NODE_VERSION: '20'
@@ -104,12 +106,13 @@ jobs:
           echo "Running health checks for ${{ matrix.environment }}..."
           
           # Create health check script
-          cat > health-checker.js << 'EOF'
-          const https = require('https');
-          const http = require('http');
-          const net = require('net');
+          cat > health-checker.mjs << 'EOF'
+          import https from 'https';
+          import http from 'http';
+          import net from 'net';
+          import fs from 'fs';
           
-          const config = JSON.parse(require('fs').readFileSync('health-check-config.json', 'utf8'));
+          const config = JSON.parse(fs.readFileSync('health-check-config.json', 'utf8'));
           const env = process.argv[2] || 'staging';
           const envConfig = config.environments[env];
           
@@ -260,7 +263,7 @@ jobs:
             
             console.log(`Overall status: ${results.overall}`);
             
-            require('fs').writeFileSync(`health-results-${env}.json`, JSON.stringify(results, null, 2));
+            fs.writeFileSync(`health-results-${env}.mjson`, JSON.stringify(results, null, 2));
             
             if (results.overall === 'unhealthy') {
               console.log('Health checks failed!');
@@ -272,7 +275,7 @@ jobs:
           EOF
           
           # Run health checks (will fail gracefully in CI environment)
-          node health-checker.js ${{ matrix.environment }} || echo "Health check simulated (actual deployment would perform real checks)"
+          node health-checker.mjs ${{ matrix.environment }} || echo "Health check simulated (actual deployment would perform real checks)"
           
           # Set outputs
           if [ -f "health-results-${{ matrix.environment }}.json" ]; then
@@ -371,8 +374,8 @@ jobs:
           echo "Running performance monitoring tests..."
           
           # Create mock performance test (since we can't actually connect to deployment in CI)
-          cat > mock-performance-test.js << 'EOF'
-          const fs = require('fs');
+          cat > mock-performance-test.mjs << 'EOF'
+          import fs from 'fs';
           
           // Simulate performance test results
           const results = {
@@ -466,14 +469,14 @@ jobs:
           EOF
           
           # Run mock performance test
-          node mock-performance-test.js
+          node mock-performance-test.mjs
           
           echo "status=completed" >> $GITHUB_OUTPUT
 
       - name: Generate performance report
         run: |
-          cat > generate-perf-report.js << 'EOF'
-          const fs = require('fs');
+          cat > generate-perf-report.mjs << 'EOF'
+          import fs from 'fs';
           const results = JSON.parse(fs.readFileSync('performance-results.json', 'utf8'));
           
           let report = `## Performance Monitoring Report\n\n`;
@@ -511,7 +514,7 @@ jobs:
           console.log('Performance report generated');
           EOF
           
-          node generate-perf-report.js
+          node generate-perf-report.mjs
 
       - name: Upload performance results
         uses: actions/upload-artifact@v4
@@ -537,8 +540,8 @@ jobs:
           echo "Analyzing deployment logs..."
           
           # Create mock log analysis (in real deployment, would fetch actual logs)
-          cat > log-analyzer.js << 'EOF'
-          const fs = require('fs');
+          cat > log-analyzer.mjs << 'EOF'
+          import fs from 'fs';
           
           // Mock log entries for analysis
           const mockLogs = [
@@ -628,12 +631,12 @@ jobs:
           fs.writeFileSync('log-analysis-results.json', JSON.stringify(analysis, null, 2));
           EOF
           
-          node log-analyzer.js
+          node log-analyzer.mjs
 
       - name: Generate log analysis report
         run: |
-          cat > generate-log-report.js << 'EOF'
-          const fs = require('fs');
+          cat > generate-log-report.mjs << 'EOF'
+          import fs from 'fs';
           const analysis = JSON.parse(fs.readFileSync('log-analysis-results.json', 'utf8'));
           
           let report = `## Log Analysis Report\n\n`;
@@ -675,7 +678,7 @@ jobs:
           console.log('Log analysis report generated');
           EOF
           
-          node generate-log-report.js
+          node generate-log-report.mjs
 
       - name: Upload log analysis results
         uses: actions/upload-artifact@v4
@@ -701,8 +704,8 @@ jobs:
           echo "Collecting system and application metrics..."
           
           # Create mock metrics collection
-          cat > metrics-collector.js << 'EOF'
-          const fs = require('fs');
+          cat > metrics-collector.mjs << 'EOF'
+          import fs from 'fs';
           
           // Mock metrics data (in real deployment, would collect from actual monitoring systems)
           const metrics = {
@@ -828,12 +831,12 @@ jobs:
           fs.writeFileSync('metrics-results.json', JSON.stringify(metrics, null, 2));
           EOF
           
-          node metrics-collector.js
+          node metrics-collector.mjs
 
       - name: Generate metrics dashboard
         run: |
-          cat > generate-metrics-dashboard.js << 'EOF'
-          const fs = require('fs');
+          cat > generate-metrics-dashboard.mjs << 'EOF'
+          import fs from 'fs';
           const metrics = JSON.parse(fs.readFileSync('metrics-results.json', 'utf8'));
           
           let dashboard = `## System Metrics Dashboard\n\n`;
@@ -889,7 +892,7 @@ jobs:
           console.log('Metrics dashboard generated');
           EOF
           
-          node generate-metrics-dashboard.js
+          node generate-metrics-dashboard.mjs
 
       - name: Upload metrics results
         uses: actions/upload-artifact@v4

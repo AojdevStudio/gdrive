@@ -79,7 +79,7 @@ jobs:
       - name: Determine version and environment
         id: version
         run: |
-          VERSION=$(node -p "require('./package.json').version")
+          VERSION=$(jq -r '.version' package.json)
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "Current version: $VERSION"
           
@@ -151,7 +151,7 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
           build-args: |
-            BUILD_DATE=${{ fromJSON(steps.meta.outputs.json).labels['org.opencontainers.image.created'] }}
+            BUILD_DATE=${{ fromJSON(steps.meta.outputs.mjson).labels['org.opencontainers.image.created'] }}
             VERSION=${{ needs.pre-deploy.outputs.version }}
             VCS_REF=${{ github.sha }}
             
@@ -239,7 +239,7 @@ jobs:
                 - redis
               restart: unless-stopped
               healthcheck:
-                test: ["CMD", "node", "dist/index.js", "health"]
+                test: ["CMD", "node", "dist/index.mjs", "health"]
                 interval: 30s
                 timeout: 10s
                 retries: 3
@@ -335,7 +335,7 @@ jobs:
                     cpus: '0.25'
                     memory: 256M
               healthcheck:
-                test: ["CMD", "node", "dist/index.js", "health"]
+                test: ["CMD", "node", "dist/index.mjs", "health"]
                 interval: 60s
                 timeout: 10s
                 retries: 3
