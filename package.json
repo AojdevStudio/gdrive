@@ -23,7 +23,10 @@
     "test:integration": "jest --testMatch='**/__tests__/integration/**/*.test.ts'",
     "test:e2e": "jest --testMatch='**/tests/e2e/**/*.test.ts'",
     "lint": "eslint .",
-    "type-check": "tsc --noEmit"
+    "type-check": "tsc --noEmit",
+    "bmad:refresh": "bmad-method install -f -i codex",
+    "bmad:list": "bmad-method list:agents",
+    "bmad:validate": "bmad-method validate"
   },
   "dependencies": {
     "@google-cloud/local-auth": "^3.0.1",
