@@ -422,7 +422,7 @@ export class TokenManager {
   private async decrypt(versionedData: VersionedTokenStorage): Promise<string> {
     // Resolve the appropriate base key from environment by version
     const baseKey = this.getBaseKeyForVersion(versionedData.version);
-    if (!baseKey) {
+    if (!baseKey || baseKey.length === 0) {
       throw new Error(`Key version ${versionedData.version} not found`);
     }
 
