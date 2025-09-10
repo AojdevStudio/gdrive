@@ -42,5 +42,5 @@ dump.rdb
 claude-config-*.json
 
 # BMad framework installations - external tools
-.bmad-core/
 .claude/commands/BMad/
+# BMAD (local only)
