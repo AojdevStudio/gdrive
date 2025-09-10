@@ -81,15 +81,15 @@ interface FileMetadata {
   [key: string]: unknown;
 }
 
-// Question item interface for forms
+// Question item interface for forms - matching Google Forms API structure for createItem
 interface QuestionItem {
-  required: boolean;
   question: {
+    required: boolean;  // Required field is inside question structure for createItem API
     textQuestion?: {
       paragraph: boolean;
     };
     choiceQuestion?: {
-      type: string;
+      type: "RADIO" | "CHECKBOX" | "DROP_DOWN";  // More specific typing for better type safety
       options: Array<{ value: string }>;
     };
     scaleQuestion?: {
@@ -1744,9 +1744,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const scaleMinLabel = args.scaleMinLabel as string | undefined;
         const scaleMaxLabel = args.scaleMaxLabel as string | undefined;
 
+        // Build the question item structure for createItem API
+        // The Google Forms API expects the required field to be part of the question structure
         const questionItem: QuestionItem = {
-          required,
-          question: {},
+          question: {
+            required,  // Move required field inside question structure
+          },
         };
 
         // Build the question based on type
