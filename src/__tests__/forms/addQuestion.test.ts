@@ -16,7 +16,7 @@ describe('addQuestion JSON Structure Validation', () => {
       expect(questionItem.question.required).toBe(true);
       expect(questionItem.question.textQuestion).toBeDefined();
       expect(questionItem.question.textQuestion.paragraph).toBe(false);
-      
+
       // Ensure required is NOT at root level (this was the bug)
       expect((questionItem as any).required).toBeUndefined();
     });
@@ -172,7 +172,20 @@ describe('addQuestion JSON Structure Validation', () => {
         },
       };
 
-      const batchUpdateRequest = {
+      // Define the proper type for the batch update request
+      type CreateItemRequest = {
+        createItem: {
+          item: { title: string; questionItem: any };
+          location: { index: number };
+        };
+      };
+
+      const batchUpdateRequest: {
+        formId: string;
+        requestBody: {
+          requests: CreateItemRequest[];
+        };
+      } = {
         formId,
         requestBody: {
           requests: [{
@@ -192,15 +205,20 @@ describe('addQuestion JSON Structure Validation', () => {
       // Validate the complete request structure
       expect(batchUpdateRequest.formId).toBe(formId);
       expect(batchUpdateRequest.requestBody.requests).toHaveLength(1);
+
+      const { requests } = batchUpdateRequest.requestBody;
+      const createItemRequest = requests[0];
       
-      const createItemRequest = batchUpdateRequest.requestBody.requests[0]!.createItem;
-      expect(createItemRequest.item.title).toBe(title);
-      expect(createItemRequest.item.questionItem).toEqual(questionItem);
-      expect(createItemRequest.location.index).toBe(0);
-      
-      // Ensure required field is properly nested
-      expect(createItemRequest.item.questionItem.question.required).toBe(true);
-      expect((createItemRequest.item.questionItem as any).required).toBeUndefined();
+      // Add null check to satisfy TypeScript
+      if (createItemRequest) {
+        expect(createItemRequest.createItem.item.title).toBe(title);
+        expect(createItemRequest.createItem.item.questionItem).toEqual(questionItem);
+        expect(createItemRequest.createItem.location.index).toBe(0);
+
+        // Ensure required field is properly nested
+        expect(createItemRequest.createItem.item.questionItem.question.required).toBe(true);
+        expect((createItemRequest.createItem.item.questionItem as any).required).toBeUndefined();
+      }
     });
 
     it('should handle optional scale labels correctly', () => {
@@ -228,7 +246,7 @@ describe('addQuestion JSON Structure Validation', () => {
         if (!options || options.length === 0) {
           throw new Error(`Options required for ${type.toLowerCase()} questions`);
         }
-        
+
         return {
           question: {
             required: true,
@@ -254,7 +272,7 @@ describe('addQuestion JSON Structure Validation', () => {
     it('should handle unsupported question types', () => {
       const createUnsupportedQuestion = (type: string) => {
         const supportedTypes = ['TEXT', 'PARAGRAPH_TEXT', 'MULTIPLE_CHOICE', 'CHECKBOX', 'DROPDOWN', 'LINEAR_SCALE', 'DATE', 'TIME'];
-        
+
         if (!supportedTypes.includes(type)) {
           throw new Error(`Unsupported question type: ${type}`);
         }
@@ -262,7 +280,7 @@ describe('addQuestion JSON Structure Validation', () => {
 
       expect(() => createUnsupportedQuestion('INVALID_TYPE')).toThrow('Unsupported question type: INVALID_TYPE');
       expect(() => createUnsupportedQuestion('CUSTOM_TYPE')).toThrow('Unsupported question type: CUSTOM_TYPE');
-      
+
       // Should work with supported types
       expect(() => createUnsupportedQuestion('TEXT')).not.toThrow();
       expect(() => createUnsupportedQuestion('MULTIPLE_CHOICE')).not.toThrow();
