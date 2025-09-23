@@ -28,6 +28,9 @@
     "node_modules",
     "dist",
     "jest.config.js",
-    "jest.setup.js"
+    "jest.setup.js",
+    "**/__tests__/**/*",
+    "**/*.test.ts",
+    "**/*.spec.ts"
   ]
 }

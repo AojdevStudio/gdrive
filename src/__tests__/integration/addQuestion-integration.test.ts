@@ -47,7 +47,8 @@ describe('addQuestion Integration Tests', () => {
         required: true,
       };
 
-      const { addQuestion } = await import('../../index.ts');
+      const index = await import('../../index');
+      const addQuestion = index.addQuestion;
       await addQuestion(args);
 
       expect(mockFormsAPI.forms.batchUpdate).toHaveBeenCalledTimes(1);
@@ -71,7 +72,8 @@ describe('addQuestion Integration Tests', () => {
         options: ['Red', 'Blue', 'Green', 'Yellow'],
       };
 
-      const { addQuestion } = await import('../../index.ts');
+      const index = await import('../../index');
+      const addQuestion = index.addQuestion;
       await addQuestion(args);
 
       expect(mockFormsAPI.forms.batchUpdate).toHaveBeenCalledTimes(1);
@@ -105,7 +107,8 @@ describe('addQuestion Integration Tests', () => {
         scaleMaxLabel: 'Excellent',
       };
 
-      const { addQuestion } = await import('../../index.ts');
+      const index = await import('../../index');
+      const addQuestion = index.addQuestion;
       await addQuestion(args);
 
       expect(mockFormsAPI.forms.batchUpdate).toHaveBeenCalledTimes(1);
@@ -132,7 +135,8 @@ describe('addQuestion Integration Tests', () => {
         required: true,
       };
 
-      const { addQuestion } = await import('../../index.ts');
+      const index = await import('../../index');
+      const addQuestion = index.addQuestion;
       await addQuestion(args);
 
       expect(mockFormsAPI.forms.batchUpdate).toHaveBeenCalledTimes(1);
@@ -157,7 +161,8 @@ describe('addQuestion Integration Tests', () => {
         required: false,
       };
 
-      const { addQuestion } = await import('../../index.ts');
+      const index = await import('../../index');
+      const addQuestion = index.addQuestion;
       await addQuestion(args);
 
       expect(mockFormsAPI.forms.batchUpdate).toHaveBeenCalledTimes(1);
@@ -182,7 +187,8 @@ describe('addQuestion Integration Tests', () => {
         required: true,
       };
 
-      const { addQuestion } = await import('../../index.ts');
+      const index = await import('../../index');
+      const addQuestion = index.addQuestion;
       await expect(addQuestion(args)).rejects.toThrow('API Error: Invalid form ID');
     });
 

@@ -24,3 +24,10 @@ docs/
 npm-debug.log*
 .vscode/
 .idea/
+**/__tests__
+**/*.test.ts
+**/*.spec.ts
+jest.config.js
+jest.setup.js
+coverage/
+.nyc_output/
