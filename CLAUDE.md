@@ -18,6 +18,35 @@ This is a Model Context Protocol (MCP) server for Google Drive integration. It p
 - **Performance monitoring and logging** - Structured logging with Winston and comprehensive performance metrics
 - Automatic export of Google Workspace files to readable formats
 - Docker support for containerized deployment with Redis
+- **BMAD Framework Integration** - Agent-driven development methodology for structured brownfield and greenfield projects
+
+## BMAD Framework Integration
+
+This project now includes the BMAD (Brownfield/Multi-Agent Development) framework for structured development workflows:
+
+### Available Agents
+- **Business Analyst** - Market research, brainstorming, competitive analysis
+- **Product Manager** - PRD creation, product strategy, roadmap planning
+- **Architect** - System design, technology selection, API design
+- **Developer** - Code implementation, debugging, refactoring
+- **QA** - Test design, quality assurance, validation
+- **UX Expert** - UI/UX design, wireframes, user experience optimization
+- **Product Owner** - Backlog management, story refinement, acceptance criteria
+- **Scrum Master** - Story creation, epic management, agile process guidance
+
+### BMAD Commands
+- `npx bmad-method list:agents` - List all available agents
+- `npx bmad-method install -f -i codex` - Reinstall BMAD core and regenerate AGENTS.md
+- `npx bmad-method validate` - Validate BMAD configuration
+
+### Workflow Templates
+Located in `.bmad-core/workflows/`:
+- Brownfield development workflows
+- Greenfield project workflows
+- Full-stack, service, and UI-specific templates
+
+### Usage with Claude Code
+Reference agents naturally in development tasks, e.g., "As dev, implement..." or "As architect, design..."
 
 ## Key Commands
 
@@ -79,6 +108,12 @@ This is a Model Context Protocol (MCP) server for Google Drive integration. It p
 - `NODE_ENV` - Environment mode (default: `development`)
 
 ## Docker Usage
+
+### Build Optimizations (Updated 2025-09-23)
+Recent improvements to Docker builds:
+- Test files excluded from Docker images via `.dockerignore` for cleaner, smaller builds
+- TypeScript compilation excludes test files from production builds
+- Optimized build process removes development dependencies from container images
 
 ### Authentication Setup (Required First)
 Authentication must be performed on the host machine before running Docker:
@@ -170,6 +205,23 @@ docker-compose up -d
 - Executable shebang added to compiled files via shx
 - Build requirements: Node.js 18+ for ES2022 support
 - Redis optional but recommended for optimal performance
+
+## Recent Updates (September 2025)
+
+### Google Forms API Improvements
+- **Fixed addQuestion JSON payload error** - Resolved "Invalid JSON payload" issue when programmatically adding questions to forms
+- **Enhanced type safety** - Improved QuestionItem interface structure to match Google Forms API expectations
+- **Comprehensive test coverage** - Added 21 tests covering all question types for robust validation
+- **Better error handling** - Enhanced debugging and error reporting for form operations
+
+### Security Enhancements
+- **Enhanced TokenManager validation** - Improved base key validation for better authentication security
+- **Authentication hardening** - Additional security measures for credential management
+
+### CI/CD Pipeline Improvements
+- **ESLint compliance** - Resolved all ESLint violations blocking CI pipeline
+- **GitHub Actions optimization** - Fixed ESM/CommonJS compatibility issues
+- **Test infrastructure** - Improved Jest coverage thresholds and testing workflows
 
 ## Project Management
 - When issues are completed, IMPORTANT you MUST mark them DONE! Using the linear MCP
