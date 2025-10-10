@@ -128,18 +128,19 @@ describe('createSheet Integration Tests', () => {
 
     if (args.tabColor && typeof args.tabColor === 'object') {
       const color = args.tabColor;
-      sheetProperties.tabColor = {};
-      if (typeof color.red === 'number') {
-        sheetProperties.tabColor.red = color.red;
-      }
-      if (typeof color.green === 'number') {
-        sheetProperties.tabColor.green = color.green;
-      }
-      if (typeof color.blue === 'number') {
-        sheetProperties.tabColor.blue = color.blue;
-      }
-      if (typeof color.alpha === 'number') {
-        sheetProperties.tabColor.alpha = color.alpha;
+      const validatedColor: Record<string, number> = {};
+      ['red', 'green', 'blue', 'alpha'].forEach((channel) => {
+        const value = (color as Record<string, unknown>)[channel];
+        if (value !== undefined) {
+          if (typeof value !== 'number' || Number.isNaN(value) || value < 0 || value > 1) {
+            throw new Error(`tabColor.${channel} must be a number between 0 and 1`);
+          }
+          validatedColor[channel] = value;
+        }
+      });
+
+      if (Object.keys(validatedColor).length > 0) {
+        sheetProperties.tabColor = validatedColor;
       }
     }
 
@@ -170,8 +171,8 @@ describe('createSheet Integration Tests', () => {
         }],
       };
     } catch (error: any) {
-      // Re-throw the error with the message
-      throw new Error(error.message || 'Unknown error');
+      mockPerformanceMonitor.track('createSheet', Date.now() - startTime, true);
+      throw new Error(`Failed to create sheet in spreadsheet ${spreadsheetId}: ${error?.message ?? error}`);
     }
   };
 
@@ -221,6 +222,26 @@ describe('createSheet Integration Tests', () => {
         'createSheet',
         expect.any(Number)
       );
+    });
+
+    it('should support titles with special characters and emojis', async () => {
+      const title = 'SaaS 📈 Pipeline – FY24';
+      const result = await callTool('createSheet', {
+        spreadsheetId: 'test-spreadsheet-id',
+        title,
+      });
+
+      expect(result.content?.[0]?.text).toContain(title);
+      expect(mockSheets.spreadsheets.batchUpdate).toHaveBeenCalledWith({
+        spreadsheetId: 'test-spreadsheet-id',
+        requestBody: {
+          requests: [{
+            addSheet: {
+              properties: { title },
+            },
+          }],
+        },
+      });
     });
 
     it('should handle creation with complex grid properties', async () => {
@@ -357,6 +378,64 @@ describe('createSheet Integration Tests', () => {
     });
   });
 
+  describe('Tab color validation', () => {
+    it('should allow boundary values of 0 and 1', async () => {
+      await callTool('createSheet', {
+        spreadsheetId: 'test-spreadsheet-id',
+        title: 'Boundary Sheet',
+        tabColor: {
+          red: 0,
+          green: 1,
+          blue: 0,
+          alpha: 1,
+        },
+      });
+
+      expect(mockSheets.spreadsheets.batchUpdate).toHaveBeenCalledWith({
+        spreadsheetId: 'test-spreadsheet-id',
+        requestBody: {
+          requests: [{
+            addSheet: {
+              properties: {
+                title: 'Boundary Sheet',
+                tabColor: {
+                  red: 0,
+                  green: 1,
+                  blue: 0,
+                  alpha: 1,
+                },
+              },
+            },
+          }],
+        },
+      });
+    });
+
+    it('should reject tabColor values below 0', async () => {
+      await expect(
+        callTool('createSheet', {
+          spreadsheetId: 'test-spreadsheet-id',
+          title: 'Invalid Color',
+          tabColor: {
+            blue: -0.2,
+          },
+        })
+      ).rejects.toThrow('tabColor.blue must be a number between 0 and 1');
+    });
+
+    it('should reject tabColor values above 1', async () => {
+      await expect(
+        callTool('createSheet', {
+          spreadsheetId: 'test-spreadsheet-id',
+          title: 'Invalid Color',
+          tabColor: {
+            alpha: 1.2,
+          },
+        })
+      ).rejects.toThrow('tabColor.alpha must be a number between 0 and 1');
+    });
+  });
+
   describe('Error scenarios', () => {
     it('should handle quota exceeded error', async () => {
       mockSheets.spreadsheets.batchUpdate = jest.fn(() => Promise.reject({
@@ -369,7 +448,13 @@ describe('createSheet Integration Tests', () => {
           spreadsheetId: 'test-spreadsheet-id',
           title: 'Quota Test Sheet',
         })
-      ).rejects.toThrow('Quota exceeded');
+      ).rejects.toThrow('Failed to create sheet in spreadsheet test-spreadsheet-id: Quota exceeded for quota metric');
+
+      expect(mockPerformanceMonitor.track).toHaveBeenCalledWith(
+        'createSheet',
+        expect.any(Number),
+        true
+      );
     });
 
     it('should handle permission denied error', async () => {
@@ -383,7 +468,13 @@ describe('createSheet Integration Tests', () => {
           spreadsheetId: 'test-spreadsheet-id',
           title: 'Permission Test Sheet',
         })
-      ).rejects.toThrow('permission');
+      ).rejects.toThrow('Failed to create sheet in spreadsheet test-spreadsheet-id: The caller does not have permission');
+
+      expect(mockPerformanceMonitor.track).toHaveBeenCalledWith(
+        'createSheet',
+        expect.any(Number),
+        true
+      );
     });
 
     it('should handle spreadsheet not found', async () => {
@@ -397,7 +488,13 @@ describe('createSheet Integration Tests', () => {
           spreadsheetId: 'nonexistent-id',
           title: 'Not Found Test Sheet',
         })
-      ).rejects.toThrow('not found');
+      ).rejects.toThrow('Failed to create sheet in spreadsheet nonexistent-id: Requested entity was not found');
+
+      expect(mockPerformanceMonitor.track).toHaveBeenCalledWith(
+        'createSheet',
+        expect.any(Number),
+        true
+      );
     });
   });
 
@@ -447,6 +544,23 @@ describe('createSheet Integration Tests', () => {
       expect(mockPerformanceMonitor.track).toHaveBeenCalledWith(
         'createSheet',
         expect.any(Number)
+      );
+    });
+
+    it('should record errors in performance metrics', async () => {
+      mockSheets.spreadsheets.batchUpdate = jest.fn(() => Promise.reject(new Error('Service unavailable')));
+
+      await expect(
+        callTool('createSheet', {
+          spreadsheetId: 'test-spreadsheet-id',
+          title: 'Metrics Error Sheet',
+        })
+      ).rejects.toThrow('Failed to create sheet in spreadsheet test-spreadsheet-id: Service unavailable');
+
+      expect(mockPerformanceMonitor.track).toHaveBeenCalledWith(
+        'createSheet',
+        expect.any(Number),
+        true
       );
     });
   });

@@ -298,6 +298,11 @@ Common errors:
 - `formatSheet`: Apply formatting to cells
 - `setFormulas`: Add formulas to cells
 
+#### createSheet tabColor format
+
+When supplying `tabColor`, use normalized RGB values between `0` and `1` (e.g. `0.5` for 50% intensity). This mirrors the
+Google Sheets API and allows optional `alpha` transparency in the same range.
+
 ### Google Docs Operations
 - `createDoc`: Create new documents
 - `updateDoc`: Update document content
