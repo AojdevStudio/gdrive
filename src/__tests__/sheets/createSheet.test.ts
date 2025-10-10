@@ -119,18 +119,18 @@ describe('createSheet', () => {
       // Handle tabColor
       if (args.tabColor && typeof args.tabColor === 'object') {
         const color = args.tabColor;
-        sheetProperties.tabColor = {};
-        if (typeof color.red === 'number') {
-          sheetProperties.tabColor.red = color.red;
-        }
-        if (typeof color.green === 'number') {
-          sheetProperties.tabColor.green = color.green;
-        }
-        if (typeof color.blue === 'number') {
-          sheetProperties.tabColor.blue = color.blue;
-        }
-        if (typeof color.alpha === 'number') {
-          sheetProperties.tabColor.alpha = color.alpha;
+        const validatedColor: Record<string, number> = {};
+        ['red', 'green', 'blue', 'alpha'].forEach((channel) => {
+          const value = (color as Record<string, unknown>)[channel];
+          if (value !== undefined) {
+            if (typeof value !== 'number' || Number.isNaN(value) || value < 0 || value > 1) {
+              throw new Error(`tabColor.${channel} must be a number between 0 and 1`);
+            }
+            validatedColor[channel] = value;
+          }
+        });
+        if (Object.keys(validatedColor).length > 0) {
+          sheetProperties.tabColor = validatedColor;
         }
       }
 
@@ -169,8 +169,10 @@ describe('createSheet', () => {
           }],
         };
       } catch (error) {
+        mockPerformanceMonitor.track('createSheet', Date.now() - startTime, true);
         mockLogger.error('Error in createSheet', { error });
-        throw error;
+        const message = (error as { message?: string }).message ?? `${error}`;
+        throw new Error(`Failed to create sheet in spreadsheet ${spreadsheetId}: ${message}`);
       }
     };
   });
@@ -232,6 +234,27 @@ describe('createSheet', () => {
       });
 
       expect(result.content[0].text).toContain('My Custom Sheet');
+    });
+
+    it('should support titles with special characters and emojis', async () => {
+      const title = 'Quarterly 📊 Report – Q1/2024';
+      const result = await callTool('createSheet', {
+        spreadsheetId: 'test-spreadsheet-id',
+        title,
+      });
+
+      expect(mockSheets.spreadsheets.batchUpdate).toHaveBeenCalledWith({
+        spreadsheetId: 'test-spreadsheet-id',
+        requestBody: {
+          requests: [{
+            addSheet: {
+              properties: { title },
+            },
+          }],
+        },
+      });
+
+      expect(result.content[0].text).toContain(title);
     });
 
     it('should create sheet with all optional parameters', async () => {
@@ -339,6 +362,64 @@ describe('createSheet', () => {
     });
   });
 
+  describe('Tab color validation', () => {
+    it('should allow boundary values of 0 and 1 for each channel', async () => {
+      await callTool('createSheet', {
+        spreadsheetId: 'test-spreadsheet-id',
+        title: 'Boundary Color Sheet',
+        tabColor: {
+          red: 0,
+          green: 1,
+          blue: 0,
+          alpha: 1,
+        },
+      });
+
+      expect(mockSheets.spreadsheets.batchUpdate).toHaveBeenCalledWith({
+        spreadsheetId: 'test-spreadsheet-id',
+        requestBody: {
+          requests: [{
+            addSheet: {
+              properties: {
+                title: 'Boundary Color Sheet',
+                tabColor: {
+                  red: 0,
+                  green: 1,
+                  blue: 0,
+                  alpha: 1,
+                },
+              },
+            },
+          }],
+        },
+      });
+    });
+
+    it('should reject tabColor values below 0', async () => {
+      await expect(
+        callTool('createSheet', {
+          spreadsheetId: 'test-spreadsheet-id',
+          title: 'Invalid Color Sheet',
+          tabColor: {
+            red: -0.1,
+          },
+        })
+      ).rejects.toThrow('tabColor.red must be a number between 0 and 1');
+    });
+
+    it('should reject tabColor values above 1', async () => {
+      await expect(
+        callTool('createSheet', {
+          spreadsheetId: 'test-spreadsheet-id',
+          title: 'Invalid Color Sheet',
+          tabColor: {
+            green: 1.5,
+          },
+        })
+      ).rejects.toThrow('tabColor.green must be a number between 0 and 1');
+    });
+  });
+
   describe('Error handling', () => {
     it('should handle API errors gracefully', async () => {
       mockSheets.spreadsheets.batchUpdate = jest.fn(() =>
@@ -350,13 +431,19 @@ describe('createSheet', () => {
           spreadsheetId: 'invalid-id',
           title: 'Test Sheet',
         })
-      ).rejects.toThrow('API Error: Invalid spreadsheet ID');
+      ).rejects.toThrow('Failed to create sheet in spreadsheet invalid-id: API Error: Invalid spreadsheet ID');
 
       expect(mockLogger.error).toHaveBeenCalledWith(
         'Error in createSheet',
         expect.objectContaining({
           error: expect.any(Error),
         })
+      );
+
+      expect(mockPerformanceMonitor.track).toHaveBeenCalledWith(
+        'createSheet',
+        expect.any(Number),
+        true
       );
     });
 

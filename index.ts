@@ -130,6 +130,10 @@ interface TextStyle {
 }
 
 // Google Sheets interfaces for createSheet
+/**
+ * RGBA color definition that matches the Google Sheets API structure. All
+ * channels are normalized numbers between 0 and 1 inclusive.
+ */
 interface Color {
   red?: number;
   green?: number;
@@ -137,6 +141,10 @@ interface Color {
   alpha?: number;
 }
 
+/**
+ * Optional grid configuration values for a sheet. Individual properties are
+ * forwarded directly to `GridProperties` in the Sheets API.
+ */
 interface GridProperties {
   rowCount?: number;
   columnCount?: number;
@@ -144,6 +152,9 @@ interface GridProperties {
   frozenColumnCount?: number;
 }
 
+/**
+ * Sheet-level configuration that is sent in the addSheet batchUpdate request.
+ */
 interface SheetProperties {
   sheetId?: number;
   title?: string;
@@ -227,6 +238,19 @@ const safeStringify = (value: unknown): string => {
   } catch {
     return String(value);
   }
+};
+
+const toErrorMessage = (error: unknown): string => {
+  if (error instanceof Error) {
+    return error.message;
+  }
+  if (typeof error === 'string') {
+    return error;
+  }
+  if (error && typeof error === 'object' && 'message' in error && typeof (error as { message: unknown }).message === 'string') {
+    return (error as { message: string }).message;
+  }
+  return safeStringify(error);
 };
 
 const logger = winston.createLogger({
@@ -907,7 +931,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       },
       {
         name: "createSheet",
-        description: "Create a new sheet in an existing Google Spreadsheet",
+        description: "Create a new sheet in an existing Google Spreadsheet. Examples: {\"spreadsheetId\": \"abc123\", \"title\": \"Quarterly 📊\"} and {\"spreadsheetId\": \"abc123\", \"title\": \"Roadmap\", \"tabColor\": {\"red\": 0.1, \"green\": 0.3, \"blue\": 0.7}}",
         inputSchema: {
           type: "object",
           properties: {
@@ -940,7 +964,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             },
             tabColor: {
               type: "object",
-              description: "RGB color for the sheet tab",
+              description: "RGB color for the sheet tab using normalized 0-1 values (e.g. 0.5 = 50% intensity)",
               properties: {
                 red: { type: "number", minimum: 0, maximum: 1 },
                 green: { type: "number", minimum: 0, maximum: 1 },
@@ -1792,36 +1816,41 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         // Handle tabColor if provided
         if (args.tabColor && typeof args.tabColor === 'object') {
           const color = args.tabColor as Color;
-          sheetProperties.tabColor = {};
+          const validatedColor: Color = {};
+          (['red', 'green', 'blue', 'alpha'] as Array<keyof Color>).forEach((channel) => {
+            const value = color[channel];
+            if (value !== undefined) {
+              if (typeof value !== 'number' || Number.isNaN(value) || value < 0 || value > 1) {
+                throw new Error(`tabColor.${channel} must be a number between 0 and 1`);
+              }
+              validatedColor[channel] = value;
+            }
+          });
 
-          if (typeof color.red === 'number') {
-            sheetProperties.tabColor.red = color.red;
-          }
-
-          if (typeof color.green === 'number') {
-            sheetProperties.tabColor.green = color.green;
-          }
-
-          if (typeof color.blue === 'number') {
-            sheetProperties.tabColor.blue = color.blue;
-          }
-
-          if (typeof color.alpha === 'number') {
-            sheetProperties.tabColor.alpha = color.alpha;
+          if (Object.keys(validatedColor).length > 0) {
+            sheetProperties.tabColor = validatedColor;
           }
         }
 
         // Execute batchUpdate to create the sheet
-        const response = await sheets.spreadsheets.batchUpdate({
-          spreadsheetId,
-          requestBody: {
-            requests: [{
-              addSheet: {
-                properties: sheetProperties,
-              },
-            }],
-          },
-        });
+        let response;
+        try {
+          response = await sheets.spreadsheets.batchUpdate({
+            spreadsheetId,
+            requestBody: {
+              requests: [{
+                addSheet: {
+                  properties: sheetProperties,
+                },
+              }],
+            },
+          });
+        } catch (error) {
+          performanceMonitor.track('createSheet', Date.now() - startTime, true);
+          const message = toErrorMessage(error);
+          logger.error('Failed to create sheet with batchUpdate', { spreadsheetId, error });
+          throw new Error(`Failed to create sheet in spreadsheet ${spreadsheetId}: ${message}`);
+        }
 
         // Extract the new sheet ID from response
         const newSheetId = response.data.replies?.[0]?.addSheet?.properties?.sheetId;
