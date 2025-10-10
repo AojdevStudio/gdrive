@@ -38,11 +38,13 @@ jest.mock('googleapis', () => ({
     })),
     sheets: jest.fn(() => ({
       spreadsheets: {
+        get: jest.fn(),
         values: {
           get: jest.fn(),
           update: jest.fn(),
           append: jest.fn(),
         },
+        batchUpdate: jest.fn(),
       },
     })),
     forms: jest.fn(() => ({

@@ -129,6 +129,42 @@ interface TextStyle {
   };
 }
 
+// Google Sheets interfaces for createSheet
+/**
+ * RGBA color definition that matches the Google Sheets API structure. All
+ * channels are normalized numbers between 0 and 1 inclusive.
+ */
+interface Color {
+  red?: number;
+  green?: number;
+  blue?: number;
+  alpha?: number;
+}
+
+/**
+ * Optional grid configuration values for a sheet. Individual properties are
+ * forwarded directly to `GridProperties` in the Sheets API.
+ */
+interface GridProperties {
+  rowCount?: number;
+  columnCount?: number;
+  frozenRowCount?: number;
+  frozenColumnCount?: number;
+}
+
+/**
+ * Sheet-level configuration that is sent in the addSheet batchUpdate request.
+ */
+interface SheetProperties {
+  sheetId?: number;
+  title?: string;
+  index?: number;
+  gridProperties?: GridProperties;
+  hidden?: boolean;
+  tabColor?: Color;
+  rightToLeft?: boolean;
+}
+
 // Structured logging with Winston
 // Ensure Error instances inside metadata are serialized with details
 const errorSerializer = winston.format((info) => {
@@ -202,6 +238,19 @@ const safeStringify = (value: unknown): string => {
   } catch {
     return String(value);
   }
+};
+
+const toErrorMessage = (error: unknown): string => {
+  if (error instanceof Error) {
+    return error.message;
+  }
+  if (typeof error === 'string') {
+    return error;
+  }
+  if (error && typeof error === 'object' && 'message' in error && typeof (error as { message: unknown }).message === 'string') {
+    return (error as { message: string }).message;
+  }
+  return safeStringify(error);
 };
 
 const logger = winston.createLogger({
@@ -878,6 +927,68 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             },
           },
           required: ["spreadsheetId", "values"],
+        },
+      },
+      {
+        name: "createSheet",
+        description: "Create a new sheet in an existing Google Spreadsheet. Examples: {\"spreadsheetId\": \"abc123\", \"title\": \"Quarterly 📊\"} and {\"spreadsheetId\": \"abc123\", \"title\": \"Roadmap\", \"tabColor\": {\"red\": 0.1, \"green\": 0.3, \"blue\": 0.7}}",
+        inputSchema: {
+          type: "object",
+          properties: {
+            spreadsheetId: {
+              type: "string",
+              description: "The ID of the Google Sheets document",
+            },
+            title: {
+              type: "string",
+              description: "The name of the new sheet",
+            },
+            index: {
+              type: "number",
+              description: "The position where the sheet should be inserted (0-based)",
+            },
+            rowCount: {
+              type: "number",
+              description: "Number of rows in the new sheet",
+              default: 1000,
+            },
+            columnCount: {
+              type: "number",
+              description: "Number of columns in the new sheet",
+              default: 26,
+            },
+            hidden: {
+              type: "boolean",
+              description: "Whether the sheet should be hidden",
+              default: false,
+            },
+            tabColor: {
+              type: "object",
+              description: "RGB color for the sheet tab using normalized 0-1 values (e.g. 0.5 = 50% intensity)",
+              properties: {
+                red: { type: "number", minimum: 0, maximum: 1 },
+                green: { type: "number", minimum: 0, maximum: 1 },
+                blue: { type: "number", minimum: 0, maximum: 1 },
+                alpha: { type: "number", minimum: 0, maximum: 1 },
+              },
+            },
+            frozenRowCount: {
+              type: "number",
+              description: "Number of rows to freeze",
+              default: 0,
+            },
+            frozenColumnCount: {
+              type: "number",
+              description: "Number of columns to freeze",
+              default: 0,
+            },
+            rightToLeft: {
+              type: "boolean",
+              description: "Whether text should be right-to-left",
+              default: false,
+            },
+          },
+          required: ["spreadsheetId"],
         },
       },
       {
@@ -1646,6 +1757,115 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           content: [{
             type: "text",
             text: `Successfully appended ${values.length} rows to ${sheetName}`,
+          }],
+        };
+      }
+
+      case "createSheet": {
+        if (!args || typeof args.spreadsheetId !== 'string') {
+          throw new Error('spreadsheetId parameter is required');
+        }
+
+        const { spreadsheetId } = args;
+
+        // Build SheetProperties from arguments
+        const sheetProperties: SheetProperties = {};
+
+        if (typeof args.title === 'string') {
+          sheetProperties.title = args.title;
+        }
+
+        if (typeof args.index === 'number') {
+          sheetProperties.index = args.index;
+        }
+
+        if (typeof args.hidden === 'boolean') {
+          sheetProperties.hidden = args.hidden;
+        }
+
+        if (typeof args.rightToLeft === 'boolean') {
+          sheetProperties.rightToLeft = args.rightToLeft;
+        }
+
+        // Build GridProperties if any grid params are provided
+        const hasGridProps = typeof args.rowCount === 'number' ||
+                             typeof args.columnCount === 'number' ||
+                             typeof args.frozenRowCount === 'number' ||
+                             typeof args.frozenColumnCount === 'number';
+
+        if (hasGridProps) {
+          sheetProperties.gridProperties = {};
+
+          if (typeof args.rowCount === 'number') {
+            sheetProperties.gridProperties.rowCount = args.rowCount;
+          }
+
+          if (typeof args.columnCount === 'number') {
+            sheetProperties.gridProperties.columnCount = args.columnCount;
+          }
+
+          if (typeof args.frozenRowCount === 'number') {
+            sheetProperties.gridProperties.frozenRowCount = args.frozenRowCount;
+          }
+
+          if (typeof args.frozenColumnCount === 'number') {
+            sheetProperties.gridProperties.frozenColumnCount = args.frozenColumnCount;
+          }
+        }
+
+        // Handle tabColor if provided
+        if (args.tabColor && typeof args.tabColor === 'object') {
+          const color = args.tabColor as Color;
+          const validatedColor: Color = {};
+          (['red', 'green', 'blue', 'alpha'] as Array<keyof Color>).forEach((channel) => {
+            const value = color[channel];
+            if (value !== undefined) {
+              if (typeof value !== 'number' || Number.isNaN(value) || value < 0 || value > 1) {
+                throw new Error(`tabColor.${channel} must be a number between 0 and 1`);
+              }
+              validatedColor[channel] = value;
+            }
+          });
+
+          if (Object.keys(validatedColor).length > 0) {
+            sheetProperties.tabColor = validatedColor;
+          }
+        }
+
+        // Execute batchUpdate to create the sheet
+        let response;
+        try {
+          response = await sheets.spreadsheets.batchUpdate({
+            spreadsheetId,
+            requestBody: {
+              requests: [{
+                addSheet: {
+                  properties: sheetProperties,
+                },
+              }],
+            },
+          });
+        } catch (error) {
+          performanceMonitor.track('createSheet', Date.now() - startTime, true);
+          const message = toErrorMessage(error);
+          logger.error('Failed to create sheet with batchUpdate', { spreadsheetId, error });
+          throw new Error(`Failed to create sheet in spreadsheet ${spreadsheetId}: ${message}`);
+        }
+
+        // Extract the new sheet ID from response
+        const newSheetId = response.data.replies?.[0]?.addSheet?.properties?.sheetId;
+        const newSheetTitle = response.data.replies?.[0]?.addSheet?.properties?.title ?? sheetProperties.title ?? 'Untitled Sheet';
+
+        // Invalidate cache for this spreadsheet
+        await cacheManager.invalidate(`sheet:${spreadsheetId}:*`);
+
+        performanceMonitor.track('createSheet', Date.now() - startTime);
+        logger.info('Sheet created', { spreadsheetId, sheetId: newSheetId, title: newSheetTitle });
+
+        return {
+          content: [{
+            type: "text",
+            text: `Successfully created sheet "${newSheetTitle}" with ID ${newSheetId} in spreadsheet ${spreadsheetId}`,
           }],
         };
       }
