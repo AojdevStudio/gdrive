@@ -307,6 +307,75 @@ const logger = winston.createLogger({
   ]
 });
 
+// Sheet metadata resolution helper
+interface SheetIdentifier {
+  sheetId?: unknown;
+  sheetName?: unknown;
+  title?: unknown;
+}
+
+const resolveSheetMetadata = async (
+  spreadsheetId: string,
+  identifiers: SheetIdentifier,
+  operation: string,
+): Promise<{ sheetId: number; title?: string }> => {
+  let numericId: number | undefined;
+
+  if (typeof identifiers.sheetId === 'number') {
+    numericId = identifiers.sheetId;
+  } else if (typeof identifiers.sheetId === 'string' && identifiers.sheetId.trim() !== '') {
+    const parsed = Number(identifiers.sheetId);
+    if (Number.isNaN(parsed)) {
+      throw new Error(`${operation} requires sheetId to be a number`);
+    }
+    numericId = parsed;
+  }
+
+  const providedName =
+    typeof identifiers.sheetName === 'string' && identifiers.sheetName.trim() !== ''
+      ? identifiers.sheetName
+      : typeof identifiers.title === 'string' && identifiers.title.trim() !== ''
+        ? identifiers.title
+        : undefined;
+
+  if (numericId !== undefined) {
+    const result: { sheetId: number; title?: string } = { sheetId: numericId };
+    if (providedName !== undefined) {
+      result.title = providedName;
+    }
+    return result;
+  }
+
+  if (!providedName) {
+    throw new Error(`${operation} requires either sheetId or sheetName`);
+  }
+
+  let response;
+  try {
+    response = await sheets.spreadsheets.get({
+      spreadsheetId,
+      fields: 'sheets(properties(sheetId,title))',
+    });
+  } catch (error) {
+    logger.error('Failed to resolve sheet ID', { spreadsheetId, sheetName: providedName, operation, error });
+    throw new Error(`Failed to resolve sheet ID for "${providedName}" in spreadsheet ${spreadsheetId}: ${toErrorMessage(error)}`);
+  }
+
+  const match = response.data.sheets?.find((sheet) => sheet.properties?.title === providedName);
+  const sheetId = match?.properties?.sheetId;
+
+  if (typeof sheetId !== 'number') {
+    throw new Error(`Sheet "${providedName}" not found in spreadsheet ${spreadsheetId}`);
+  }
+
+  const result: { sheetId: number; title?: string } = { sheetId };
+  const resolvedTitle = match?.properties?.title ?? providedName;
+  if (resolvedTitle !== undefined) {
+    result.title = resolvedTitle;
+  }
+  return result;
+};
+
 // Performance monitoring
 class PerformanceMonitor {
   private metrics: Map<string, { count: number; totalTime: number; errors: number }> = new Map();
@@ -1130,9 +1199,13 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
               type: "string",
               description: "The ID of the Google Sheets document",
             },
+            sheetName: {
+              type: "string",
+              description: "Name of the new sheet (alias for title)",
+            },
             title: {
               type: "string",
-              description: "The name of the new sheet",
+              description: "The name of the new sheet (deprecated alias)",
             },
             index: {
               type: "number",
@@ -1177,6 +1250,54 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
               type: "boolean",
               description: "Whether text should be right-to-left",
               default: false,
+            },
+          },
+          required: ["spreadsheetId"],
+        },
+      },
+      {
+        name: "renameSheet",
+        description: "Rename an existing sheet within a Google Spreadsheet",
+        inputSchema: {
+          type: "object",
+          properties: {
+            spreadsheetId: {
+              type: "string",
+              description: "The ID of the Google Sheets document",
+            },
+            sheetId: {
+              type: ["number", "string"],
+              description: "Numeric ID of the sheet to rename",
+            },
+            sheetName: {
+              type: "string",
+              description: "Name of the sheet to rename (alternative to sheetId)",
+            },
+            newName: {
+              type: "string",
+              description: "The new sheet name",
+            },
+          },
+          required: ["spreadsheetId", "newName"],
+        },
+      },
+      {
+        name: "deleteSheet",
+        description: "Delete a sheet from a Google Spreadsheet",
+        inputSchema: {
+          type: "object",
+          properties: {
+            spreadsheetId: {
+              type: "string",
+              description: "The ID of the Google Sheets document",
+            },
+            sheetId: {
+              type: ["number", "string"],
+              description: "Numeric ID of the sheet to delete",
+            },
+            sheetName: {
+              type: "string",
+              description: "Name of the sheet to delete (alternative to sheetId)",
             },
           },
           required: ["spreadsheetId"],
@@ -2197,8 +2318,18 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         // Build SheetProperties from arguments
         const sheetProperties: SheetProperties = {};
 
-        if (typeof args.title === 'string') {
-          sheetProperties.title = args.title;
+        const providedSheetName =
+          typeof args.sheetName === 'string' && args.sheetName.trim() !== ''
+            ? args.sheetName
+            : undefined;
+        const providedTitle =
+          typeof args.title === 'string' && args.title.trim() !== ''
+            ? args.title
+            : undefined;
+
+        const effectiveTitle = providedSheetName ?? providedTitle;
+        if (effectiveTitle) {
+          sheetProperties.title = effectiveTitle;
         }
 
         if (typeof args.index === 'number') {
@@ -2213,30 +2344,21 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           sheetProperties.rightToLeft = args.rightToLeft;
         }
 
-        // Build GridProperties if any grid params are provided
-        const hasGridProps = typeof args.rowCount === 'number' ||
-                             typeof args.columnCount === 'number' ||
-                             typeof args.frozenRowCount === 'number' ||
-                             typeof args.frozenColumnCount === 'number';
+        // Build GridProperties with defaults
+        const rowCount = typeof args.rowCount === 'number' ? args.rowCount : 1000;
+        const columnCount = typeof args.columnCount === 'number' ? args.columnCount : 26;
 
-        if (hasGridProps) {
-          sheetProperties.gridProperties = {};
+        sheetProperties.gridProperties = {
+          rowCount,
+          columnCount,
+        };
 
-          if (typeof args.rowCount === 'number') {
-            sheetProperties.gridProperties.rowCount = args.rowCount;
-          }
+        if (typeof args.frozenRowCount === 'number') {
+          sheetProperties.gridProperties.frozenRowCount = args.frozenRowCount;
+        }
 
-          if (typeof args.columnCount === 'number') {
-            sheetProperties.gridProperties.columnCount = args.columnCount;
-          }
-
-          if (typeof args.frozenRowCount === 'number') {
-            sheetProperties.gridProperties.frozenRowCount = args.frozenRowCount;
-          }
-
-          if (typeof args.frozenColumnCount === 'number') {
-            sheetProperties.gridProperties.frozenColumnCount = args.frozenColumnCount;
-          }
+        if (typeof args.frozenColumnCount === 'number') {
+          sheetProperties.gridProperties.frozenColumnCount = args.frozenColumnCount;
         }
 
         // Handle tabColor if provided
@@ -2282,16 +2404,109 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const newSheetId = response.data.replies?.[0]?.addSheet?.properties?.sheetId;
         const newSheetTitle = response.data.replies?.[0]?.addSheet?.properties?.title ?? sheetProperties.title ?? 'Untitled Sheet';
 
+        const resolvedSheet = await resolveSheetMetadata(
+          spreadsheetId,
+          {
+            sheetId: typeof newSheetId === 'number' ? newSheetId : undefined,
+            sheetName: newSheetTitle,
+            title: newSheetTitle,
+          },
+          'createSheet',
+        );
+
         // Invalidate cache for this spreadsheet
         await cacheManager.invalidate(`sheet:${spreadsheetId}:*`);
 
         performanceMonitor.track('createSheet', Date.now() - startTime);
-        logger.info('Sheet created', { spreadsheetId, sheetId: newSheetId, title: newSheetTitle });
+        logger.info('Sheet created', { spreadsheetId, sheetId: resolvedSheet.sheetId, title: resolvedSheet.title });
 
         return {
           content: [{
             type: "text",
-            text: `Successfully created sheet "${newSheetTitle}" with ID ${newSheetId} in spreadsheet ${spreadsheetId}`,
+            text: `Successfully created sheet "${resolvedSheet.title}" with ID ${resolvedSheet.sheetId} in spreadsheet ${spreadsheetId}`,
+          }],
+        };
+      }
+
+      case "renameSheet": {
+        if (!args || typeof args.spreadsheetId !== 'string') {
+          throw new Error('spreadsheetId parameter is required');
+        }
+        if (typeof args.newName !== 'string' || args.newName.trim() === '') {
+          throw new Error('newName parameter is required');
+        }
+
+        const { spreadsheetId, newName } = args;
+        const resolved = await resolveSheetMetadata(spreadsheetId, args, 'renameSheet');
+
+        try {
+          await sheets.spreadsheets.batchUpdate({
+            spreadsheetId,
+            requestBody: {
+              requests: [{
+                updateSheetProperties: {
+                  properties: {
+                    sheetId: resolved.sheetId,
+                    title: newName,
+                  },
+                  fields: 'title',
+                },
+              }],
+            },
+          });
+        } catch (error) {
+          performanceMonitor.track('renameSheet', Date.now() - startTime, true);
+          logger.error('Failed to rename sheet', { spreadsheetId, sheetId: resolved.sheetId, newName, error });
+          throw error;
+        }
+
+        await cacheManager.invalidate(`sheet:${spreadsheetId}:*`);
+
+        performanceMonitor.track('renameSheet', Date.now() - startTime);
+        logger.info('Sheet renamed', { spreadsheetId, sheetId: resolved.sheetId, oldName: resolved.title, newName });
+
+        return {
+          content: [{
+            type: "text",
+            text: `Successfully renamed sheet to "${newName}" in spreadsheet ${spreadsheetId}`,
+          }],
+        };
+      }
+
+      case "deleteSheet": {
+        if (!args || typeof args.spreadsheetId !== 'string') {
+          throw new Error('spreadsheetId parameter is required');
+        }
+
+        const { spreadsheetId } = args;
+        const resolved = await resolveSheetMetadata(spreadsheetId, args, 'deleteSheet');
+
+        try {
+          await sheets.spreadsheets.batchUpdate({
+            spreadsheetId,
+            requestBody: {
+              requests: [{
+                deleteSheet: {
+                  sheetId: resolved.sheetId,
+                },
+              }],
+            },
+          });
+        } catch (error) {
+          performanceMonitor.track('deleteSheet', Date.now() - startTime, true);
+          logger.error('Failed to delete sheet', { spreadsheetId, sheetId: resolved.sheetId, error });
+          throw error;
+        }
+
+        await cacheManager.invalidate(`sheet:${spreadsheetId}:*`);
+
+        performanceMonitor.track('deleteSheet', Date.now() - startTime);
+        logger.info('Sheet deleted', { spreadsheetId, sheetId: resolved.sheetId, title: resolved.title });
+
+        return {
+          content: [{
+            type: "text",
+            text: `Successfully deleted sheet "${resolved.title}" from spreadsheet ${spreadsheetId}`,
           }],
         };
       }

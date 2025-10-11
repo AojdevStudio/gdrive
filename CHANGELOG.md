@@ -33,12 +33,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - 3 unit tests for rule construction and validation
   - Complete documentation with examples in docs/Examples
 
+- **Google Sheets Management Tools** - `renameSheet` and `deleteSheet` for sheet lifecycle management
+  - Unified `resolveSheetMetadata` helper for flexible sheet identification
+  - Support for both sheetId (numeric) and sheetName (string) parameters
+  - Enhanced `createSheet` with `sheetName` alias and default row/column handling
+  - Automatic cache invalidation after sheet operations
+  - Comprehensive error logging and validation
+
 ### Improved
 
 - Test coverage expanded to 37 tests total (29 formula + 5 formatting + 3 conditional)
 - Error handling with detailed logging including error types and context
 - Documentation with practical examples for formulas, formatting, and conditional rules
 - Unified helpers module combining formula and formatting operations
+- createSheet now defaults to 1000 rows × 26 columns (standard Google Sheets)
 
 ## [0.8.0] - 2025-08-19
 
