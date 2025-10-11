@@ -1778,56 +1778,74 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const providedSheetName =
           typeof args.sheetName === 'string' && args.sheetName.trim() ? args.sheetName.trim() : undefined;
 
-        const { sheetName: rangeSheetName, a1Range } = parseRangeInput(rawRange);
+        try {
+          const { sheetName: rangeSheetName, a1Range } = parseRangeInput(rawRange);
 
-        if (providedSheetName && rangeSheetName && providedSheetName !== rangeSheetName) {
-          throw new Error('sheetName does not match the sheet specified in range');
-        }
+          if (providedSheetName && rangeSheetName && providedSheetName !== rangeSheetName) {
+            throw new Error('sheetName does not match the sheet specified in range');
+          }
 
-        const { sheetId, title } = await getSheetId(
-          sheets,
-          spreadsheetId,
-          providedSheetName ?? rangeSheetName
-        );
+          const { sheetId, title } = await getSheetId(
+            sheets,
+            spreadsheetId,
+            providedSheetName ?? rangeSheetName
+          );
 
-        const gridRange = parseA1Notation(a1Range, sheetId);
-        const normalizedFormula = formula.trim();
-        const rows = buildFormulaRows(gridRange, normalizedFormula);
+          const gridRange = parseA1Notation(a1Range, sheetId);
+          const normalizedFormula = formula.trim();
+          const rows = buildFormulaRows(gridRange, normalizedFormula);
 
-        await sheets.spreadsheets.batchUpdate({
-          spreadsheetId,
-          requestBody: {
-            requests: [
-              {
-                updateCells: {
-                  range: gridRange,
-                  fields: "userEnteredValue",
-                  rows,
+          await sheets.spreadsheets.batchUpdate({
+            spreadsheetId,
+            requestBody: {
+              requests: [
+                {
+                  updateCells: {
+                    range: gridRange,
+                    fields: "userEnteredValue",
+                    rows,
+                  },
                 },
+              ],
+            },
+          });
+
+          await cacheManager.invalidate(`sheet:${spreadsheetId}:*`);
+
+          performanceMonitor.track('updateCellsWithFormula', Date.now() - startTime);
+          logger.info('Formula updated', {
+            spreadsheetId,
+            sheetId,
+            sheetTitle: title,
+            range: `${title}!${a1Range}`,
+            formula: normalizedFormula,
+          });
+
+          return {
+            content: [
+              {
+                type: "text",
+                text: `Successfully set formula ${normalizedFormula} in range ${title}!${a1Range}`,
               },
             ],
-          },
-        });
+          };
+        } catch (error) {
+          const errorType = error instanceof Error ? error.constructor.name : 'UnknownError';
+          const errorMessage = error instanceof Error ? error.message : String(error);
 
-        await cacheManager.invalidate(`sheet:${spreadsheetId}:*`);
+          logger.error('Formula update failed', {
+            spreadsheetId,
+            range: rawRange,
+            formula: formula,
+            error: errorMessage,
+            errorType: errorType,
+          });
 
-        performanceMonitor.track('updateCellsWithFormula', Date.now() - startTime);
-        logger.info('Formula updated', {
-          spreadsheetId,
-          sheetId,
-          sheetTitle: title,
-          range: `${title}!${a1Range}`,
-          formula: normalizedFormula,
-        });
+          // Track failed operation
+          performanceMonitor.track('updateCellsWithFormula', Date.now() - startTime, true);
 
-        return {
-          content: [
-            {
-              type: "text",
-              text: `Successfully set formula ${normalizedFormula} in range ${title}!${a1Range}`,
-            },
-          ],
-        };
+          throw error;
+        }
       }
 
       case "appendRows": {

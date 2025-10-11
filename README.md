@@ -143,6 +143,78 @@ node ./dist/index.js auth
 - **Formula Automation** - Apply formulas to specific cells with `updateCellsWithFormula`
 - **CSV Export** - Automatic conversion for data analysis
 
+#### Formula Automation Examples
+
+**Add a SUM formula to total a column:**
+```javascript
+await updateCellsWithFormula({
+  spreadsheetId: "your-spreadsheet-id",
+  range: "Sheet1!D25",
+  formula: "=SUM(D2:D24)"
+});
+```
+
+**Apply formulas to multiple cells (with relative references):**
+```javascript
+// This applies the formula to cells E2:E25
+// Google Sheets automatically adjusts relative references
+// So E2 gets =D2*1.1, E3 gets =D3*1.1, etc.
+await updateCellsWithFormula({
+  spreadsheetId: "your-spreadsheet-id",
+  range: "E2:E25",
+  formula: "=D2*1.1"
+});
+```
+
+**Calculate running totals:**
+```javascript
+await updateCellsWithFormula({
+  spreadsheetId: "your-spreadsheet-id",
+  range: "Budget!F10",
+  formula: "=SUM(F2:F9)"
+});
+```
+
+**Use VLOOKUP for data matching:**
+```javascript
+await updateCellsWithFormula({
+  spreadsheetId: "your-spreadsheet-id",
+  range: "Sheet1!C2",
+  formula: "=VLOOKUP(A2,Prices!A:B,2,FALSE)"
+});
+```
+
+#### Security Considerations for Formula Operations
+
+When using `updateCellsWithFormula`, be aware of these security considerations:
+
+- **Formula Execution Context**: Formulas execute within Google Sheets' security sandbox
+- **External URL Access**: User-crafted formulas can access external URLs via functions like `IMPORTXML`, `IMPORTDATA`, or `IMPORTHTML`
+- **Input Validation**: If accepting formula input from users in your application:
+  - Validate formula content before passing to the MCP server
+  - Consider restricting dangerous functions (IMPORTXML, IMPORTHTML, etc.)
+  - Implement allowlists for permitted functions
+- **Permission Model**: The MCP server respects Google Drive file permissions - users can only update sheets they have edit access to
+- **Data Exposure**: Be cautious with formulas that might expose sensitive data through external requests
+
+**Example validation pattern:**
+```javascript
+// Validate user-provided formulas
+function isSafeFormula(formula) {
+  const dangerousFunctions = ['IMPORTXML', 'IMPORTHTML', 'IMPORTDATA', 'IMAGE'];
+  const upperFormula = formula.toUpperCase();
+
+  return !dangerousFunctions.some(fn => upperFormula.includes(fn));
+}
+
+// Only allow safe formulas
+if (isSafeFormula(userFormula)) {
+  await updateCellsWithFormula({ spreadsheetId, range, formula: userFormula });
+} else {
+  throw new Error('Formula contains potentially unsafe functions');
+}
+```
+
 ### 📝 **Google Docs Manipulation**
 - **Document Creation** - Create documents with content and formatting
 - **Text Operations** - Insert, replace, and style text at specific positions
@@ -207,11 +279,11 @@ graph TB
 
 ### 📖 Available Tools
 
-The server provides **22 comprehensive tools** for Google Workspace integration across **6 categories**:
+The server provides **23 comprehensive tools** for Google Workspace integration across **6 categories**:
 
 - **🔍 Search & Read** (6 tools): search, enhancedSearch, read, listSheets, readSheet, getAppScript
 - **📁 File & Folder** (4 tools): createFile, updateFile, createFolder, batchFileOperations
-- **📊 Sheets** (2 tools): updateCells, appendRows
+- **📊 Sheets** (3 tools): updateCells, updateCellsWithFormula, appendRows
 - **📋 Forms** (4 tools): createForm, getForm, addQuestion, listResponses
 - **📝 Docs** (5 tools): createDocument, insertText, replaceText, applyTextStyle, insertTable
 - **📂 Resources**: MCP resource access via `gdrive:///<file_id>` URIs
