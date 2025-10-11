@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- ✨ **Sheets Layout Controls**: Added `freezeRowsColumns` and `setColumnWidth` tools with batch updates, helper utilities, and documentation/tests for layout customization
+
 ## [0.8.0] - 2025-08-19
 
 ### Added
