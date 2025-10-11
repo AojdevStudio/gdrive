@@ -19,10 +19,18 @@ import { TokenManager } from "./src/auth/TokenManager.js";
 import { KeyRotationManager } from "./src/auth/KeyRotationManager.js";
 import { performHealthCheck, HealthStatus } from "./src/health-check.js";
 import {
+  buildFieldMask,
   buildFormulaRows,
+  clearGridRangeCacheForSheet,
+  clearSpreadsheetMetadata,
   getSheetId,
   parseA1Notation,
   parseRangeInput,
+  resolveGridRange,
+  toSheetsColor,
+  type CellFormat,
+  type FormatCellsInput,
+  type TextFormat,
 } from "./src/sheets/helpers.js";
 
 const drive = google.drive("v3");
@@ -930,6 +938,78 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             },
           },
           required: ["spreadsheetId", "range", "formula"],
+        },
+      },
+      {
+        name: "formatCells",
+        description: "Apply formatting to cells (bold, colors, number formats) in Google Sheets",
+        inputSchema: {
+          type: "object",
+          properties: {
+            spreadsheetId: {
+              type: "string",
+              description: "The ID of the Google Sheets document",
+            },
+            range: {
+              type: "string",
+              description: "The A1 notation range to format (e.g., 'Sheet1!A1:B2')",
+            },
+            format: {
+              type: "object",
+              description: "Formatting options to apply to the cells",
+              properties: {
+                bold: {
+                  type: "boolean",
+                  description: "Apply bold styling to text",
+                },
+                italic: {
+                  type: "boolean",
+                  description: "Apply italic styling to text",
+                },
+                fontSize: {
+                  type: "number",
+                  description: "Font size in points (e.g., 12)",
+                },
+                foregroundColor: {
+                  type: "object",
+                  description: "Text color using 0.0-1.0 RGB channel values",
+                  properties: {
+                    red: { type: "number", description: "Red channel (0.0 - 1.0)" },
+                    green: { type: "number", description: "Green channel (0.0 - 1.0)" },
+                    blue: { type: "number", description: "Blue channel (0.0 - 1.0)" },
+                    alpha: { type: "number", description: "Alpha channel (0.0 - 1.0)", default: 1 },
+                  },
+                },
+                backgroundColor: {
+                  type: "object",
+                  description: "Cell background color using 0.0-1.0 RGB channel values",
+                  properties: {
+                    red: { type: "number", description: "Red channel (0.0 - 1.0)" },
+                    green: { type: "number", description: "Green channel (0.0 - 1.0)" },
+                    blue: { type: "number", description: "Blue channel (0.0 - 1.0)" },
+                    alpha: { type: "number", description: "Alpha channel (0.0 - 1.0)", default: 1 },
+                  },
+                },
+                numberFormat: {
+                  type: "object",
+                  description: "Number formatting options",
+                  properties: {
+                    type: {
+                      type: "string",
+                      description: "Number format preset",
+                      enum: ["CURRENCY", "PERCENT", "DATE", "NUMBER", "TEXT"],
+                    },
+                    pattern: {
+                      type: "string",
+                      description: "Custom number format pattern (e.g., '$#,##0.00')",
+                    },
+                  },
+                  required: ["type"],
+                },
+              },
+            },
+          },
+          required: ["spreadsheetId", "range", "format"],
         },
       },
       {
@@ -1846,6 +1926,99 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
           throw error;
         }
+      }
+
+      case "formatCells": {
+        if (
+          !args ||
+          typeof args.spreadsheetId !== 'string' ||
+          typeof args.range !== 'string' ||
+          typeof args.format !== 'object' ||
+          args.format === null
+        ) {
+          throw new Error('spreadsheetId, range, and format parameters are required');
+        }
+
+        const { spreadsheetId, range } = args;
+        const formatOptions = args.format as FormatCellsInput;
+
+        const { sheetId, gridRange } = await resolveGridRange(sheets, spreadsheetId, range);
+
+        const cellFormat: CellFormat = {};
+        const textFormat: TextFormat = {};
+
+        if (typeof formatOptions.bold === 'boolean') {
+          textFormat.bold = formatOptions.bold;
+        }
+        if (typeof formatOptions.italic === 'boolean') {
+          textFormat.italic = formatOptions.italic;
+        }
+        if (typeof formatOptions.fontSize === 'number') {
+          textFormat.fontSize = formatOptions.fontSize;
+        }
+        if (formatOptions.foregroundColor && typeof formatOptions.foregroundColor === 'object') {
+          textFormat.foregroundColor = toSheetsColor(formatOptions.foregroundColor);
+        }
+
+        if (Object.keys(textFormat).length > 0) {
+          cellFormat.textFormat = textFormat;
+        }
+
+        if (formatOptions.backgroundColor && typeof formatOptions.backgroundColor === 'object') {
+          cellFormat.backgroundColor = toSheetsColor(formatOptions.backgroundColor);
+        }
+
+        if (
+          formatOptions.numberFormat &&
+          typeof formatOptions.numberFormat === 'object' &&
+          typeof formatOptions.numberFormat.type === 'string'
+        ) {
+          const numberFormat: any = {
+            type: formatOptions.numberFormat.type,
+          };
+          if (typeof formatOptions.numberFormat.pattern === 'string') {
+            numberFormat.pattern = formatOptions.numberFormat.pattern;
+          }
+          cellFormat.numberFormat = numberFormat;
+        }
+
+        if (!cellFormat.textFormat && !cellFormat.backgroundColor && !cellFormat.numberFormat) {
+          throw new Error('At least one formatting option must be provided');
+        }
+
+        const fieldMask = buildFieldMask(cellFormat);
+        if (!fieldMask) {
+          throw new Error('Unable to determine fields to update for formatCells');
+        }
+
+        await sheets.spreadsheets.batchUpdate({
+          spreadsheetId,
+          requestBody: {
+            requests: [
+              {
+                repeatCell: {
+                  range: gridRange,
+                  cell: { userEnteredFormat: cellFormat },
+                  fields: fieldMask,
+                },
+              },
+            ],
+          },
+        });
+
+        await cacheManager.invalidate(`sheet:${spreadsheetId}:*`);
+        clearSpreadsheetMetadata(spreadsheetId);
+        clearGridRangeCacheForSheet(sheetId);
+
+        performanceMonitor.track('formatCells', Date.now() - startTime);
+        logger.info('Cell formatting applied', { spreadsheetId, range, fields: fieldMask });
+
+        return {
+          content: [{
+            type: "text",
+            text: `Formatting applied to ${range}`,
+          }],
+        };
       }
 
       case "appendRows": {

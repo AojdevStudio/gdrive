@@ -326,3 +326,396 @@ export function buildFormulaRows(
     })),
   }));
 }
+
+// ============================================================================
+// FORMATTING HELPERS (from PR #18)
+// ============================================================================
+
+export type SheetsClient = sheets_v4.Sheets;
+export type CellFormat = sheets_v4.Schema$CellFormat;
+export type TextFormat = sheets_v4.Schema$TextFormat;
+export type SheetsColor = sheets_v4.Schema$Color;
+
+/**
+ * Color input for cell and text formatting.
+ * RGB values should be between 0.0 and 1.0.
+ */
+export interface ColorInput {
+  red?: number;
+  green?: number;
+  blue?: number;
+  alpha?: number;
+}
+
+/**
+ * Number format configuration for formatCells tool.
+ */
+export interface FormatCellsNumberFormatInput {
+  type: string;
+  pattern?: string;
+}
+
+/**
+ * Input format for the formatCells tool.
+ */
+export interface FormatCellsInput {
+  bold?: boolean;
+  italic?: boolean;
+  fontSize?: number;
+  foregroundColor?: ColorInput;
+  backgroundColor?: ColorInput;
+  numberFormat?: FormatCellsNumberFormatInput;
+}
+
+interface SpreadsheetMetadata {
+  byTitle: Map<string, number>;
+  defaultSheetId?: number;
+}
+
+const spreadsheetMetadataCache = new Map<string, SpreadsheetMetadata>();
+const gridRangeCache = new Map<string, GridRange>();
+
+function normalizeRange(range: string): string {
+  return range.replace(/\$/g, '').replace(/\s+/g, '').toUpperCase();
+}
+
+// Helper to convert column letters to 0-based index for formatting
+function columnLetterToIndex(letters: string): number {
+  let value = 0;
+  for (const char of letters) {
+    const upper = char.toUpperCase();
+    if (upper < 'A' || upper > 'Z') {
+      throw new Error(`Invalid column letter '${char}' in range`);
+    }
+    value = value * 26 + (upper.charCodeAt(0) - 64);
+  }
+  return value - 1;
+}
+
+function extractSheetName(range: string): { sheetName?: string; rangeA1: string } {
+  const trimmed = range.trim();
+  if (!trimmed) {
+    return { rangeA1: '' };
+  }
+
+  const match = trimmed.match(/^(?:'((?:[^']|'')+)'|([^'!]+))!(.*)$/);
+  if (!match) {
+    return { rangeA1: trimmed };
+  }
+
+  const rawName = match[1] ?? match[2];
+  const parsedName = rawName ? rawName.replace(/''/g, "'") : undefined;
+  const rangeA1 = match[3] ?? '';
+
+  const result: { sheetName?: string; rangeA1: string } = { rangeA1 };
+  if (parsedName !== undefined) {
+    result.sheetName = parsedName;
+  }
+
+  return result;
+}
+
+async function fetchSpreadsheetMetadata(
+  sheetsClient: SheetsClient,
+  spreadsheetId: string,
+): Promise<SpreadsheetMetadata> {
+  const response = await sheetsClient.spreadsheets.get({ spreadsheetId });
+  const byTitle = new Map<string, number>();
+  let defaultSheetId: number | undefined;
+
+  for (const sheet of response.data.sheets ?? []) {
+    const id = sheet.properties?.sheetId;
+    if (id === undefined || id === null) {
+      continue;
+    }
+
+    const title = sheet.properties?.title;
+    if (title) {
+      byTitle.set(title, id);
+    }
+
+    if (defaultSheetId === undefined) {
+      defaultSheetId = id;
+    }
+  }
+
+  if (defaultSheetId === undefined) {
+    throw new Error(`No sheets found in spreadsheet ${spreadsheetId}`);
+  }
+
+  const metadata: SpreadsheetMetadata = {
+    byTitle,
+    defaultSheetId,
+  };
+
+  spreadsheetMetadataCache.set(spreadsheetId, metadata);
+  return metadata;
+}
+
+/**
+ * Resolves a sheet name to its sheet ID, with caching.
+ * Uses cached metadata to avoid repeated API calls.
+ */
+export async function getSheetIdForFormatting(
+  sheetsClient: SheetsClient,
+  spreadsheetId: string,
+  sheetName?: string,
+): Promise<number> {
+  let metadata = spreadsheetMetadataCache.get(spreadsheetId);
+  if (!metadata) {
+    metadata = await fetchSpreadsheetMetadata(sheetsClient, spreadsheetId);
+  }
+
+  if (sheetName) {
+    const sheetId = metadata.byTitle.get(sheetName);
+    if (sheetId === undefined) {
+      throw new Error(`Sheet "${sheetName}" not found in spreadsheet ${spreadsheetId}`);
+    }
+    return sheetId;
+  }
+
+  if (metadata.defaultSheetId === undefined) {
+    throw new Error(`No sheets found in spreadsheet ${spreadsheetId}`);
+  }
+
+  return metadata.defaultSheetId;
+}
+
+// Helper to parse cell reference for formatting (returns 0-based indices)
+function parseCellReferenceForFormatting(ref: string): { row?: number; column?: number } {
+  if (!ref) {
+    return {};
+  }
+
+  const match = ref.match(/^([A-Z]*)(\d*)$/);
+  if (!match) {
+    throw new Error(`Invalid A1 notation segment: ${ref}`);
+  }
+
+  const [, letters, numbers] = match;
+  const result: { row?: number; column?: number } = {};
+
+  if (letters) {
+    result.column = columnLetterToIndex(letters);
+  }
+  if (numbers) {
+    result.row = parseInt(numbers, 10) - 1;
+  }
+
+  return result;
+}
+
+/**
+ * Alternative A1 notation parser for formatting operations.
+ * Uses caching and handles empty ranges differently than formula parser.
+ */
+function parseA1NotationForFormatting(range: string, sheetId: number): GridRange | Partial<GridRange> {
+  if (!range.trim()) {
+    return { sheetId };
+  }
+
+  const normalized = normalizeRange(range);
+  const cacheKey = `${sheetId}:${normalized}`;
+  const cached = gridRangeCache.get(cacheKey);
+  if (cached) {
+    return { ...cached };
+  }
+
+  const parts = normalized.split(':');
+  const [startPart, endPart] = parts;
+  const startRef = parseCellReferenceForFormatting(startPart ?? '');
+  const endRef = parseCellReferenceForFormatting(parts.length > 1 ? endPart ?? '' : startPart ?? '');
+
+  const gridRange: Partial<GridRange> = { sheetId };
+
+  if (startRef.row !== undefined) {
+    gridRange.startRowIndex = startRef.row;
+  }
+  if (startRef.column !== undefined) {
+    gridRange.startColumnIndex = startRef.column;
+  }
+
+  if (parts.length === 1) {
+    if (startRef.row !== undefined) {
+      gridRange.endRowIndex = startRef.row + 1;
+    }
+    if (startRef.column !== undefined) {
+      gridRange.endColumnIndex = startRef.column + 1;
+    }
+  } else {
+    if (endRef.row !== undefined) {
+      gridRange.endRowIndex = endRef.row + 1;
+    }
+    if (endRef.column !== undefined) {
+      gridRange.endColumnIndex = endRef.column + 1;
+    }
+  }
+
+  if (gridRange.startRowIndex !== undefined && gridRange.endRowIndex !== undefined &&
+      gridRange.startColumnIndex !== undefined && gridRange.endColumnIndex !== undefined) {
+    const fullRange = gridRange as GridRange;
+    gridRangeCache.set(cacheKey, fullRange);
+    return { ...fullRange };
+  }
+
+  return gridRange;
+}
+
+/**
+ * Resolves a range input (with optional sheet name) to a GridRange.
+ * Handles formats: "Sheet1!A1:B5", "A1:B5", "Sheet1"
+ */
+export async function resolveGridRange(
+  sheetsClient: SheetsClient,
+  spreadsheetId: string,
+  rangeInput: string,
+): Promise<{ sheetId: number; gridRange: GridRange; sheetName?: string }> {
+  const trimmed = rangeInput.trim();
+  const { sheetName: explicitSheetName, rangeA1 } = extractSheetName(trimmed);
+
+  let targetSheetId: number;
+  let sheetName = explicitSheetName;
+  let innerRange = rangeA1;
+
+  if (sheetName !== undefined) {
+    targetSheetId = await getSheetIdForFormatting(sheetsClient, spreadsheetId, sheetName);
+  } else {
+    targetSheetId = await getSheetIdForFormatting(sheetsClient, spreadsheetId);
+
+    if (innerRange) {
+      try {
+        targetSheetId = await getSheetIdForFormatting(sheetsClient, spreadsheetId, innerRange);
+        sheetName = innerRange;
+        innerRange = '';
+      } catch {
+        // Not a sheet name - treat as range on default sheet
+      }
+    }
+  }
+
+  const parsedRange = innerRange
+    ? parseA1NotationForFormatting(innerRange, targetSheetId)
+    : { sheetId: targetSheetId };
+
+  const gridRange: GridRange = parsedRange.startRowIndex !== undefined &&
+    parsedRange.endRowIndex !== undefined &&
+    parsedRange.startColumnIndex !== undefined &&
+    parsedRange.endColumnIndex !== undefined
+      ? parsedRange as GridRange
+      : {
+          sheetId: targetSheetId,
+          startRowIndex: 0,
+          endRowIndex: 1000,
+          startColumnIndex: 0,
+          endColumnIndex: 26
+        };
+
+  const result: { sheetId: number; gridRange: GridRange; sheetName?: string } = {
+    sheetId: targetSheetId,
+    gridRange,
+  };
+
+  if (sheetName !== undefined) {
+    result.sheetName = sheetName;
+  }
+
+  return result;
+}
+
+/**
+ * Recursively collects field paths for building a field mask.
+ */
+function collectFieldMask(value: unknown, prefix: string): string[] {
+  if (value === null || value === undefined) {
+    return [];
+  }
+
+  if (typeof value !== 'object' || Array.isArray(value)) {
+    return prefix ? [prefix] : [];
+  }
+
+  const entries = Object.entries(value).filter(([, val]) => val !== undefined && val !== null);
+  if (entries.length === 0) {
+    return [];
+  }
+
+  const hasNestedObject = entries.some(([, val]) => typeof val === 'object' && val !== null && !Array.isArray(val));
+
+  const shouldExpandChildren = hasNestedObject || (prefix.endsWith('textFormat') && entries.length > 0);
+
+  if (!shouldExpandChildren) {
+    return prefix ? [prefix] : [];
+  }
+
+  const result: string[] = [];
+  for (const [key, val] of entries) {
+    if (typeof val === 'object' && val !== null && !Array.isArray(val)) {
+      result.push(...collectFieldMask(val, prefix ? `${prefix}.${key}` : key));
+    } else if (prefix) {
+      result.push(`${prefix}.${key}`);
+    } else {
+      result.push(key);
+    }
+  }
+
+  return result;
+}
+
+/**
+ * Builds a field mask string for Google Sheets API batchUpdate.
+ * Dynamically generates field paths based on provided format object.
+ */
+export function buildFieldMask(format: CellFormat): string {
+  const fields = collectFieldMask({ userEnteredFormat: format }, '');
+  const uniqueFields = Array.from(new Set(fields.filter((field) => field.length > 0)));
+  return uniqueFields.join(',');
+}
+
+/**
+ * Converts ColorInput to Google Sheets Color format.
+ */
+export function toSheetsColor(color: ColorInput): SheetsColor {
+  const sheetsColor: SheetsColor = {};
+
+  if (typeof color.red === 'number') {
+    sheetsColor.red = color.red;
+  }
+  if (typeof color.green === 'number') {
+    sheetsColor.green = color.green;
+  }
+  if (typeof color.blue === 'number') {
+    sheetsColor.blue = color.blue;
+  }
+  if (typeof color.alpha === 'number') {
+    sheetsColor.alpha = color.alpha;
+  }
+
+  return sheetsColor;
+}
+
+/**
+ * Clears cached spreadsheet metadata for a specific spreadsheet.
+ */
+export function clearSpreadsheetMetadata(spreadsheetId: string): void {
+  spreadsheetMetadataCache.delete(spreadsheetId);
+}
+
+/**
+ * Clears cached grid ranges for a specific sheet.
+ */
+export function clearGridRangeCacheForSheet(sheetId: number): void {
+  const prefix = `${sheetId}:`;
+  for (const key of Array.from(gridRangeCache.keys())) {
+    if (key.startsWith(prefix)) {
+      gridRangeCache.delete(key);
+    }
+  }
+}
+
+/**
+ * Resets all sheet helper caches (for testing).
+ */
+export function resetSheetHelperCaches(): void {
+  spreadsheetMetadataCache.clear();
+  gridRangeCache.clear();
+}

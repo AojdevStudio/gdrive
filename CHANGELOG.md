@@ -9,17 +9,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Google Sheets formula support via `updateCellsWithFormula`, including reusable range helpers and comprehensive unit tests (29 tests)
-- JSDoc documentation for all helper functions with detailed examples and parameter descriptions
-- Usage examples and security considerations for formula operations in README.md
-- Maximum cell limit (10,000 cells) to prevent memory exhaustion from very large ranges
-- Structured error logging with error type tracking for formula operations
+- **Google Sheets Formula Support** - `updateCellsWithFormula` tool for applying formulas to cells
+  - Reusable range helpers and comprehensive unit tests (29 tests)
+  - JSDoc documentation for all formula helper functions
+  - Usage examples and security considerations in README
+  - Maximum cell limit (10,000 cells) to prevent memory exhaustion
+  - Structured error logging with error type tracking
+
+- **Google Sheets Cell Formatting** - `formatCells` tool for styling cells
+  - Bold/italic text formatting
+  - Text and background colors (RGB 0.0-1.0 format)
+  - Number format presets (CURRENCY, PERCENT, DATE, NUMBER, TEXT)
+  - Dynamic field mask generation for efficient API calls
+  - Spreadsheet metadata caching to reduce API calls
+  - 5 additional unit tests for formatting helpers
 
 ### Improved
 
-- Test coverage expanded from 3 to 29 tests covering all edge cases and helper functions
+- Test coverage expanded to 34 tests total (29 formula + 5 formatting)
 - Error handling with detailed logging including error types and context
-- Documentation with practical formula examples (SUM, VLOOKUP, relative references)
+- Documentation with practical examples for both formulas and formatting
+- Unified helpers module combining formula and formatting operations
 
 ## [0.8.0] - 2025-08-19
 

@@ -215,6 +215,54 @@ if (isSafeFormula(userFormula)) {
 }
 ```
 
+#### Cell Formatting Examples
+
+**Make headers bold with gray background:**
+```javascript
+await formatCells({
+  spreadsheetId: "your-spreadsheet-id",
+  range: "Sheet1!A1:Z1",
+  format: {
+    bold: true,
+    backgroundColor: {
+      red: 0.85,
+      green: 0.85,
+      blue: 0.85
+    }
+  }
+});
+```
+
+**Apply currency formatting:**
+```javascript
+await formatCells({
+  spreadsheetId: "your-spreadsheet-id",
+  range: "Sheet1!C2:C100",
+  format: {
+    numberFormat: {
+      type: "CURRENCY",
+      pattern: "$#,##0.00"
+    }
+  }
+});
+```
+
+**Highlight warnings in red:**
+```javascript
+await formatCells({
+  spreadsheetId: "your-spreadsheet-id",
+  range: "Sheet1!A10:D10",
+  format: {
+    foregroundColor: {
+      red: 0.8,
+      green: 0.2,
+      blue: 0.2
+    },
+    bold: true
+  }
+});
+```
+
 ### 📝 **Google Docs Manipulation**
 - **Document Creation** - Create documents with content and formatting
 - **Text Operations** - Insert, replace, and style text at specific positions
@@ -279,11 +327,11 @@ graph TB
 
 ### 📖 Available Tools
 
-The server provides **23 comprehensive tools** for Google Workspace integration across **6 categories**:
+The server provides **24 comprehensive tools** for Google Workspace integration across **6 categories**:
 
 - **🔍 Search & Read** (6 tools): search, enhancedSearch, read, listSheets, readSheet, getAppScript
 - **📁 File & Folder** (4 tools): createFile, updateFile, createFolder, batchFileOperations
-- **📊 Sheets** (3 tools): updateCells, updateCellsWithFormula, appendRows
+- **📊 Sheets** (4 tools): updateCells, updateCellsWithFormula, formatCells, appendRows
 - **📋 Forms** (4 tools): createForm, getForm, addQuestion, listResponses
 - **📝 Docs** (5 tools): createDocument, insertText, replaceText, applyTextStyle, insertTable
 - **📂 Resources**: MCP resource access via `gdrive:///<file_id>` URIs
