@@ -18,30 +18,7 @@ import { AuthManager, AuthState } from "./src/auth/AuthManager.js";
 import { TokenManager } from "./src/auth/TokenManager.js";
 import { KeyRotationManager } from "./src/auth/KeyRotationManager.js";
 import { performHealthCheck, HealthStatus } from "./src/health-check.js";
-import {
-  buildFieldMask,
-  buildFormulaRows,
-  clearGridRangeCacheForSheet,
-  clearSpreadsheetMetadata,
-  getSheetId,
-  parseA1Notation,
-  parseRangeInput,
-  resolveGridRange,
-  toSheetsColor,
-  type CellFormat,
-  type FormatCellsInput,
-  type TextFormat,
-} from "./src/sheets/helpers.js";
-import {
-  buildConditionalFormattingRequestBody,
-  extractSheetNameFromRange,
-  type ConditionalFormattingRuleInput,
-} from "./src/sheets/conditional-formatting.js";
-import {
-  createColumnWidthRequests,
-  createFreezeRequest,
-  resolveSheetDetails,
-} from "./src/sheets/layoutHelpers.js";
+import { handleSheetsTool } from "./src/sheets/sheets-handler.js";
 
 const drive = google.drive("v3");
 const sheets = google.sheets("v4");
@@ -158,37 +135,6 @@ interface TextStyle {
  * RGBA color definition that matches the Google Sheets API structure. All
  * channels are normalized numbers between 0 and 1 inclusive.
  */
-interface Color {
-  red?: number;
-  green?: number;
-  blue?: number;
-  alpha?: number;
-}
-
-/**
- * Optional grid configuration values for a sheet. Individual properties are
- * forwarded directly to `GridProperties` in the Sheets API.
- */
-interface GridProperties {
-  rowCount?: number;
-  columnCount?: number;
-  frozenRowCount?: number;
-  frozenColumnCount?: number;
-}
-
-/**
- * Sheet-level configuration that is sent in the addSheet batchUpdate request.
- */
-interface SheetProperties {
-  sheetId?: number;
-  title?: string;
-  index?: number;
-  gridProperties?: GridProperties;
-  hidden?: boolean;
-  tabColor?: Color;
-  rightToLeft?: boolean;
-}
-
 // Structured logging with Winston
 // Ensure Error instances inside metadata are serialized with details
 const errorSerializer = winston.format((info) => {
@@ -264,19 +210,6 @@ const safeStringify = (value: unknown): string => {
   }
 };
 
-const toErrorMessage = (error: unknown): string => {
-  if (error instanceof Error) {
-    return error.message;
-  }
-  if (typeof error === 'string') {
-    return error;
-  }
-  if (error && typeof error === 'object' && 'message' in error && typeof (error as { message: unknown }).message === 'string') {
-    return (error as { message: string }).message;
-  }
-  return safeStringify(error);
-};
-
 const logger = winston.createLogger({
   level: process.env.LOG_LEVEL ?? 'info',
   format: winston.format.combine(
@@ -313,74 +246,6 @@ const logger = winston.createLogger({
 });
 
 // Sheet metadata resolution helper
-interface SheetIdentifier {
-  sheetId?: unknown;
-  sheetName?: unknown;
-  title?: unknown;
-}
-
-const resolveSheetMetadata = async (
-  spreadsheetId: string,
-  identifiers: SheetIdentifier,
-  operation: string,
-): Promise<{ sheetId: number; title?: string }> => {
-  let numericId: number | undefined;
-
-  if (typeof identifiers.sheetId === 'number') {
-    numericId = identifiers.sheetId;
-  } else if (typeof identifiers.sheetId === 'string' && identifiers.sheetId.trim() !== '') {
-    const parsed = Number(identifiers.sheetId);
-    if (Number.isNaN(parsed)) {
-      throw new Error(`${operation} requires sheetId to be a number`);
-    }
-    numericId = parsed;
-  }
-
-  const providedName =
-    typeof identifiers.sheetName === 'string' && identifiers.sheetName.trim() !== ''
-      ? identifiers.sheetName
-      : typeof identifiers.title === 'string' && identifiers.title.trim() !== ''
-        ? identifiers.title
-        : undefined;
-
-  if (numericId !== undefined) {
-    const result: { sheetId: number; title?: string } = { sheetId: numericId };
-    if (providedName !== undefined) {
-      result.title = providedName;
-    }
-    return result;
-  }
-
-  if (!providedName) {
-    throw new Error(`${operation} requires either sheetId or sheetName`);
-  }
-
-  let response;
-  try {
-    response = await sheets.spreadsheets.get({
-      spreadsheetId,
-      fields: 'sheets(properties(sheetId,title))',
-    });
-  } catch (error) {
-    logger.error('Failed to resolve sheet ID', { spreadsheetId, sheetName: providedName, operation, error });
-    throw new Error(`Failed to resolve sheet ID for "${providedName}" in spreadsheet ${spreadsheetId}: ${toErrorMessage(error)}`);
-  }
-
-  const match = response.data.sheets?.find((sheet) => sheet.properties?.title === providedName);
-  const sheetId = match?.properties?.sheetId;
-
-  if (typeof sheetId !== 'number') {
-    throw new Error(`Sheet "${providedName}" not found in spreadsheet ${spreadsheetId}`);
-  }
-
-  const result: { sheetId: number; title?: string } = { sheetId };
-  const resolvedTitle = match?.properties?.title ?? providedName;
-  if (resolvedTitle !== undefined) {
-    result.title = resolvedTitle;
-  }
-  return result;
-};
-
 // Performance monitoring
 class PerformanceMonitor {
   private metrics: Map<string, { count: number; totalTime: number; errors: number }> = new Map();
@@ -933,181 +798,98 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         },
       },
       {
-        name: "listSheets",
-        description: "List all sheets in a Google Sheets document",
+        name: "sheets",
+        description: "Consolidated Google Sheets tool supporting operations for list, read, create, rename, delete, update, updateFormula, format, conditionalFormat, append, freeze, and setColumnWidth",
         inputSchema: {
           type: "object",
           properties: {
-            spreadsheetId: {
+            operation: {
               type: "string",
-              description: "The ID of the Google Sheets document",
+              enum: [
+                "list",
+                "read",
+                "create",
+                "rename",
+                "delete",
+                "update",
+                "updateFormula",
+                "format",
+                "conditionalFormat",
+                "append",
+                "freeze",
+                "setColumnWidth"
+              ],
+              description: "The sheets tool operation to execute",
             },
-          },
-          required: ["spreadsheetId"],
-        },
-      },
-      {
-        name: "readSheet",
-        description: "Read data from a specific sheet or range in Google Sheets",
-        inputSchema: {
-          type: "object",
-          properties: {
             spreadsheetId: {
               type: "string",
-              description: "The ID of the Google Sheets document",
+              description: "The ID of the target spreadsheet",
             },
             range: {
               type: "string",
-              description: "The A1 notation range to read (e.g., 'Sheet1!A1:B10', 'Sheet1')",
-              default: "Sheet1",
-            },
-          },
-          required: ["spreadsheetId"],
-        },
-      },
-      {
-        name: "updateCells",
-        description: "Update cells in a Google Sheets document",
-        inputSchema: {
-          type: "object",
-          properties: {
-            spreadsheetId: {
-              type: "string",
-              description: "The ID of the Google Sheets document",
-            },
-            range: {
-              type: "string",
-              description: "The A1 notation range to update (e.g., 'Sheet1!A1:B2')",
-            },
-            values: {
-              type: "array",
-              description: "2D array of values to write",
-              items: {
-                type: "array",
-                items: {
-                  type: ["string", "number", "boolean", "null"],
-                },
-              },
-            },
-          },
-          required: ["spreadsheetId", "range", "values"],
-        },
-      },
-      {
-        name: "updateCellsWithFormula",
-        description: "Set cell formulas in Google Sheets (e.g., =SUM(A1:A10))",
-        inputSchema: {
-          type: "object",
-          properties: {
-            spreadsheetId: {
-              type: "string",
-              description: "The ID of the Google Sheets document",
-            },
-            range: {
-              type: "string",
-              description: "The A1 notation range to update (e.g., 'Sheet1!A1')",
-            },
-            formula: {
-              type: "string",
-              description: "Formula to apply (must include leading '=' sign)",
+              description: "A1 notation range used by read, update, updateFormula, format, and conditionalFormat operations",
             },
             sheetName: {
               type: "string",
-              description: "Optional sheet name when not included in the range",
+              description: "Optional sheet title used by create, append, freeze, setColumnWidth, and as an alternative identifier for rename/delete/updateFormula",
             },
-          },
-          required: ["spreadsheetId", "range", "formula"],
-        },
-      },
-      {
-        name: "formatCells",
-        description: "Apply formatting to cells (bold, colors, number formats) in Google Sheets",
-        inputSchema: {
-          type: "object",
-          properties: {
-            spreadsheetId: {
-              type: "string",
-              description: "The ID of the Google Sheets document",
+            sheetId: {
+              type: "number",
+              description: "Optional numeric sheet identifier for rename and delete operations",
             },
-            range: {
+            newName: {
               type: "string",
-              description: "The A1 notation range to format (e.g., 'Sheet1!A1:B2')",
+              description: "New sheet name for the rename operation",
+            },
+            values: {
+              type: "array",
+              description: "2D array of cell values for update and append operations",
+              items: {
+                type: "array",
+                items: {},
+              },
+            },
+            formula: {
+              type: "string",
+              description: "Formula string for the updateFormula operation",
             },
             format: {
               type: "object",
-              description: "Formatting options to apply to the cells",
+              description: "Formatting options for the format operation",
               properties: {
-                bold: {
-                  type: "boolean",
-                  description: "Apply bold styling to text",
-                },
-                italic: {
-                  type: "boolean",
-                  description: "Apply italic styling to text",
-                },
-                fontSize: {
-                  type: "number",
-                  description: "Font size in points (e.g., 12)",
-                },
+                bold: { type: "boolean" },
+                italic: { type: "boolean" },
+                fontSize: { type: "number" },
                 foregroundColor: {
                   type: "object",
-                  description: "Text color using 0.0-1.0 RGB channel values",
                   properties: {
-                    red: { type: "number", description: "Red channel (0.0 - 1.0)" },
-                    green: { type: "number", description: "Green channel (0.0 - 1.0)" },
-                    blue: { type: "number", description: "Blue channel (0.0 - 1.0)" },
-                    alpha: { type: "number", description: "Alpha channel (0.0 - 1.0)", default: 1 },
+                    red: { type: "number", minimum: 0, maximum: 1 },
+                    green: { type: "number", minimum: 0, maximum: 1 },
+                    blue: { type: "number", minimum: 0, maximum: 1 },
+                    alpha: { type: "number", minimum: 0, maximum: 1 },
                   },
                 },
                 backgroundColor: {
                   type: "object",
-                  description: "Cell background color using 0.0-1.0 RGB channel values",
                   properties: {
-                    red: { type: "number", description: "Red channel (0.0 - 1.0)" },
-                    green: { type: "number", description: "Green channel (0.0 - 1.0)" },
-                    blue: { type: "number", description: "Blue channel (0.0 - 1.0)" },
-                    alpha: { type: "number", description: "Alpha channel (0.0 - 1.0)", default: 1 },
+                    red: { type: "number", minimum: 0, maximum: 1 },
+                    green: { type: "number", minimum: 0, maximum: 1 },
+                    blue: { type: "number", minimum: 0, maximum: 1 },
+                    alpha: { type: "number", minimum: 0, maximum: 1 },
                   },
                 },
                 numberFormat: {
                   type: "object",
-                  description: "Number formatting options",
                   properties: {
-                    type: {
-                      type: "string",
-                      description: "Number format preset",
-                      enum: ["CURRENCY", "PERCENT", "DATE", "NUMBER", "TEXT"],
-                    },
-                    pattern: {
-                      type: "string",
-                      description: "Custom number format pattern (e.g., '$#,##0.00')",
-                    },
+                    type: { type: "string" },
+                    pattern: { type: "string" },
                   },
-                  required: ["type"],
                 },
               },
             },
-          },
-          required: ["spreadsheetId", "range", "format"],
-        },
-      },
-      {
-        name: "addConditionalFormatting",
-        description: "Add a conditional formatting rule to a Google Sheets range",
-        inputSchema: {
-          type: "object",
-          properties: {
-            spreadsheetId: {
-              type: "string",
-              description: "The ID of the Google Sheets document",
-            },
-            range: {
-              type: "string",
-              description: "A1 notation range to apply the rule (e.g., 'Sheet1!A2:A25' or 'B2:B10')",
-            },
             rule: {
               type: "object",
-              description: "Conditional formatting rule definition",
+              description: "Conditional formatting rule for the conditionalFormat operation",
               properties: {
                 condition: {
                   type: "object",
@@ -1115,26 +897,19 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
                     type: {
                       type: "string",
                       enum: ["NUMBER_GREATER", "NUMBER_LESS", "TEXT_CONTAINS", "CUSTOM_FORMULA"],
-                      description: "Comparison operator or custom formula type",
                     },
                     values: {
                       type: "array",
                       items: { type: "string" },
-                      description: "Comparison values for numeric or text conditions",
                     },
-                    formula: {
-                      type: "string",
-                      description: "Custom formula used when type is CUSTOM_FORMULA",
-                    },
+                    formula: { type: "string" },
                   },
-                  required: ["type"],
                 },
                 format: {
                   type: "object",
                   properties: {
                     backgroundColor: {
                       type: "object",
-                      description: "Cell background color using normalized RGB values (0-1)",
                       properties: {
                         red: { type: "number", minimum: 0, maximum: 1 },
                         green: { type: "number", minimum: 0, maximum: 1 },
@@ -1144,7 +919,6 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
                     },
                     foregroundColor: {
                       type: "object",
-                      description: "Text color using normalized RGB values (0-1)",
                       properties: {
                         red: { type: "number", minimum: 0, maximum: 1 },
                         green: { type: "number", minimum: 0, maximum: 1 },
@@ -1152,153 +926,57 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
                         alpha: { type: "number", minimum: 0, maximum: 1 },
                       },
                     },
-                    bold: {
-                      type: "boolean",
-                      description: "Apply bold text formatting when true",
-                    },
+                    bold: { type: "boolean" },
                   },
                 },
               },
-              required: ["condition", "format"],
-            },
-          },
-          required: ["spreadsheetId", "range", "rule"],
-        },
-      },
-      {
-        name: "appendRows",
-        description: "Append rows to a Google Sheets document",
-        inputSchema: {
-          type: "object",
-          properties: {
-            spreadsheetId: {
-              type: "string",
-              description: "The ID of the Google Sheets document",
-            },
-            sheetName: {
-              type: "string",
-              description: "The name of the sheet to append to",
-              default: "Sheet1",
-            },
-            values: {
-              type: "array",
-              description: "2D array of values to append",
-              items: {
-                type: "array",
-                items: {
-                  type: ["string", "number", "boolean", "null"],
-                },
-              },
-            },
-          },
-          required: ["spreadsheetId", "values"],
-        },
-      },
-      {
-        name: "freezeRowsColumns",
-        description: "Freeze header rows and/or columns within a Google Sheet",
-        inputSchema: {
-          type: "object",
-          properties: {
-            spreadsheetId: {
-              type: "string",
-              description: "The ID of the Google Sheets document",
-            },
-            sheetName: {
-              type: "string",
-              description: "Optional sheet name (defaults to the first sheet)",
-            },
-            frozenRowCount: {
-              type: "number",
-              description: "Number of rows to freeze from the top of the sheet",
-              default: 0,
-            },
-            frozenColumnCount: {
-              type: "number",
-              description: "Number of columns to freeze from the left of the sheet",
-              default: 0,
-            },
-          },
-          required: ["spreadsheetId"],
-        },
-      },
-      {
-        name: "setColumnWidth",
-        description: "Adjust pixel widths for specific columns in a Google Sheet",
-        inputSchema: {
-          type: "object",
-          properties: {
-            spreadsheetId: {
-              type: "string",
-              description: "The ID of the Google Sheets document",
-            },
-            sheetName: {
-              type: "string",
-              description: "Optional sheet name (defaults to the first sheet)",
-            },
-            columns: {
-              type: "array",
-              description: "List of column index/width pairs to update",
-              items: {
-                type: "object",
-                properties: {
-                  columnIndex: {
-                    type: "number",
-                    description: "0-based column index (A = 0, B = 1, etc.)",
-                  },
-                  width: {
-                    type: "number",
-                    description: "Pixel width for the column",
-                    default: 100,
-                  },
-                },
-                required: ["columnIndex"],
-              },
-            },
-          },
-          required: ["spreadsheetId", "columns"],
-        },
-      },
-      {
-        name: "createSheet",
-        description: "Create a new sheet in an existing Google Spreadsheet. Examples: {\"spreadsheetId\": \"abc123\", \"title\": \"Quarterly 📊\"} and {\"spreadsheetId\": \"abc123\", \"title\": \"Roadmap\", \"tabColor\": {\"red\": 0.1, \"green\": 0.3, \"blue\": 0.7}}",
-        inputSchema: {
-          type: "object",
-          properties: {
-            spreadsheetId: {
-              type: "string",
-              description: "The ID of the Google Sheets document",
-            },
-            sheetName: {
-              type: "string",
-              description: "Name of the new sheet (alias for title)",
-            },
-            title: {
-              type: "string",
-              description: "The name of the new sheet (deprecated alias)",
-            },
-            index: {
-              type: "number",
-              description: "The position where the sheet should be inserted (0-based)",
             },
             rowCount: {
               type: "number",
-              description: "Number of rows in the new sheet",
+              description: "Initial row count for the create operation",
               default: 1000,
             },
             columnCount: {
               type: "number",
-              description: "Number of columns in the new sheet",
+              description: "Initial column count for the create operation",
               default: 26,
+            },
+            frozenRowCount: {
+              type: "number",
+              description: "Number of rows to freeze for the freeze operation",
+              default: 0,
+            },
+            frozenColumnCount: {
+              type: "number",
+              description: "Number of columns to freeze for the freeze operation",
+              default: 0,
+            },
+            columns: {
+              type: "array",
+              description: "Column definitions for the setColumnWidth operation",
+              items: {
+                type: "object",
+                properties: {
+                  columnIndex: { type: "number" },
+                  width: { type: "number" },
+                },
+              },
+            },
+            index: {
+              type: "number",
+              description: "Optional zero-based index for where the new sheet should be inserted",
             },
             hidden: {
               type: "boolean",
-              description: "Whether the sheet should be hidden",
-              default: false,
+              description: "Whether the new sheet should be hidden on creation",
+            },
+            rightToLeft: {
+              type: "boolean",
+              description: "Whether the new sheet should use right-to-left layout",
             },
             tabColor: {
               type: "object",
-              description: "RGB color for the sheet tab using normalized 0-1 values (e.g. 0.5 = 50% intensity)",
+              description: "Tab color for the create operation",
               properties: {
                 red: { type: "number", minimum: 0, maximum: 1 },
                 green: { type: "number", minimum: 0, maximum: 1 },
@@ -1306,71 +984,12 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
                 alpha: { type: "number", minimum: 0, maximum: 1 },
               },
             },
-            frozenRowCount: {
-              type: "number",
-              description: "Number of rows to freeze",
-              default: 0,
-            },
-            frozenColumnCount: {
-              type: "number",
-              description: "Number of columns to freeze",
-              default: 0,
-            },
-            rightToLeft: {
-              type: "boolean",
-              description: "Whether text should be right-to-left",
-              default: false,
+            title: {
+              type: "string",
+              description: "Optional alias for sheetName when creating or identifying sheets",
             },
           },
-          required: ["spreadsheetId"],
-        },
-      },
-      {
-        name: "renameSheet",
-        description: "Rename an existing sheet within a Google Spreadsheet",
-        inputSchema: {
-          type: "object",
-          properties: {
-            spreadsheetId: {
-              type: "string",
-              description: "The ID of the Google Sheets document",
-            },
-            sheetId: {
-              type: ["number", "string"],
-              description: "Numeric ID of the sheet to rename",
-            },
-            sheetName: {
-              type: "string",
-              description: "Name of the sheet to rename (alternative to sheetId)",
-            },
-            newName: {
-              type: "string",
-              description: "The new sheet name",
-            },
-          },
-          required: ["spreadsheetId", "newName"],
-        },
-      },
-      {
-        name: "deleteSheet",
-        description: "Delete a sheet from a Google Spreadsheet",
-        inputSchema: {
-          type: "object",
-          properties: {
-            spreadsheetId: {
-              type: "string",
-              description: "The ID of the Google Sheets document",
-            },
-            sheetId: {
-              type: ["number", "string"],
-              description: "Numeric ID of the sheet to delete",
-            },
-            sheetName: {
-              type: "string",
-              description: "Name of the sheet to delete (alternative to sheetId)",
-            },
-          },
-          required: ["spreadsheetId"],
+          required: ["operation", "spreadsheetId"],
         },
       },
       {
@@ -2020,746 +1639,14 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         };
       }
 
-      case "listSheets": {
-        if (!args || typeof args.spreadsheetId !== 'string') {
-          throw new Error('spreadsheetId parameter is required');
-        }
-        const { spreadsheetId } = args;
-
-        const response = await sheets.spreadsheets.get({
-          spreadsheetId,
-        });
-
-        const sheetList = response.data.sheets?.map((sheet) => ({
-          sheetId: sheet.properties?.sheetId,
-          title: sheet.properties?.title,
-          index: sheet.properties?.index,
-          rowCount: sheet.properties?.gridProperties?.rowCount,
-          columnCount: sheet.properties?.gridProperties?.columnCount,
-        })) ?? [];
-
-        performanceMonitor.track('listSheets', Date.now() - startTime);
-
-        return {
-          content: [{
-            type: "text",
-            text: JSON.stringify(sheetList, null, 2),
-          }],
-        };
-      }
-
-      case "readSheet": {
-        if (!args || typeof args.spreadsheetId !== 'string') {
-          throw new Error('spreadsheetId parameter is required');
-        }
-        const { spreadsheetId } = args;
-        const range = (typeof args.range === 'string' ? args.range : "Sheet1");
-
-        const cacheKey = `sheet:${spreadsheetId}:${range}`;
-        const cached = await cacheManager.get(cacheKey);
-        if (cached) {
-          performanceMonitor.track('readSheet', Date.now() - startTime);
-          return cached;
-        }
-
-        const response = await sheets.spreadsheets.values.get({
-          spreadsheetId,
-          range,
-        });
-
-        const result = {
-          content: [{
-            type: "text",
-            text: JSON.stringify({
-              range: response.data.range,
-              values: response.data.values ?? [],
-            }, null, 2),
-          }],
-        };
-
-        await cacheManager.set(cacheKey, result);
-        performanceMonitor.track('readSheet', Date.now() - startTime);
-
-        return result;
-      }
-
-      case "updateCells": {
-        if (!args || typeof args.spreadsheetId !== 'string' || typeof args.range !== 'string' || !Array.isArray(args.values)) {
-          throw new Error('spreadsheetId, range, and values parameters are required');
-        }
-        const { spreadsheetId, range, values } = args;
-
-        await sheets.spreadsheets.values.update({
-          spreadsheetId,
-          range,
-          valueInputOption: "USER_ENTERED",
-          requestBody: {
-            values,
-          },
-        });
-
-        // Invalidate cache
-        await cacheManager.invalidate(`sheet:${spreadsheetId}:*`);
-
-        performanceMonitor.track('updateCells', Date.now() - startTime);
-        logger.info('Cells updated', { spreadsheetId, range });
-
-        return {
-          content: [{
-            type: "text",
-            text: `Successfully updated ${values.length} rows in range ${range}`,
-          }],
-        };
-      }
-
-      case "updateCellsWithFormula": {
-        if (
-          !args ||
-          typeof args.spreadsheetId !== 'string' ||
-          typeof args.range !== 'string' ||
-          typeof args.formula !== 'string'
-        ) {
-          throw new Error('spreadsheetId, range, and formula parameters are required');
-        }
-
-        const spreadsheetId = args.spreadsheetId;
-        const rawRange = args.range;
-        const formula = args.formula;
-        const providedSheetName =
-          typeof args.sheetName === 'string' && args.sheetName.trim() ? args.sheetName.trim() : undefined;
-
-        try {
-          const { sheetName: rangeSheetName, a1Range } = parseRangeInput(rawRange);
-
-          if (providedSheetName && rangeSheetName && providedSheetName !== rangeSheetName) {
-            throw new Error('sheetName does not match the sheet specified in range');
-          }
-
-          const { sheetId, title } = await getSheetId(
-            sheets,
-            spreadsheetId,
-            providedSheetName ?? rangeSheetName
-          );
-
-          const gridRange = parseA1Notation(a1Range, sheetId);
-          const normalizedFormula = formula.trim();
-          const rows = buildFormulaRows(gridRange, normalizedFormula);
-
-          await sheets.spreadsheets.batchUpdate({
-            spreadsheetId,
-            requestBody: {
-              requests: [
-                {
-                  updateCells: {
-                    range: gridRange,
-                    fields: "userEnteredValue",
-                    rows,
-                  },
-                },
-              ],
-            },
-          });
-
-          await cacheManager.invalidate(`sheet:${spreadsheetId}:*`);
-
-          performanceMonitor.track('updateCellsWithFormula', Date.now() - startTime);
-          logger.info('Formula updated', {
-            spreadsheetId,
-            sheetId,
-            sheetTitle: title,
-            range: `${title}!${a1Range}`,
-            formula: normalizedFormula,
-          });
-
-          return {
-            content: [
-              {
-                type: "text",
-                text: `Successfully set formula ${normalizedFormula} in range ${title}!${a1Range}`,
-              },
-            ],
-          };
-        } catch (error) {
-          const errorType = error instanceof Error ? error.constructor.name : 'UnknownError';
-          const errorMessage = error instanceof Error ? error.message : String(error);
-
-          logger.error('Formula update failed', {
-            spreadsheetId,
-            range: rawRange,
-            formula: formula,
-            error: errorMessage,
-            errorType: errorType,
-          });
-
-          // Track failed operation
-          performanceMonitor.track('updateCellsWithFormula', Date.now() - startTime, true);
-
-          throw error;
-        }
-      }
-
-      case "formatCells": {
-        if (
-          !args ||
-          typeof args.spreadsheetId !== 'string' ||
-          typeof args.range !== 'string' ||
-          typeof args.format !== 'object' ||
-          args.format === null
-        ) {
-          throw new Error('spreadsheetId, range, and format parameters are required');
-        }
-
-        const { spreadsheetId, range } = args;
-        const formatOptions = args.format as FormatCellsInput;
-
-        const { sheetId, gridRange } = await resolveGridRange(sheets, spreadsheetId, range);
-
-        const cellFormat: CellFormat = {};
-        const textFormat: TextFormat = {};
-
-        if (typeof formatOptions.bold === 'boolean') {
-          textFormat.bold = formatOptions.bold;
-        }
-        if (typeof formatOptions.italic === 'boolean') {
-          textFormat.italic = formatOptions.italic;
-        }
-        if (typeof formatOptions.fontSize === 'number') {
-          textFormat.fontSize = formatOptions.fontSize;
-        }
-        if (formatOptions.foregroundColor && typeof formatOptions.foregroundColor === 'object') {
-          textFormat.foregroundColor = toSheetsColor(formatOptions.foregroundColor);
-        }
-
-        if (Object.keys(textFormat).length > 0) {
-          cellFormat.textFormat = textFormat;
-        }
-
-        if (formatOptions.backgroundColor && typeof formatOptions.backgroundColor === 'object') {
-          cellFormat.backgroundColor = toSheetsColor(formatOptions.backgroundColor);
-        }
-
-        if (
-          formatOptions.numberFormat &&
-          typeof formatOptions.numberFormat === 'object' &&
-          typeof formatOptions.numberFormat.type === 'string'
-        ) {
-          const numberFormat: any = {
-            type: formatOptions.numberFormat.type,
-          };
-          if (typeof formatOptions.numberFormat.pattern === 'string') {
-            numberFormat.pattern = formatOptions.numberFormat.pattern;
-          }
-          cellFormat.numberFormat = numberFormat;
-        }
-
-        if (!cellFormat.textFormat && !cellFormat.backgroundColor && !cellFormat.numberFormat) {
-          throw new Error('At least one formatting option must be provided');
-        }
-
-        const fieldMask = buildFieldMask(cellFormat);
-        if (!fieldMask) {
-          throw new Error('Unable to determine fields to update for formatCells');
-        }
-
-        await sheets.spreadsheets.batchUpdate({
-          spreadsheetId,
-          requestBody: {
-            requests: [
-              {
-                repeatCell: {
-                  range: gridRange,
-                  cell: { userEnteredFormat: cellFormat },
-                  fields: fieldMask,
-                },
-              },
-            ],
-          },
-        });
-
-        await cacheManager.invalidate(`sheet:${spreadsheetId}:*`);
-        clearSpreadsheetMetadata(spreadsheetId);
-        clearGridRangeCacheForSheet(sheetId);
-
-        performanceMonitor.track('formatCells', Date.now() - startTime);
-        logger.info('Cell formatting applied', { spreadsheetId, range, fields: fieldMask });
-
-        return {
-          content: [{
-            type: "text",
-            text: `Formatting applied to ${range}`,
-          }],
-        };
-      }
-
-      case "addConditionalFormatting": {
-        if (!args || typeof args.spreadsheetId !== 'string') {
-          throw new Error('spreadsheetId parameter is required');
-        }
-        if (typeof args.range !== 'string' || args.range.trim() === '') {
-          throw new Error('range parameter is required');
-        }
-        if (!args.rule || typeof args.rule !== 'object') {
-          throw new Error('rule parameter is required');
-        }
-
-        const { spreadsheetId } = args;
-        const rangeInput = args.range as string;
-        const { sheetName, range } = extractSheetNameFromRange(rangeInput);
-
-        // Use our existing getSheetId helper from helpers.ts
-        const sheetIdResult = await getSheetId(
+      case "sheets": {
+        return await handleSheetsTool(args ?? {}, {
+          logger,
           sheets,
-          spreadsheetId,
-          sheetName
-        );
-        const sheetId = typeof sheetIdResult === 'object' ? sheetIdResult.sheetId : sheetIdResult;
-
-        const ruleInput = args.rule as ConditionalFormattingRuleInput;
-
-        const requestBody = buildConditionalFormattingRequestBody({
-          sheetId,
-          range,
-          rule: ruleInput,
-          index: 0,
+          cacheManager,
+          performanceMonitor,
+          startTime,
         });
-
-        try {
-          await sheets.spreadsheets.batchUpdate({
-            spreadsheetId,
-            requestBody,
-          });
-        } catch (error) {
-          performanceMonitor.track('addConditionalFormatting', Date.now() - startTime, true);
-          logger.error('Failed to add conditional formatting', { spreadsheetId, range: rangeInput, error });
-          throw error;
-        }
-
-        await cacheManager.invalidate(`sheet:${spreadsheetId}:*`);
-
-        performanceMonitor.track('addConditionalFormatting', Date.now() - startTime);
-        logger.info('Conditional formatting added', { spreadsheetId, range: rangeInput, sheetId });
-
-        return {
-          content: [{
-            type: "text",
-            text: `Conditional formatting added to ${rangeInput}`,
-          }],
-        };
-      }
-
-      case "appendRows": {
-        if (!args || typeof args.spreadsheetId !== 'string' || !Array.isArray(args.values)) {
-          throw new Error('spreadsheetId and values parameters are required');
-        }
-        const { spreadsheetId, values } = args;
-        const sheetName = (typeof args.sheetName === 'string' ? args.sheetName : "Sheet1");
-
-        await sheets.spreadsheets.values.append({
-          spreadsheetId,
-          range: sheetName,
-          valueInputOption: "USER_ENTERED",
-          insertDataOption: "INSERT_ROWS",
-          requestBody: {
-            values,
-          },
-        });
-
-        // Invalidate cache
-        await cacheManager.invalidate(`sheet:${spreadsheetId}:*`);
-
-        performanceMonitor.track('appendRows', Date.now() - startTime);
-        logger.info('Rows appended', { spreadsheetId, sheetName, rowCount: values.length });
-
-        return {
-          content: [{
-            type: "text",
-            text: `Successfully appended ${values.length} rows to ${sheetName}`,
-          }],
-        };
-      }
-
-      case "createSheet": {
-        if (!args || typeof args.spreadsheetId !== 'string') {
-          throw new Error('spreadsheetId parameter is required');
-        }
-
-        const { spreadsheetId } = args;
-
-        // Build SheetProperties from arguments
-        const sheetProperties: SheetProperties = {};
-
-        const providedSheetName =
-          typeof args.sheetName === 'string' && args.sheetName.trim() !== ''
-            ? args.sheetName
-            : undefined;
-        const providedTitle =
-          typeof args.title === 'string' && args.title.trim() !== ''
-            ? args.title
-            : undefined;
-
-        const effectiveTitle = providedSheetName ?? providedTitle;
-        if (effectiveTitle) {
-          sheetProperties.title = effectiveTitle;
-        }
-
-        if (typeof args.index === 'number') {
-          sheetProperties.index = args.index;
-        }
-
-        if (typeof args.hidden === 'boolean') {
-          sheetProperties.hidden = args.hidden;
-        }
-
-        if (typeof args.rightToLeft === 'boolean') {
-          sheetProperties.rightToLeft = args.rightToLeft;
-        }
-
-        // Build GridProperties with defaults
-        const rowCount = typeof args.rowCount === 'number' ? args.rowCount : 1000;
-        const columnCount = typeof args.columnCount === 'number' ? args.columnCount : 26;
-
-        sheetProperties.gridProperties = {
-          rowCount,
-          columnCount,
-        };
-
-        if (typeof args.frozenRowCount === 'number') {
-          sheetProperties.gridProperties.frozenRowCount = args.frozenRowCount;
-        }
-
-        if (typeof args.frozenColumnCount === 'number') {
-          sheetProperties.gridProperties.frozenColumnCount = args.frozenColumnCount;
-        }
-
-        // Handle tabColor if provided
-        if (args.tabColor && typeof args.tabColor === 'object') {
-          const color = args.tabColor as Color;
-          const validatedColor: Color = {};
-          (['red', 'green', 'blue', 'alpha'] as Array<keyof Color>).forEach((channel) => {
-            const value = color[channel];
-            if (value !== undefined) {
-              if (typeof value !== 'number' || Number.isNaN(value) || value < 0 || value > 1) {
-                throw new Error(`tabColor.${channel} must be a number between 0 and 1`);
-              }
-              validatedColor[channel] = value;
-            }
-          });
-
-          if (Object.keys(validatedColor).length > 0) {
-            sheetProperties.tabColor = validatedColor;
-          }
-        }
-
-        // Execute batchUpdate to create the sheet
-        let response;
-        try {
-          response = await sheets.spreadsheets.batchUpdate({
-            spreadsheetId,
-            requestBody: {
-              requests: [{
-                addSheet: {
-                  properties: sheetProperties,
-                },
-              }],
-            },
-          });
-        } catch (error) {
-          performanceMonitor.track('createSheet', Date.now() - startTime, true);
-          const message = toErrorMessage(error);
-          logger.error('Failed to create sheet with batchUpdate', { spreadsheetId, error });
-          throw new Error(`Failed to create sheet in spreadsheet ${spreadsheetId}: ${message}`);
-        }
-
-        // Extract the new sheet ID from response
-        const newSheetId = response.data.replies?.[0]?.addSheet?.properties?.sheetId;
-        const newSheetTitle = response.data.replies?.[0]?.addSheet?.properties?.title ?? sheetProperties.title ?? 'Untitled Sheet';
-
-        const resolvedSheet = await resolveSheetMetadata(
-          spreadsheetId,
-          {
-            sheetId: typeof newSheetId === 'number' ? newSheetId : undefined,
-            sheetName: newSheetTitle,
-            title: newSheetTitle,
-          },
-          'createSheet',
-        );
-
-        // Invalidate cache for this spreadsheet
-        await cacheManager.invalidate(`sheet:${spreadsheetId}:*`);
-
-        performanceMonitor.track('createSheet', Date.now() - startTime);
-        logger.info('Sheet created', { spreadsheetId, sheetId: resolvedSheet.sheetId, title: resolvedSheet.title });
-
-        return {
-          content: [{
-            type: "text",
-            text: `Successfully created sheet "${resolvedSheet.title}" with ID ${resolvedSheet.sheetId} in spreadsheet ${spreadsheetId}`,
-          }],
-        };
-      }
-
-      case "renameSheet": {
-        if (!args || typeof args.spreadsheetId !== 'string') {
-          throw new Error('spreadsheetId parameter is required');
-        }
-        if (typeof args.newName !== 'string' || args.newName.trim() === '') {
-          throw new Error('newName parameter is required');
-        }
-
-        const { spreadsheetId, newName } = args;
-        const resolved = await resolveSheetMetadata(spreadsheetId, args, 'renameSheet');
-
-        try {
-          await sheets.spreadsheets.batchUpdate({
-            spreadsheetId,
-            requestBody: {
-              requests: [{
-                updateSheetProperties: {
-                  properties: {
-                    sheetId: resolved.sheetId,
-                    title: newName,
-                  },
-                  fields: 'title',
-                },
-              }],
-            },
-          });
-        } catch (error) {
-          performanceMonitor.track('renameSheet', Date.now() - startTime, true);
-          logger.error('Failed to rename sheet', { spreadsheetId, sheetId: resolved.sheetId, newName, error });
-          throw error;
-        }
-
-        await cacheManager.invalidate(`sheet:${spreadsheetId}:*`);
-
-        performanceMonitor.track('renameSheet', Date.now() - startTime);
-        logger.info('Sheet renamed', { spreadsheetId, sheetId: resolved.sheetId, oldName: resolved.title, newName });
-
-        return {
-          content: [{
-            type: "text",
-            text: `Successfully renamed sheet to "${newName}" in spreadsheet ${spreadsheetId}`,
-          }],
-        };
-      }
-
-      case "deleteSheet": {
-        if (!args || typeof args.spreadsheetId !== 'string') {
-          throw new Error('spreadsheetId parameter is required');
-        }
-
-        const { spreadsheetId } = args;
-        const resolved = await resolveSheetMetadata(spreadsheetId, args, 'deleteSheet');
-
-        try {
-          await sheets.spreadsheets.batchUpdate({
-            spreadsheetId,
-            requestBody: {
-              requests: [{
-                deleteSheet: {
-                  sheetId: resolved.sheetId,
-                },
-              }],
-            },
-          });
-        } catch (error) {
-          performanceMonitor.track('deleteSheet', Date.now() - startTime, true);
-          logger.error('Failed to delete sheet', { spreadsheetId, sheetId: resolved.sheetId, error });
-          throw error;
-        }
-
-        await cacheManager.invalidate(`sheet:${spreadsheetId}:*`);
-
-        performanceMonitor.track('deleteSheet', Date.now() - startTime);
-        logger.info('Sheet deleted', { spreadsheetId, sheetId: resolved.sheetId, title: resolved.title });
-
-        return {
-          content: [{
-            type: "text",
-            text: `Successfully deleted sheet "${resolved.title}" from spreadsheet ${spreadsheetId}`,
-          }],
-        };
-      }
-
-      case "freezeRowsColumns": {
-        if (!args || typeof args.spreadsheetId !== 'string') {
-          throw new Error('spreadsheetId parameter is required');
-        }
-
-        const { spreadsheetId } = args;
-        const sheetName = (typeof args.sheetName === 'string' ? args.sheetName : undefined);
-        const frozenRowCountRaw = args.frozenRowCount;
-        const frozenColumnCountRaw = args.frozenColumnCount;
-
-        const frozenRowCount = frozenRowCountRaw === undefined ? 0 : Number(frozenRowCountRaw);
-        const frozenColumnCount = frozenColumnCountRaw === undefined ? 0 : Number(frozenColumnCountRaw);
-
-        if (!Number.isInteger(frozenRowCount) || frozenRowCount < 0) {
-          throw new Error('frozenRowCount must be a non-negative integer');
-        }
-
-        if (!Number.isInteger(frozenColumnCount) || frozenColumnCount < 0) {
-          throw new Error('frozenColumnCount must be a non-negative integer');
-        }
-
-        let sheetDetails;
-        try {
-          const options: any = {
-            sheetsClient: sheets,
-            spreadsheetId,
-          };
-          if (sheetName !== undefined) {
-            options.sheetName = sheetName;
-          }
-          sheetDetails = await resolveSheetDetails(options);
-        } catch (error) {
-          performanceMonitor.track('freezeRowsColumns', Date.now() - startTime, true);
-          logger.error('Failed to resolve sheet for freezeRowsColumns', {
-            error,
-            spreadsheetId,
-            sheetName,
-          });
-          throw error;
-        }
-
-        const request = createFreezeRequest(sheetDetails.sheetId, frozenRowCount, frozenColumnCount);
-
-        try {
-          await sheets.spreadsheets.batchUpdate({
-            spreadsheetId,
-            requestBody: {
-              requests: [request],
-            },
-          });
-        } catch (error) {
-          performanceMonitor.track('freezeRowsColumns', Date.now() - startTime, true);
-          logger.error('Failed to update frozen rows/columns', {
-            error,
-            spreadsheetId,
-            sheetId: sheetDetails.sheetId,
-            sheetName: sheetDetails.title,
-            frozenRowCount,
-            frozenColumnCount,
-          });
-          throw error;
-        }
-
-        await cacheManager.invalidate(`sheet:${spreadsheetId}:*`);
-
-        performanceMonitor.track('freezeRowsColumns', Date.now() - startTime);
-        logger.info('Updated frozen rows/columns', {
-          spreadsheetId,
-          sheetId: sheetDetails.sheetId,
-          sheetName: sheetDetails.title,
-          frozenRowCount,
-          frozenColumnCount,
-        });
-
-        const summary = `Frozen ${frozenRowCount} row${frozenRowCount === 1 ? '' : 's'} and ${frozenColumnCount} column${frozenColumnCount === 1 ? '' : 's'} on sheet "${sheetDetails.title}"`;
-
-        return {
-          content: [{
-            type: "text",
-            text: summary,
-          }],
-        };
-      }
-
-      case "setColumnWidth": {
-        if (!args || typeof args.spreadsheetId !== 'string') {
-          throw new Error('spreadsheetId parameter is required');
-        }
-
-        if (!Array.isArray(args.columns) || args.columns.length === 0) {
-          throw new Error('columns parameter must be a non-empty array');
-        }
-
-        const { spreadsheetId } = args;
-        const sheetName = (typeof args.sheetName === 'string' ? args.sheetName : undefined);
-
-        const normalizedColumns = (args.columns as Array<Record<string, unknown>>).map((column, index) => {
-          if (!column || typeof column !== 'object') {
-            throw new Error(`Column definition at index ${index} must be an object`);
-          }
-
-          const columnIndex = column.columnIndex;
-          const widthValue = column.width;
-
-          if (typeof columnIndex !== 'number' || !Number.isInteger(columnIndex) || columnIndex < 0) {
-            throw new Error(`columnIndex must be a non-negative integer at index ${index}`);
-          }
-
-          const width = widthValue !== undefined ? Number(widthValue) : undefined;
-          if (width !== undefined && (Number.isNaN(width) || width <= 0)) {
-            throw new Error(`width must be a positive number when provided at index ${index}`);
-          }
-
-          const result: any = { columnIndex };
-          if (width !== undefined) {
-            result.width = width;
-          }
-          return result;
-        });
-
-        let sheetDetails;
-        try {
-          const options: any = {
-            sheetsClient: sheets,
-            spreadsheetId,
-          };
-          if (sheetName !== undefined) {
-            options.sheetName = sheetName;
-          }
-          sheetDetails = await resolveSheetDetails(options);
-        } catch (error) {
-          performanceMonitor.track('setColumnWidth', Date.now() - startTime, true);
-          logger.error('Failed to resolve sheet for setColumnWidth', {
-            error,
-            spreadsheetId,
-            sheetName,
-          });
-          throw error;
-        }
-
-        const requests = createColumnWidthRequests(sheetDetails.sheetId, normalizedColumns);
-
-        try {
-          await sheets.spreadsheets.batchUpdate({
-            spreadsheetId,
-            requestBody: {
-              requests,
-            },
-          });
-        } catch (error) {
-          performanceMonitor.track('setColumnWidth', Date.now() - startTime, true);
-          logger.error('Failed to update column widths', {
-            error,
-            spreadsheetId,
-            sheetId: sheetDetails.sheetId,
-            sheetName: sheetDetails.title,
-            columns: normalizedColumns,
-          });
-          throw error;
-        }
-
-        await cacheManager.invalidate(`sheet:${spreadsheetId}:*`);
-
-        performanceMonitor.track('setColumnWidth', Date.now() - startTime);
-        logger.info('Updated column widths', {
-          spreadsheetId,
-          sheetId: sheetDetails.sheetId,
-          sheetName: sheetDetails.title,
-          columnCount: normalizedColumns.length,
-        });
-
-        const summary = `Updated width for ${normalizedColumns.length} column${normalizedColumns.length === 1 ? '' : 's'} on sheet "${sheetDetails.title}"`;
-
-        return {
-          content: [{
-            type: "text",
-            text: summary,
-          }],
-        };
       }
 
       case "createForm": {
