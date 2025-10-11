@@ -18,6 +18,12 @@ import { AuthManager, AuthState } from "./src/auth/AuthManager.js";
 import { TokenManager } from "./src/auth/TokenManager.js";
 import { KeyRotationManager } from "./src/auth/KeyRotationManager.js";
 import { performHealthCheck, HealthStatus } from "./src/health-check.js";
+import {
+  buildFormulaRows,
+  getSheetId,
+  parseA1Notation,
+  parseRangeInput,
+} from "./src/sheets/helpers.js";
 
 const drive = google.drive("v3");
 const sheets = google.sheets("v4");
@@ -901,6 +907,32 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         },
       },
       {
+        name: "updateCellsWithFormula",
+        description: "Set cell formulas in Google Sheets (e.g., =SUM(A1:A10))",
+        inputSchema: {
+          type: "object",
+          properties: {
+            spreadsheetId: {
+              type: "string",
+              description: "The ID of the Google Sheets document",
+            },
+            range: {
+              type: "string",
+              description: "The A1 notation range to update (e.g., 'Sheet1!A1')",
+            },
+            formula: {
+              type: "string",
+              description: "Formula to apply (must include leading '=' sign)",
+            },
+            sheetName: {
+              type: "string",
+              description: "Optional sheet name when not included in the range",
+            },
+          },
+          required: ["spreadsheetId", "range", "formula"],
+        },
+      },
+      {
         name: "appendRows",
         description: "Append rows to a Google Sheets document",
         inputSchema: {
@@ -1727,6 +1759,74 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             type: "text",
             text: `Successfully updated ${values.length} rows in range ${range}`,
           }],
+        };
+      }
+
+      case "updateCellsWithFormula": {
+        if (
+          !args ||
+          typeof args.spreadsheetId !== 'string' ||
+          typeof args.range !== 'string' ||
+          typeof args.formula !== 'string'
+        ) {
+          throw new Error('spreadsheetId, range, and formula parameters are required');
+        }
+
+        const spreadsheetId = args.spreadsheetId;
+        const rawRange = args.range;
+        const formula = args.formula;
+        const providedSheetName =
+          typeof args.sheetName === 'string' && args.sheetName.trim() ? args.sheetName.trim() : undefined;
+
+        const { sheetName: rangeSheetName, a1Range } = parseRangeInput(rawRange);
+
+        if (providedSheetName && rangeSheetName && providedSheetName !== rangeSheetName) {
+          throw new Error('sheetName does not match the sheet specified in range');
+        }
+
+        const { sheetId, title } = await getSheetId(
+          sheets,
+          spreadsheetId,
+          providedSheetName ?? rangeSheetName
+        );
+
+        const gridRange = parseA1Notation(a1Range, sheetId);
+        const normalizedFormula = formula.trim();
+        const rows = buildFormulaRows(gridRange, normalizedFormula);
+
+        await sheets.spreadsheets.batchUpdate({
+          spreadsheetId,
+          requestBody: {
+            requests: [
+              {
+                updateCells: {
+                  range: gridRange,
+                  fields: "userEnteredValue",
+                  rows,
+                },
+              },
+            ],
+          },
+        });
+
+        await cacheManager.invalidate(`sheet:${spreadsheetId}:*`);
+
+        performanceMonitor.track('updateCellsWithFormula', Date.now() - startTime);
+        logger.info('Formula updated', {
+          spreadsheetId,
+          sheetId,
+          sheetTitle: title,
+          range: `${title}!${a1Range}`,
+          formula: normalizedFormula,
+        });
+
+        return {
+          content: [
+            {
+              type: "text",
+              text: `Successfully set formula ${normalizedFormula} in range ${title}!${a1Range}`,
+            },
+          ],
         };
       }
 
