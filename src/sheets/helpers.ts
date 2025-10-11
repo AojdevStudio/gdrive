@@ -245,7 +245,7 @@ export async function getSheetId(
     ? sheets.find((s) => s.properties?.title === sheetName)
     : sheets[0];
 
-  if (!sheet || !sheet.properties) {
+  if (!sheet?.properties) {
     const name = sheetName ?? '(first sheet)';
     throw new Error(`Sheet '${name}' not found in spreadsheet ${spreadsheetId}`);
   }
@@ -434,9 +434,7 @@ async function fetchSpreadsheetMetadata(
       byTitle.set(title, id);
     }
 
-    if (defaultSheetId === undefined) {
-      defaultSheetId = id;
-    }
+    defaultSheetId ??= id;
   }
 
   if (defaultSheetId === undefined) {
@@ -462,9 +460,7 @@ export async function getSheetIdForFormatting(
   sheetName?: string,
 ): Promise<number> {
   let metadata = spreadsheetMetadataCache.get(spreadsheetId);
-  if (!metadata) {
-    metadata = await fetchSpreadsheetMetadata(sheetsClient, spreadsheetId);
-  }
+  metadata ??= await fetchSpreadsheetMetadata(sheetsClient, spreadsheetId);
 
   if (sheetName) {
     const sheetId = metadata.byTitle.get(sheetName);

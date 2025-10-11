@@ -340,7 +340,7 @@ function validateDataValidationArgs(rawArgs: unknown): DataValidationArgs {
     );
   }
 
-  const normalizedValidation = validation as DataValidationArgs["validation"];
+  const normalizedValidation = validation;
 
   return {
     spreadsheetId,

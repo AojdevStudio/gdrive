@@ -117,7 +117,7 @@ export const createColumnWidthRequests = (
   }
 
   return columns.map((column, index) => {
-    if (column == null || typeof column !== 'object') {
+    if (column === null || column === undefined || typeof column !== 'object') {
       throw new Error(`Column definition at index ${index} must be an object`);
     }
 
@@ -187,7 +187,7 @@ export const resolveSheetDetails = async ({
     ? sheetList.find((sheet) => sheet.properties?.title === sheetName)
     : sheetList[0];
 
-  if (!match || match.properties?.sheetId === undefined || match.properties.sheetId === null) {
+  if (match?.properties?.sheetId === undefined || match.properties.sheetId === null) {
     if (sheetName) {
       throw new Error(`Sheet "${sheetName}" not found in spreadsheet ${spreadsheetId}`);
     }
