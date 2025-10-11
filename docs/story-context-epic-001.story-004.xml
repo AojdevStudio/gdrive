@@ -1,0 +1,226 @@
+<story-context id="bmad/bmm/workflows/4-implementation/story-context/template" v="1.0">
+  <metadata>
+    <epicId>epic-001</epicId>
+    <storyId>story-004</storyId>
+    <title>Documentation &amp; Versioning (Phase 4)</title>
+    <status>Ready for Development</status>
+    <generatedAt>2025-10-11</generatedAt>
+    <generator>BMAD Story Context Workflow</generator>
+    <sourceStoryPath>/Users/ossieirondi/Projects/local-mcps/gdrive/docs/Stories/story-004-documentation-versioning.md</sourceStoryPath>
+  </metadata>
+
+  <story>
+    <asA>user of the Google Drive MCP server</asA>
+    <iWant>clear documentation on the new consolidated tool architecture</iWant>
+    <soThat>I can migrate from individual tools to operation-based tools without confusion</soThat>
+    <tasks>
+      <task id="1">Update README.md with breaking changes section and migration guide</task>
+      <task id="2">Update CHANGELOG.md with comprehensive v2.0.0 entry</task>
+      <task id="3">Create MIGRATION_V2.md with complete migration instructions</task>
+      <task id="4">Update/create API.md with full API reference</task>
+      <task id="5">Bump version to 2.0.0 in package.json</task>
+      <task id="6">Update Claude Desktop configuration examples</task>
+    </tasks>
+  </story>
+
+  <acceptanceCriteria>
+    <criterion id="AC-1">
+      <title>Update README.md</title>
+      <description>Add prominent Breaking Changes section, update Tools section to document consolidated architecture with 5 tools (sheets, drive, forms, docs, batch), include before/after examples, add Migration Guide section, update Architecture section with operation-based pattern, reference HOW2MCP 2025 patterns</description>
+    </criterion>
+    <criterion id="AC-2">
+      <title>Update CHANGELOG.md</title>
+      <description>Create new [2.0.0] - 2025-10-11 section documenting consolidation of 41+ tools into 5 operation-based tools, include migration examples, list benefits (88% tool reduction, better type safety, cleaner codebase), document technical changes and testing results</description>
+    </criterion>
+    <criterion id="AC-3">
+      <title>Create Migration Guide Document</title>
+      <description>Create docs/MIGRATION_V2.md with comprehensive migration instructions including Why We Changed, What Changed, How to Migrate with step-by-step for each tool type, before/after examples for all 32 operations, breaking changes summary table, FAQ, and support resources</description>
+    </criterion>
+    <criterion id="AC-4">
+      <title>Update API Documentation</title>
+      <description>Create or update docs/API.md with complete API reference for each consolidated tool including tool name, description, all operations with parameters, required vs optional parameters, response formats, error codes, examples, JSON schemas, and TypeScript type definitions</description>
+    </criterion>
+    <criterion id="AC-5">
+      <title>Version Bump in package.json</title>
+      <description>Change version from 1.x.x to 2.0.0, update description to mention operation-based tools, verify all package metadata is current</description>
+    </criterion>
+    <criterion id="AC-6">
+      <title>Update Claude Desktop Configuration Example</title>
+      <description>Update example configuration files, show how to configure new tool architecture, update troubleshooting docs with new tool names</description>
+    </criterion>
+  </acceptanceCriteria>
+
+  <artifacts>
+    <docs>
+      <artifact>
+        <path>/Users/ossieirondi/Projects/local-mcps/gdrive/docs/Migration/consolidation-guide.md</path>
+        <title>Google Workspace MCP Consolidation Guide</title>
+        <section>Complete Implementation Guide</section>
+        <snippet>Comprehensive 1117-line guide for consolidating 41+ tools to 5 operation-based tools. Includes step-by-step Zod schema creation, handler implementation, and migration examples for all 32 operations (lines 1094-1099 contain Phase 4 documentation tasks)</snippet>
+      </artifact>
+      <artifact>
+        <path>/Users/ossieirondi/Projects/local-mcps/gdrive/docs/epics/consolidate-workspace-tools.md</path>
+        <title>Epic: Consolidate All Google Workspace Tools</title>
+        <section>Epic Overview &amp; Success Criteria</section>
+        <snippet>Epic-001 describing consolidation from 41+ tools to 5, with expected 88% reduction in tool count, timeline estimates (80 minutes total, 15 min for documentation phase), and success criteria including v2.0.0 versioning requirements</snippet>
+      </artifact>
+      <artifact>
+        <path>/Users/ossieirondi/Projects/local-mcps/gdrive/README.md</path>
+        <title>Google Drive MCP Server README</title>
+        <section>Project Documentation (Current)</section>
+        <snippet>Main README needing updates to reflect consolidated architecture. Currently describes server capabilities, authentication, and Claude Desktop integration. Needs Breaking Changes section, Migration Guide, and updated tool count from 41+ to 5</snippet>
+      </artifact>
+      <artifact>
+        <path>/Users/ossieirondi/Projects/local-mcps/gdrive/CHANGELOG.md</path>
+        <title>Project Changelog</title>
+        <section>Version History</section>
+        <snippet>Current version is Unreleased. Needs new [2.0.0] - 2025-10-11 section with breaking changes announcement, migration examples showing before/after for all 32 operations, and benefits documentation</snippet>
+      </artifact>
+      <artifact>
+        <path>/Users/ossieirondi/projects/scratch/how2mcp/</path>
+        <title>HOW2MCP 2025 Reference Implementation</title>
+        <section>MCP Architecture Best Practices</section>
+        <snippet>Definitive 2025 MCP implementation guide containing MCP_ARCHITECTURE_2025.md, MCP_IMPLEMENTATION_GUIDE.md, and example project demonstrating operation-based tool pattern (calculator tool with operations: add, subtract, multiply, divide)</snippet>
+      </artifact>
+      <artifact>
+        <path>/Users/ossieirondi/Projects/local-mcps/gdrive/docs/Architecture/ARCHITECTURE.md</path>
+        <title>Project Architecture Documentation</title>
+        <section>System Architecture</section>
+        <snippet>Architecture documentation needing updates to describe operation-based tool pattern, Zod discriminated unions, centralized logger pattern, and single ListTools handler approach</snippet>
+      </artifact>
+      <artifact>
+        <path>/Users/ossieirondi/Projects/local-mcps/gdrive/docs/Developer-Guidelines/API.md</path>
+        <title>API Documentation</title>
+        <section>API Reference</section>
+        <snippet>API documentation requiring complete rewrite for v2.0.0 to document 5 consolidated tools with all operations, parameters (required vs optional), response formats, error codes, JSON schemas, and TypeScript type definitions</snippet>
+      </artifact>
+    </docs>
+    <code>
+      <artifact>
+        <path>/Users/ossieirondi/Projects/local-mcps/gdrive/package.json</path>
+        <kind>configuration</kind>
+        <symbol>version</symbol>
+        <lines>1-51</lines>
+        <reason>Current version is 0.6.2, needs to be bumped to 2.0.0 for breaking change. Package metadata also needs description update to mention operation-based tools</reason>
+      </artifact>
+      <artifact>
+        <path>/Users/ossieirondi/Projects/local-mcps/gdrive/README.md</path>
+        <kind>documentation</kind>
+        <symbol>main project documentation</symbol>
+        <lines>1-100</lines>
+        <reason>Main README requires comprehensive updates: Breaking Changes section (near top), Migration Guide section with before/after examples, updated tool count (41+ → 5), Architecture section updates for operation-based pattern</reason>
+      </artifact>
+      <artifact>
+        <path>/Users/ossieirondi/Projects/local-mcps/gdrive/CHANGELOG.md</path>
+        <kind>documentation</kind>
+        <symbol>version history</symbol>
+        <lines>1-50</lines>
+        <reason>Needs new [2.0.0] - 2025-10-11 section at top with breaking changes, migration examples for all 32 operations, benefits (88% tool reduction), technical changes, and testing results</reason>
+      </artifact>
+      <artifact>
+        <path>/Users/ossieirondi/Projects/local-mcps/gdrive/src/sheets/sheets-schemas.ts</path>
+        <kind>implementation</kind>
+        <symbol>Zod schemas</symbol>
+        <lines>1-80</lines>
+        <reason>Example of completed operation-based tool implementation using Zod discriminated unions. Shows the pattern that the documentation will describe (12 operations: list, read, create, rename, delete, update, updateFormula, format, conditionalFormat, append, freeze, setColumnWidth)</reason>
+      </artifact>
+      <artifact>
+        <path>/Users/ossieirondi/Projects/local-mcps/gdrive/src/sheets/sheets-handler.ts</path>
+        <kind>implementation</kind>
+        <symbol>operation router</symbol>
+        <lines>1-80</lines>
+        <reason>Reference implementation showing operation routing pattern and context handling (logger, sheets, cacheManager, performanceMonitor). Documentation will explain this architecture to users</reason>
+      </artifact>
+      <artifact>
+        <path>/Users/ossieirondi/Projects/local-mcps/gdrive/docs/Examples/README.md</path>
+        <kind>documentation</kind>
+        <symbol>examples index</symbol>
+        <lines>1-102</lines>
+        <reason>Example documentation structure and format to follow. All examples will need updates to use new operation-based tool format instead of individual tool names</reason>
+      </artifact>
+    </code>
+    <dependencies>
+      <node>
+        <package name="@modelcontextprotocol/sdk" version="1.0.1">MCP SDK for server implementation and types</package>
+        <package name="googleapis" version="^144.0.0">Google APIs client library for Drive, Sheets, Docs, Forms</package>
+        <package name="zod" version="implied">Schema validation used in operation-based tools (discriminated unions)</package>
+        <package name="typescript" version="^5.6.2">TypeScript for type definitions in documentation</package>
+      </node>
+      <devDependencies>
+        <package name="@types/node" version="^22">TypeScript types for documentation examples</package>
+      </devDependencies>
+    </dependencies>
+  </artifacts>
+
+  <constraints>
+    <constraint id="breaking-change">This is a MAJOR breaking change requiring version bump to v2.0.0 (semantic versioning)</constraint>
+    <constraint id="semantic-versioning">Follow semantic versioning: Major.Minor.Patch (2.0.0 indicates breaking API changes)</constraint>
+    <constraint id="documentation-clarity">Documentation must be clear for non-technical users - avoid jargon, explain all concepts</constraint>
+    <constraint id="migration-completeness">Migration guide MUST cover all 32 operations across 5 tools with before/after examples</constraint>
+    <constraint id="consistency">Use consistent format for all migration examples (Before/After/Changes sections)</constraint>
+    <constraint id="tool-count-accuracy">Update all references: "41+ tools" → "5 consolidated tools"</constraint>
+    <constraint id="operation-list-accuracy">Document exact operations: sheets(12), drive(7), forms(4), docs(5), batch(4) = 32 total</constraint>
+    <constraint id="how2mcp-reference">Reference HOW2MCP 2025 patterns as source of architecture decisions</constraint>
+    <constraint id="benefits-emphasis">Emphasize benefits (88% reduction, faster LLM selection) not just breaking changes</constraint>
+    <constraint id="writing-style">Writing style: Clear, Helpful, Encouraging, Thorough, Accessible (per Technical Notes in story)</constraint>
+  </constraints>
+  <interfaces>
+    <interface>
+      <name>Operation-Based Tool Pattern</name>
+      <kind>architecture</kind>
+      <signature>{ name: "toolName", operation: "operationName", ...params }</signature>
+      <path>HOW2MCP reference implementation</path>
+      <description>Core pattern for all consolidated tools: single tool name with operation discriminator, replacing individual tools per operation</description>
+    </interface>
+    <interface>
+      <name>Semantic Versioning</name>
+      <kind>standard</kind>
+      <signature>MAJOR.MINOR.PATCH</signature>
+      <path>https://semver.org/</path>
+      <description>Version bump from 0.6.2 to 2.0.0 required. MAJOR version for incompatible API changes, MINOR for backwards-compatible functionality, PATCH for backwards-compatible bug fixes</description>
+    </interface>
+    <interface>
+      <name>Keep a Changelog</name>
+      <kind>standard</kind>
+      <signature>[Version] - YYYY-MM-DD format</signature>
+      <path>https://keepachangelog.com/</path>
+      <description>CHANGELOG.md follows Keep a Changelog format. New entries at top with sections: Breaking Changes, Added, Changed, Deprecated, Removed, Fixed, Security</description>
+    </interface>
+    <interface>
+      <name>Markdown Documentation</name>
+      <kind>standard</kind>
+      <signature>GitHub-flavored Markdown</signature>
+      <path>docs/</path>
+      <description>All documentation uses GitHub-flavored Markdown with proper heading hierarchy, code blocks with language identifiers, tables, and relative links between docs</description>
+    </interface>
+  </interfaces>
+  <tests>
+    <standards>
+      This is a documentation-only story with no code changes, so traditional unit/integration testing does not apply.
+      However, documentation quality must be validated through:
+      - Manual review of all documentation files for accuracy
+      - Verification that all 32 operations are documented with before/after examples
+      - Markdown syntax validation (no broken links, proper formatting)
+      - Cross-reference checking between README, CHANGELOG, MIGRATION_V2.md, and API.md
+      - Version consistency check across all documentation (v2.0.0 referenced correctly)
+      - Completeness verification against Definition of Done checklist in story
+    </standards>
+    <locations>
+      <location>README.md</location>
+      <location>CHANGELOG.md</location>
+      <location>docs/MIGRATION_V2.md (new file)</location>
+      <location>docs/Developer-Guidelines/API.md</location>
+      <location>package.json (version field)</location>
+      <location>docs/Examples/*.md (all example files needing updates)</location>
+    </locations>
+    <ideas>
+      <idea ac="AC-1">Verify README.md contains: Breaking Changes section, Migration Guide, updated tool count (5 not 41+), operation-based architecture description, HOW2MCP references</idea>
+      <idea ac="AC-2">Verify CHANGELOG.md [2.0.0] section contains: Breaking changes notice, before/after examples for all 32 operations, benefits list (88% reduction), technical changes, testing results</idea>
+      <idea ac="AC-3">Verify MIGRATION_V2.md exists and contains: Why We Changed, What Changed, How to Migrate sections, before/after examples for all 32 operations, Breaking Changes Summary table, FAQ, Support resources</idea>
+      <idea ac="AC-4">Verify API.md contains: Complete API reference for 5 tools, all operations documented with parameters, required vs optional parameter indicators, response formats, error codes, JSON schemas, TypeScript type definitions</idea>
+      <idea ac="AC-5">Verify package.json version changed from 0.6.2 to 2.0.0, description mentions operation-based tools</idea>
+      <idea ac="AC-6">Verify Claude Desktop configuration examples updated to show new tool architecture, troubleshooting docs reference new tool names</idea>
+      <idea ac="general">User testing: Ask a non-technical person to read migration guide and confirm it's understandable</idea>
+    </ideas>
+  </tests>
+</story-context>
