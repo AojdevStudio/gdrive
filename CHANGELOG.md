@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Google Sheets formula support via `updateCellsWithFormula`, including reusable range helpers and comprehensive unit tests (29 tests)
+- JSDoc documentation for all helper functions with detailed examples and parameter descriptions
+- Usage examples and security considerations for formula operations in README.md
+- Maximum cell limit (10,000 cells) to prevent memory exhaustion from very large ranges
+- Structured error logging with error type tracking for formula operations
+
+### Improved
+
+- Test coverage expanded from 3 to 29 tests covering all edge cases and helper functions
+- Error handling with detailed logging including error types and context
+- Documentation with practical formula examples (SUM, VLOOKUP, relative references)
+
 ## [0.8.0] - 2025-08-19
 
 ### Added

@@ -85,7 +85,7 @@ Reference agents naturally in development tasks, e.g., "As dev, implement..." or
 - **Tools**: 
   - **Read Operations**: search, read, listSheets, readSheet
   - **Write Operations**: createFile, updateFile, createFolder
-  - **Sheets Operations**: updateCells, appendRows
+  - **Sheets Operations**: updateCells, updateCellsWithFormula, appendRows
   - **Forms Operations**: createForm, getForm, addQuestion, listResponses
   - **Docs Operations**: createDocument, insertText, replaceText, applyTextStyle, insertTable
   - **Batch Operations**: batchFileOperations (create, update, delete, move multiple files)
