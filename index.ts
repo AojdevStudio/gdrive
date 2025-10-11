@@ -18,6 +18,11 @@ import { AuthManager, AuthState } from "./src/auth/AuthManager.js";
 import { TokenManager } from "./src/auth/TokenManager.js";
 import { KeyRotationManager } from "./src/auth/KeyRotationManager.js";
 import { performHealthCheck, HealthStatus } from "./src/health-check.js";
+import {
+  buildConditionalFormattingRequestBody,
+  extractSheetNameFromRange,
+  type ConditionalFormattingRuleInput,
+} from "./src/sheets/conditional-formatting.js";
 
 const drive = google.drive("v3");
 const sheets = google.sheets("v4");
@@ -510,6 +515,67 @@ function parseNaturalLanguageQuery(query: string): { searchTerms: string; filter
   return { searchTerms, filters };
 }
 
+interface SheetMetadataEntry {
+  sheetId?: number;
+  title?: string;
+}
+
+const getSheetMetadata = async (spreadsheetId: string): Promise<SheetMetadataEntry[]> => {
+  const cacheKey = `sheet:${spreadsheetId}:metadata`;
+  const cached = await cacheManager.get(cacheKey);
+
+  if (cached && typeof cached === 'object' && 'sheets' in cached) {
+    const potentialSheets = (cached as { sheets?: unknown }).sheets;
+    if (Array.isArray(potentialSheets)) {
+      return potentialSheets as SheetMetadataEntry[];
+    }
+  }
+
+  try {
+    const response = await sheets.spreadsheets.get({
+      spreadsheetId,
+      fields: 'sheets.properties(sheetId,title)',
+    });
+
+    const metadata = response.data.sheets?.map((sheet) => ({
+      sheetId: sheet.properties?.sheetId,
+      title: sheet.properties?.title,
+    })) ?? [];
+
+    await cacheManager.set(cacheKey, { sheets: metadata });
+
+    return metadata;
+  } catch (error) {
+    const message = toErrorMessage(error);
+    logger.error('Failed to fetch sheet metadata', { spreadsheetId, error });
+    throw new Error(`Unable to retrieve sheets for spreadsheet ${spreadsheetId}: ${message}`);
+  }
+};
+
+async function getSheetId(spreadsheetId: string, sheetName?: string): Promise<number> {
+  const metadata = await getSheetMetadata(spreadsheetId);
+
+  if (metadata.length === 0) {
+    throw new Error(`No sheets found in spreadsheet ${spreadsheetId}`);
+  }
+
+  if (sheetName && sheetName.trim() !== '') {
+    const normalizedName = sheetName.trim();
+    const match = metadata.find((sheet) => sheet.title === normalizedName);
+    if (!match || typeof match.sheetId !== 'number') {
+      throw new Error(`Sheet "${normalizedName}" not found in spreadsheet ${spreadsheetId}`);
+    }
+    return match.sheetId;
+  }
+
+  const firstWithId = metadata.find((sheet) => typeof sheet.sheetId === 'number');
+  if (!firstWithId || typeof firstWithId.sheetId !== 'number') {
+    throw new Error(`Spreadsheet ${spreadsheetId} does not contain a sheet with a valid ID`);
+  }
+
+  return firstWithId.sheetId;
+}
+
 const server = new Server(
   {
     name: "gdrive-mcp-server",
@@ -927,6 +993,80 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             },
           },
           required: ["spreadsheetId", "values"],
+        },
+      },
+      {
+        name: "addConditionalFormatting",
+        description: "Add a conditional formatting rule to a Google Sheets range",
+        inputSchema: {
+          type: "object",
+          properties: {
+            spreadsheetId: {
+              type: "string",
+              description: "The ID of the Google Sheets document",
+            },
+            range: {
+              type: "string",
+              description: "A1 notation range to apply the rule (e.g., 'Sheet1!A2:A25' or 'B2:B10')",
+            },
+            rule: {
+              type: "object",
+              description: "Conditional formatting rule definition",
+              properties: {
+                condition: {
+                  type: "object",
+                  properties: {
+                    type: {
+                      type: "string",
+                      enum: ["NUMBER_GREATER", "NUMBER_LESS", "TEXT_CONTAINS", "CUSTOM_FORMULA"],
+                      description: "Comparison operator or custom formula type",
+                    },
+                    values: {
+                      type: "array",
+                      items: { type: "string" },
+                      description: "Comparison values for numeric or text conditions",
+                    },
+                    formula: {
+                      type: "string",
+                      description: "Custom formula used when type is CUSTOM_FORMULA",
+                    },
+                  },
+                  required: ["type"],
+                },
+                format: {
+                  type: "object",
+                  properties: {
+                    backgroundColor: {
+                      type: "object",
+                      description: "Cell background color using normalized RGB values (0-1)",
+                      properties: {
+                        red: { type: "number", minimum: 0, maximum: 1 },
+                        green: { type: "number", minimum: 0, maximum: 1 },
+                        blue: { type: "number", minimum: 0, maximum: 1 },
+                        alpha: { type: "number", minimum: 0, maximum: 1 },
+                      },
+                    },
+                    foregroundColor: {
+                      type: "object",
+                      description: "Text color using normalized RGB values (0-1)",
+                      properties: {
+                        red: { type: "number", minimum: 0, maximum: 1 },
+                        green: { type: "number", minimum: 0, maximum: 1 },
+                        blue: { type: "number", minimum: 0, maximum: 1 },
+                        alpha: { type: "number", minimum: 0, maximum: 1 },
+                      },
+                    },
+                    bold: {
+                      type: "boolean",
+                      description: "Apply bold text formatting when true",
+                    },
+                  },
+                },
+              },
+              required: ["condition", "format"],
+            },
+          },
+          required: ["spreadsheetId", "range", "rule"],
         },
       },
       {
@@ -1757,6 +1897,55 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           content: [{
             type: "text",
             text: `Successfully appended ${values.length} rows to ${sheetName}`,
+          }],
+        };
+      }
+
+      case "addConditionalFormatting": {
+        if (!args || typeof args.spreadsheetId !== 'string') {
+          throw new Error('spreadsheetId parameter is required');
+        }
+        if (typeof args.range !== 'string' || args.range.trim() === '') {
+          throw new Error('range parameter is required');
+        }
+        if (!args.rule || typeof args.rule !== 'object') {
+          throw new Error('rule parameter is required');
+        }
+
+        const { spreadsheetId } = args;
+        const rangeInput = args.range as string;
+        const { sheetName, range } = extractSheetNameFromRange(rangeInput);
+        const sheetId = await getSheetId(spreadsheetId, sheetName);
+        const ruleInput = args.rule as ConditionalFormattingRuleInput;
+
+        const requestBody = buildConditionalFormattingRequestBody({
+          sheetId,
+          range,
+          rule: ruleInput,
+          index: 0,
+        });
+
+        try {
+          await sheets.spreadsheets.batchUpdate({
+            spreadsheetId,
+            requestBody,
+          });
+        } catch (error) {
+          performanceMonitor.track('addConditionalFormatting', Date.now() - startTime, true);
+          const message = toErrorMessage(error);
+          logger.error('Failed to add conditional formatting', { spreadsheetId, range: rangeInput, error });
+          throw new Error(`Failed to add conditional formatting to ${rangeInput}: ${message}`);
+        }
+
+        await cacheManager.invalidate(`sheet:${spreadsheetId}:*`);
+
+        performanceMonitor.track('addConditionalFormatting', Date.now() - startTime);
+        logger.info('Conditional formatting added', { spreadsheetId, range: rangeInput, sheetId });
+
+        return {
+          content: [{
+            type: "text",
+            text: `Conditional formatting added to ${rangeInput}`,
           }],
         };
       }

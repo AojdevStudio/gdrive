@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- ✨ **Sheets:** Introduced the `addConditionalFormatting` tool with rule validation, cache-aware updates, and documentation/examples for highlighting positive and negative trends.
+
 ## [0.8.0] - 2025-08-19
 
 ### Added

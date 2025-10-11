@@ -17,6 +17,7 @@ This directory contains comprehensive code examples demonstrating how to use the
 - **[Reading Sheets](./sheets-reading.md)** - Read spreadsheet data and metadata
 - **[Writing to Sheets](./sheets-writing.md)** - Update cells and append rows
 - **[Sheet Management](./sheets-management.md)** - Create and manage multiple sheets
+- **[Conditional Formatting](./sheets-conditional-formatting.md)** - Highlight key metrics with color rules
 
 ### 📋 **Forms Management**
 - **[Creating Forms](./forms-creating.md)** - Build forms with various question types
