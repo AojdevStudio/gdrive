@@ -143,6 +143,7 @@ node ./dist/index.js auth
 - **Formula Automation** - Apply formulas to specific cells with `updateCellsWithFormula`
 - **Cell Formatting** - Apply bold/italic text, colors, and number formats with `formatCells`
 - **Conditional Formatting** - Highlight trends with custom rules (e.g., green gains, red losses)
+- **Layout Controls** - Freeze header rows/columns and adjust column widths for better readability
 - **CSV Export** - Automatic conversion for data analysis
 
 #### Formula Automation Examples
@@ -329,11 +330,11 @@ graph TB
 
 ### 📖 Available Tools
 
-The server provides **27 comprehensive tools** for Google Workspace integration across **6 categories**:
+The server provides **29 comprehensive tools** for Google Workspace integration across **6 categories**:
 
 - **🔍 Search & Read** (6 tools): search, enhancedSearch, read, listSheets, readSheet, getAppScript
 - **📁 File & Folder** (4 tools): createFile, updateFile, createFolder, batchFileOperations
-- **📊 Sheets** (7 tools): createSheet, renameSheet, deleteSheet, updateCells, updateCellsWithFormula, formatCells, addConditionalFormatting, appendRows
+- **📊 Sheets** (9 tools): createSheet, renameSheet, deleteSheet, updateCells, updateCellsWithFormula, formatCells, addConditionalFormatting, freezeRowsColumns, setColumnWidth, appendRows
 - **📋 Forms** (4 tools): createForm, getForm, addQuestion, listResponses
 - **📝 Docs** (5 tools): createDocument, insertText, replaceText, applyTextStyle, insertTable
 - **📂 Resources**: MCP resource access via `gdrive:///<file_id>` URIs

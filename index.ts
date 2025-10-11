@@ -37,6 +37,11 @@ import {
   extractSheetNameFromRange,
   type ConditionalFormattingRuleInput,
 } from "./src/sheets/conditional-formatting.js";
+import {
+  createColumnWidthRequests,
+  createFreezeRequest,
+  resolveSheetDetails,
+} from "./src/sheets/layoutHelpers.js";
 
 const drive = google.drive("v3");
 const sheets = google.sheets("v4");
@@ -1187,6 +1192,71 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             },
           },
           required: ["spreadsheetId", "values"],
+        },
+      },
+      {
+        name: "freezeRowsColumns",
+        description: "Freeze header rows and/or columns within a Google Sheet",
+        inputSchema: {
+          type: "object",
+          properties: {
+            spreadsheetId: {
+              type: "string",
+              description: "The ID of the Google Sheets document",
+            },
+            sheetName: {
+              type: "string",
+              description: "Optional sheet name (defaults to the first sheet)",
+            },
+            frozenRowCount: {
+              type: "number",
+              description: "Number of rows to freeze from the top of the sheet",
+              default: 0,
+            },
+            frozenColumnCount: {
+              type: "number",
+              description: "Number of columns to freeze from the left of the sheet",
+              default: 0,
+            },
+          },
+          required: ["spreadsheetId"],
+        },
+      },
+      {
+        name: "setColumnWidth",
+        description: "Adjust pixel widths for specific columns in a Google Sheet",
+        inputSchema: {
+          type: "object",
+          properties: {
+            spreadsheetId: {
+              type: "string",
+              description: "The ID of the Google Sheets document",
+            },
+            sheetName: {
+              type: "string",
+              description: "Optional sheet name (defaults to the first sheet)",
+            },
+            columns: {
+              type: "array",
+              description: "List of column index/width pairs to update",
+              items: {
+                type: "object",
+                properties: {
+                  columnIndex: {
+                    type: "number",
+                    description: "0-based column index (A = 0, B = 1, etc.)",
+                  },
+                  width: {
+                    type: "number",
+                    description: "Pixel width for the column",
+                    default: 100,
+                  },
+                },
+                required: ["columnIndex"],
+              },
+            },
+          },
+          required: ["spreadsheetId", "columns"],
         },
       },
       {
@@ -2507,6 +2577,187 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           content: [{
             type: "text",
             text: `Successfully deleted sheet "${resolved.title}" from spreadsheet ${spreadsheetId}`,
+          }],
+        };
+      }
+
+      case "freezeRowsColumns": {
+        if (!args || typeof args.spreadsheetId !== 'string') {
+          throw new Error('spreadsheetId parameter is required');
+        }
+
+        const { spreadsheetId } = args;
+        const sheetName = (typeof args.sheetName === 'string' ? args.sheetName : undefined);
+        const frozenRowCountRaw = args.frozenRowCount;
+        const frozenColumnCountRaw = args.frozenColumnCount;
+
+        const frozenRowCount = frozenRowCountRaw === undefined ? 0 : Number(frozenRowCountRaw);
+        const frozenColumnCount = frozenColumnCountRaw === undefined ? 0 : Number(frozenColumnCountRaw);
+
+        if (!Number.isInteger(frozenRowCount) || frozenRowCount < 0) {
+          throw new Error('frozenRowCount must be a non-negative integer');
+        }
+
+        if (!Number.isInteger(frozenColumnCount) || frozenColumnCount < 0) {
+          throw new Error('frozenColumnCount must be a non-negative integer');
+        }
+
+        let sheetDetails;
+        try {
+          const options: any = {
+            sheetsClient: sheets,
+            spreadsheetId,
+          };
+          if (sheetName !== undefined) {
+            options.sheetName = sheetName;
+          }
+          sheetDetails = await resolveSheetDetails(options);
+        } catch (error) {
+          performanceMonitor.track('freezeRowsColumns', Date.now() - startTime, true);
+          logger.error('Failed to resolve sheet for freezeRowsColumns', {
+            error,
+            spreadsheetId,
+            sheetName,
+          });
+          throw error;
+        }
+
+        const request = createFreezeRequest(sheetDetails.sheetId, frozenRowCount, frozenColumnCount);
+
+        try {
+          await sheets.spreadsheets.batchUpdate({
+            spreadsheetId,
+            requestBody: {
+              requests: [request],
+            },
+          });
+        } catch (error) {
+          performanceMonitor.track('freezeRowsColumns', Date.now() - startTime, true);
+          logger.error('Failed to update frozen rows/columns', {
+            error,
+            spreadsheetId,
+            sheetId: sheetDetails.sheetId,
+            sheetName: sheetDetails.title,
+            frozenRowCount,
+            frozenColumnCount,
+          });
+          throw error;
+        }
+
+        await cacheManager.invalidate(`sheet:${spreadsheetId}:*`);
+
+        performanceMonitor.track('freezeRowsColumns', Date.now() - startTime);
+        logger.info('Updated frozen rows/columns', {
+          spreadsheetId,
+          sheetId: sheetDetails.sheetId,
+          sheetName: sheetDetails.title,
+          frozenRowCount,
+          frozenColumnCount,
+        });
+
+        const summary = `Frozen ${frozenRowCount} row${frozenRowCount === 1 ? '' : 's'} and ${frozenColumnCount} column${frozenColumnCount === 1 ? '' : 's'} on sheet "${sheetDetails.title}"`;
+
+        return {
+          content: [{
+            type: "text",
+            text: summary,
+          }],
+        };
+      }
+
+      case "setColumnWidth": {
+        if (!args || typeof args.spreadsheetId !== 'string') {
+          throw new Error('spreadsheetId parameter is required');
+        }
+
+        if (!Array.isArray(args.columns) || args.columns.length === 0) {
+          throw new Error('columns parameter must be a non-empty array');
+        }
+
+        const { spreadsheetId } = args;
+        const sheetName = (typeof args.sheetName === 'string' ? args.sheetName : undefined);
+
+        const normalizedColumns = (args.columns as Array<Record<string, unknown>>).map((column, index) => {
+          if (!column || typeof column !== 'object') {
+            throw new Error(`Column definition at index ${index} must be an object`);
+          }
+
+          const columnIndex = column.columnIndex;
+          const widthValue = column.width;
+
+          if (typeof columnIndex !== 'number' || !Number.isInteger(columnIndex) || columnIndex < 0) {
+            throw new Error(`columnIndex must be a non-negative integer at index ${index}`);
+          }
+
+          const width = widthValue !== undefined ? Number(widthValue) : undefined;
+          if (width !== undefined && (Number.isNaN(width) || width <= 0)) {
+            throw new Error(`width must be a positive number when provided at index ${index}`);
+          }
+
+          const result: any = { columnIndex };
+          if (width !== undefined) {
+            result.width = width;
+          }
+          return result;
+        });
+
+        let sheetDetails;
+        try {
+          const options: any = {
+            sheetsClient: sheets,
+            spreadsheetId,
+          };
+          if (sheetName !== undefined) {
+            options.sheetName = sheetName;
+          }
+          sheetDetails = await resolveSheetDetails(options);
+        } catch (error) {
+          performanceMonitor.track('setColumnWidth', Date.now() - startTime, true);
+          logger.error('Failed to resolve sheet for setColumnWidth', {
+            error,
+            spreadsheetId,
+            sheetName,
+          });
+          throw error;
+        }
+
+        const requests = createColumnWidthRequests(sheetDetails.sheetId, normalizedColumns);
+
+        try {
+          await sheets.spreadsheets.batchUpdate({
+            spreadsheetId,
+            requestBody: {
+              requests,
+            },
+          });
+        } catch (error) {
+          performanceMonitor.track('setColumnWidth', Date.now() - startTime, true);
+          logger.error('Failed to update column widths', {
+            error,
+            spreadsheetId,
+            sheetId: sheetDetails.sheetId,
+            sheetName: sheetDetails.title,
+            columns: normalizedColumns,
+          });
+          throw error;
+        }
+
+        await cacheManager.invalidate(`sheet:${spreadsheetId}:*`);
+
+        performanceMonitor.track('setColumnWidth', Date.now() - startTime);
+        logger.info('Updated column widths', {
+          spreadsheetId,
+          sheetId: sheetDetails.sheetId,
+          sheetName: sheetDetails.title,
+          columnCount: normalizedColumns.length,
+        });
+
+        const summary = `Updated width for ${normalizedColumns.length} column${normalizedColumns.length === 1 ? '' : 's'} on sheet "${sheetDetails.title}"`;
+
+        return {
+          content: [{
+            type: "text",
+            text: summary,
           }],
         };
       }

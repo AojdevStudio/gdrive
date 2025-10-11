@@ -40,6 +40,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Automatic cache invalidation after sheet operations
   - Comprehensive error logging and validation
 
+- **Google Sheets Layout Controls** - `freezeRowsColumns` and `setColumnWidth` for UI optimization
+  - Freeze header rows and columns for better scrolling UX
+  - Set pixel widths for multiple columns in one operation
+  - Dedicated `layoutHelpers.ts` module with JSDoc documentation
+  - Batch operations for efficient API usage
+  - Automatic cache invalidation and performance tracking
+
 ### Improved
 
 - Test coverage expanded to 37 tests total (29 formula + 5 formatting + 3 conditional)
