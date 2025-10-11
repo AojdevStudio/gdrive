@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- ✨ **Sheet management tools**: Added `renameSheet` and `deleteSheet` MCP tool definitions with batch update handlers
+- 🧪 **Unit tests**: Expanded sheet management tests covering create, rename, and delete flows with error handling scenarios
+
+### Changed
+
+- ♻️ **createSheet tool**: Added `sheetName` alias support and default row/column handling aligned with Sheets API expectations
+
 ## [0.8.0] - 2025-08-19
 
 ### Added

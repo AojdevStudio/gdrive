@@ -139,7 +139,7 @@ node ./dist/index.js auth
 
 ### 📊 **Google Sheets Integration**
 - **Data Access** - Read and write sheet data with A1 notation support
-- **Sheet Management** - List sheets, update cells, append rows
+- **Sheet Management** - Create, rename, delete, and list sheets; update cells; append rows
 - **CSV Export** - Automatic conversion for data analysis
 
 ### 📝 **Google Docs Manipulation**
