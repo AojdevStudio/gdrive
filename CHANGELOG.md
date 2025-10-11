@@ -5,6 +5,75 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0] - 2025-10-11
+
+### 🚨 BREAKING CHANGES
+
+- **Consolidated 41+ individual tools into 5 operation-based tools**
+  - `sheets` - Unified tool for all Google Sheets operations (12 operations)
+  - `drive` - Unified tool for all Google Drive file operations (7 operations)
+  - `forms` - Unified tool for all Google Forms operations (4 operations)
+  - `docs` - Unified tool for all Google Docs operations (5 operations)
+  - `batch` - Batch file operations (4 operations)
+
+### ⚠️ Migration Required
+
+If you're using individual tools like `listSheets`, `readSheet`, etc., you must migrate to the new operation-based tools:
+
+**Before (v1.x):**
+```json
+{
+  "name": "listSheets",
+  "args": {
+    "spreadsheetId": "abc123"
+  }
+}
+```
+
+**After (v2.0.0):**
+```json
+{
+  "name": "sheets",
+  "args": {
+    "operation": "list",
+    "spreadsheetId": "abc123"
+  }
+}
+```
+
+### ✨ Benefits
+
+- **Improved LLM Tool Selection:** 88% reduction in tool count (41+ → 5)
+- **Better Type Safety:** Zod discriminated unions for operation routing
+- **Cleaner Codebase:** Reduced code duplication, centralized handlers
+- **HOW2MCP 2025 Compliance:** Follows modern MCP architecture patterns
+
+### 📚 Documentation
+
+- Added comprehensive migration guide to `docs/MIGRATION_V2.md`
+- Updated README.md with breaking changes section and quick migration examples
+- Updated API documentation with all 32 operations
+- Added examples for each operation type
+
+### 🔧 Technical Changes
+
+- Implemented Zod discriminated unions for type-safe operation routing
+- Centralized logger pattern (single logger instance)
+- Single ListTools handler to prevent tool registration overwriting
+- New file structure: `src/sheets/`, `src/drive/`, `src/forms/`, `src/docs/`, `src/batch/`
+
+### 🧪 Testing
+
+- All 32 operations tested end-to-end with MCP Inspector
+- 100% functional compatibility maintained
+- No performance degradation
+
+---
+
+**Full Migration Documentation:** See [Migration Guide](./docs/MIGRATION_V2.md)
+**Epic Reference:** [Epic-001: Consolidate Workspace Tools](./docs/epics/consolidate-workspace-tools.md)
+**HOW2MCP Reference:** [2025 MCP Architecture Patterns](https://github.com/modelcontextprotocol/servers)
+
 ## [Unreleased]
 
 ### Added
@@ -246,13 +315,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Development environment configuration
 - Project documentation foundation
 
-[unreleased]: https://github.com/AojdevStudio/gdrive/compare/v0.8.0...HEAD
+[unreleased]: https://github.com/AojdevStudio/gdrive/compare/v2.0.0...HEAD
+[2.0.0]: https://github.com/AojdevStudio/gdrive/compare/v0.8.0...v2.0.0
 [0.8.0]: https://github.com/AojdevStudio/gdrive/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/AojdevStudio/gdrive/compare/v0.6.2...v0.7.0
 [0.6.2]: https://github.com/AojdevStudio/gdrive/compare/v0.1.0...v0.6.2
 [0.1.0]: https://github.com/AojdevStudio/gdrive/releases/tag/v0.1.0
 
 ## Links
-[Unreleased]: https://github.com/AojdevStudio/gdrive/compare/v0.8.0...HEAD
+[Unreleased]: https://github.com/AojdevStudio/gdrive/compare/v2.0.0...HEAD
+[2.0.0]: https://github.com/AojdevStudio/gdrive/releases/tag/v2.0.0
 [0.8.0]: https://github.com/AojdevStudio/gdrive/releases/tag/v0.8.0
 [0.7.0]: https://github.com/AojdevStudio/gdrive/releases/tag/v0.7.0
