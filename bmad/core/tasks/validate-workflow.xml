@@ -34,7 +34,7 @@
     </step>
 
     <step n="3" title="Generate Report">
-      <action>Create validation-report-{timestamp}.md in document's folder</action>
+      <action>Create validation-report-{timestamp}.md in {project-root}/docs/validation/ folder</action>
 
       <report-format>
         # Validation Report
@@ -82,7 +82,7 @@
     <rule>NEVER skip sections - validate EVERYTHING</rule>
     <rule>ALWAYS provide evidence (quotes + line numbers) for marks</rule>
     <rule>Think deeply about each requirement - don't rush</rule>
-    <rule>Save report to document's folder automatically</rule>
+    <rule>Save report to {project-root}/docs/validation/ folder automatically</rule>
     <rule>HALT after presenting summary - wait for user</rule>
   </critical-rules>
 </task>
