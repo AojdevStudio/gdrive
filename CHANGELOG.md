@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- ✨ **Sheets Formatting**: Added `formatCells` tool to apply bold/italic text, colors, and number format presets with dynamic field masks and helper utilities.
+
 ## [0.8.0] - 2025-08-19
 
 ### Added
