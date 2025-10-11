@@ -297,6 +297,9 @@ Common errors:
 - `createSheet`: Create new sheets in a spreadsheet
 - `formatSheet`: Apply formatting to cells
 - `setFormulas`: Add formulas to cells
+- `mergeCells`: Combine ranges for headers and grouped data
+- `setDataValidation`: Configure dropdown lists and numeric/date validation rules
+- `createChart`: Generate charts anchored to specific cells with overlay positioning
 
 #### createSheet tabColor format
 

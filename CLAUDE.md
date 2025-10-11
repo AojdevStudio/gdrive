@@ -8,7 +8,7 @@ This is a Model Context Protocol (MCP) server for Google Drive integration. It p
 - Full read/write access to Google Drive files and folders
 - Resource access to Google Drive files via `gdrive:///<file_id>` URIs
 - Tools for searching, reading, creating, and updating files
-- Comprehensive Google Sheets operations (read, update, append)
+- Comprehensive Google Sheets operations (read, update, append, merge, validate, chart)
 - Google Forms creation and management with question types
 - **Google Docs API integration** - Create documents, insert text, replace text, apply formatting, insert tables
 - **Batch file operations** - Process multiple files in a single operation (create, update, delete, move)
@@ -85,7 +85,7 @@ Reference agents naturally in development tasks, e.g., "As dev, implement..." or
 - **Tools**: 
   - **Read Operations**: search, read, listSheets, readSheet
   - **Write Operations**: createFile, updateFile, createFolder
-  - **Sheets Operations**: updateCells, appendRows
+  - **Sheets Operations**: updateCells, appendRows, mergeCells, setDataValidation, createChart
   - **Forms Operations**: createForm, getForm, addQuestion, listResponses
   - **Docs Operations**: createDocument, insertText, replaceText, applyTextStyle, insertTable
   - **Batch Operations**: batchFileOperations (create, update, delete, move multiple files)

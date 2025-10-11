@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- ✨ **Sheets advanced tools**: Added `mergeCells`, `setDataValidation`, and `createChart` MCP tools with robust error handling and cache invalidation.
+- 🧪 **Tests**: Added unit tests covering merge requests, dropdown validation payloads, and chart generation error handling.
+- 📝 **Docs**: Updated README, CLAUDE.md, and developer API guide with guidance for the new Sheets capabilities.
+
 ## [0.8.0] - 2025-08-19
 
 ### Added

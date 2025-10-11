@@ -18,6 +18,11 @@ import { AuthManager, AuthState } from "./src/auth/AuthManager.js";
 import { TokenManager } from "./src/auth/TokenManager.js";
 import { KeyRotationManager } from "./src/auth/KeyRotationManager.js";
 import { performHealthCheck, HealthStatus } from "./src/health-check.js";
+import {
+  mergeCellsTool,
+  setDataValidationTool,
+  createChartTool,
+} from "./src/sheets/advanced-tools.js";
 
 const drive = google.drive("v3");
 const sheets = google.sheets("v4");
@@ -930,6 +935,127 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         },
       },
       {
+        name: "mergeCells",
+        description: "Merge a range of cells in a Google Sheet (MERGE_ALL by default).",
+        inputSchema: {
+          type: "object",
+          properties: {
+            spreadsheetId: {
+              type: "string",
+              description: "The ID of the Google Sheets document",
+            },
+            range: {
+              type: "string",
+              description: "A1 notation for the cells to merge (e.g., 'Sheet1!A1:C1')",
+            },
+            mergeType: {
+              type: "string",
+              description: "Merge behavior (MERGE_ALL, MERGE_COLUMNS, MERGE_ROWS)",
+              enum: ["MERGE_ALL", "MERGE_COLUMNS", "MERGE_ROWS"],
+              default: "MERGE_ALL",
+            },
+          },
+          required: ["spreadsheetId", "range"],
+        },
+      },
+      {
+        name: "setDataValidation",
+        description: "Apply data validation (dropdowns, numeric limits) to a sheet range.",
+        inputSchema: {
+          type: "object",
+          properties: {
+            spreadsheetId: {
+              type: "string",
+              description: "The ID of the Google Sheets document",
+            },
+            range: {
+              type: "string",
+              description: "A1 notation for the target range (e.g., 'Sheet1!F2:F24')",
+            },
+            validation: {
+              type: "object",
+              description: "Validation rule configuration",
+              properties: {
+                type: {
+                  type: "string",
+                  enum: ["LIST_OF_VALUES", "NUMBER_BETWEEN", "DATE_AFTER"],
+                  description: "Validation rule type",
+                },
+                values: {
+                  type: "array",
+                  description: "Allowed values for LIST_OF_VALUES dropdowns",
+                  items: { type: "string" },
+                },
+                min: {
+                  type: ["string", "number"],
+                  description: "Minimum value/date for NUMBER_BETWEEN or DATE_AFTER",
+                },
+                max: {
+                  type: ["string", "number"],
+                  description: "Maximum value for NUMBER_BETWEEN",
+                },
+                strict: {
+                  type: "boolean",
+                  description: "Reject invalid inputs (default true)",
+                },
+                showDropdown: {
+                  type: "boolean",
+                  description: "Show dropdown arrow in cells (default true)",
+                },
+              },
+              required: ["type"],
+            },
+          },
+          required: ["spreadsheetId", "range", "validation"],
+        },
+      },
+      {
+        name: "createChart",
+        description: "Create a chart anchored at a specific position using data from a range.",
+        inputSchema: {
+          type: "object",
+          properties: {
+            spreadsheetId: {
+              type: "string",
+              description: "The ID of the Google Sheets document",
+            },
+            sheetName: {
+              type: "string",
+              description: "Name of the sheet tab (optional when dataRange includes it)",
+            },
+            chartType: {
+              type: "string",
+              description: "Chart type to create",
+              enum: ["LINE", "BAR", "COLUMN", "PIE", "SCATTER"],
+            },
+            dataRange: {
+              type: "string",
+              description: "A1 notation for the chart data (e.g., 'Sheet1!A1:C20')",
+            },
+            position: {
+              type: "object",
+              description: "0-indexed anchor position for the chart",
+              properties: {
+                row: {
+                  type: "number",
+                  description: "Row index for the chart anchor (0-indexed)",
+                },
+                column: {
+                  type: "number",
+                  description: "Column index for the chart anchor (0-indexed)",
+                },
+              },
+              required: ["row", "column"],
+            },
+            title: {
+              type: "string",
+              description: "Optional chart title",
+            },
+          },
+          required: ["spreadsheetId", "chartType", "dataRange", "position"],
+        },
+      },
+      {
         name: "createSheet",
         description: "Create a new sheet in an existing Google Spreadsheet. Examples: {\"spreadsheetId\": \"abc123\", \"title\": \"Quarterly 📊\"} and {\"spreadsheetId\": \"abc123\", \"title\": \"Roadmap\", \"tabColor\": {\"red\": 0.1, \"green\": 0.3, \"blue\": 0.7}}",
         inputSchema: {
@@ -1759,6 +1885,45 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             text: `Successfully appended ${values.length} rows to ${sheetName}`,
           }],
         };
+      }
+
+      case "mergeCells": {
+        return mergeCellsTool(
+          args,
+          {
+            sheets,
+            cache: cacheManager,
+            performance: performanceMonitor,
+            logger,
+          },
+          startTime
+        );
+      }
+
+      case "setDataValidation": {
+        return setDataValidationTool(
+          args,
+          {
+            sheets,
+            cache: cacheManager,
+            performance: performanceMonitor,
+            logger,
+          },
+          startTime
+        );
+      }
+
+      case "createChart": {
+        return createChartTool(
+          args,
+          {
+            sheets,
+            cache: cacheManager,
+            performance: performanceMonitor,
+            logger,
+          },
+          startTime
+        );
       }
 
       case "createSheet": {
