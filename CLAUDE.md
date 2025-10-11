@@ -2,6 +2,47 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## 🎓 Critical Reference: how2mcp Repository
+
+**Location:** `/Users/ossieirondi/projects/scratch/how2mcp/`
+
+This is the **definitive 2025 MCP implementation guide** and must be consulted for all architectural decisions. It contains:
+
+### Key Resources
+- **📚 MCP-DOCS/**: 10+ comprehensive guides covering 2025 best practices
+  - `MCP_IMPLEMENTATION_GUIDE.md` - Complete technical reference
+  - `MCP_ARCHITECTURE_2025.md` - Modern component layers and patterns
+  - `MCP_ADVANCED_PATTERNS_2025.md` - Production patterns (caching, streaming, versioning)
+  - `MCP_QUICK_REFERENCE.md` - Essential patterns and error codes
+
+- **💻 MCP_EXAMPLE_PROJECT/**: Production-ready reference implementation
+  - `src/tools/index.ts` - Shows proper operation-based tool architecture
+  - Example: `calculator` tool with operations: `add`, `subtract`, `multiply`, `divide`
+  - Example: `data-processor` tool with operations: `count`, `sort`, `unique`, `reverse`
+
+### Architecture Pattern to Follow
+The example project demonstrates **operation-based tools** (NOT individual tools per operation):
+```typescript
+// ✅ CORRECT: One tool with operations parameter
+{
+  name: "calculator",
+  inputSchema: {
+    properties: {
+      operation: { enum: ["add", "subtract", "multiply", "divide"] },
+      a: { type: "number" },
+      b: { type: "number" }
+    }
+  }
+}
+
+// ❌ WRONG: Separate tool for each operation
+{ name: "add", ... }
+{ name: "subtract", ... }
+{ name: "multiply", ... }
+```
+
+**CRITICAL:** Always reference how2mcp patterns when implementing new tools or refactoring existing ones. This ensures we follow 2025 best practices for MCP architecture.
+
 ## Project Overview
 
 This is a Model Context Protocol (MCP) server for Google Drive integration. It provides:
