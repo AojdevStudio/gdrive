@@ -24,11 +24,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Spreadsheet metadata caching to reduce API calls
   - 5 additional unit tests for formatting helpers
 
+- **Google Sheets Conditional Formatting** - `addConditionalFormatting` tool for rule-based cell highlighting
+  - Number comparisons (NUMBER_GREATER, NUMBER_LESS)
+  - Text matching (TEXT_CONTAINS)
+  - Custom formula conditions (CUSTOM_FORMULA)
+  - Color and bold text formatting for matching cells
+  - Comprehensive validation and error handling
+  - 3 unit tests for rule construction and validation
+  - Complete documentation with examples in docs/Examples
+
 ### Improved
 
-- Test coverage expanded to 34 tests total (29 formula + 5 formatting)
+- Test coverage expanded to 37 tests total (29 formula + 5 formatting + 3 conditional)
 - Error handling with detailed logging including error types and context
-- Documentation with practical examples for both formulas and formatting
+- Documentation with practical examples for formulas, formatting, and conditional rules
 - Unified helpers module combining formula and formatting operations
 
 ## [0.8.0] - 2025-08-19
