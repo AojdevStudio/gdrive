@@ -29,33 +29,37 @@ describe('createSheet Integration Tests', () => {
             ],
           },
         })),
-        batchUpdate: jest.fn(() => Promise.resolve({
-          data: {
-            spreadsheetId: 'test-spreadsheet-id',
-            replies: [{
-              addSheet: {
-                properties: {
-                  sheetId: 789012,
-                  title: 'Integration Test Sheet',
-                  index: 1,
-                  gridProperties: {
-                    rowCount: 1000,
-                    columnCount: 26,
-                    frozenRowCount: 0,
-                    frozenColumnCount: 0,
+        batchUpdate: jest.fn((request: any) => {
+          // Extract the title from the request to return it in the response
+          const requestedTitle = request?.requestBody?.requests?.[0]?.addSheet?.properties?.title || 'Integration Test Sheet';
+          return Promise.resolve({
+            data: {
+              spreadsheetId: 'test-spreadsheet-id',
+              replies: [{
+                addSheet: {
+                  properties: {
+                    sheetId: 789012,
+                    title: requestedTitle, // Use the actual requested title
+                    index: 1,
+                    gridProperties: {
+                      rowCount: 1000,
+                      columnCount: 26,
+                      frozenRowCount: 0,
+                      frozenColumnCount: 0,
+                    },
+                    tabColor: {
+                      red: 0.2,
+                      green: 0.4,
+                      blue: 0.8,
+                    },
+                    hidden: false,
+                    rightToLeft: false,
                   },
-                  tabColor: {
-                    red: 0.2,
-                    green: 0.4,
-                    blue: 0.8,
-                  },
-                  hidden: false,
-                  rightToLeft: false,
                 },
-              },
-            }],
-          },
-        })),
+              }],
+            },
+          });
+        }),
       },
     };
 

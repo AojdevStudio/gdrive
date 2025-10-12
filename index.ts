@@ -19,6 +19,9 @@ import { TokenManager } from "./src/auth/TokenManager.js";
 import { KeyRotationManager } from "./src/auth/KeyRotationManager.js";
 import { performHealthCheck, HealthStatus } from "./src/health-check.js";
 import { handleSheetsTool } from "./src/sheets/sheets-handler.js";
+import { handleDriveTool } from "./src/drive/drive-handler.js";
+import { handleFormsTool } from "./src/forms/forms-handler.js";
+import { handleDocsTool } from "./src/docs/docs-handler.js";
 
 const drive = google.drive("v3");
 const sheets = google.sheets("v4");
@@ -638,166 +641,6 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
   return {
     tools: [
       {
-        name: "search",
-        description: "Search for files in Google Drive. Supports natural language queries like 'spreadsheets modified last 7 days' or 'documents shared with me'.",
-        inputSchema: {
-          type: "object",
-          properties: {
-            query: {
-              type: "string",
-              description: "Natural language search query (e.g., 'budget spreadsheet modified yesterday', 'presentations created last week')",
-            },
-            pageSize: {
-              type: "number",
-              description: "Number of results to return (default: 10, max: 100)",
-              default: 10,
-            },
-          },
-          required: ["query"],
-        },
-      },
-      {
-        name: "enhancedSearch",
-        description: "Enhanced search with advanced filtering options for Google Drive files",
-        inputSchema: {
-          type: "object",
-          properties: {
-            query: {
-              type: "string",
-              description: "Search query for file names and content",
-            },
-            filters: {
-              type: "object",
-              properties: {
-                mimeType: {
-                  type: "string",
-                  description: "Filter by MIME type (e.g., 'application/vnd.google-apps.spreadsheet')",
-                },
-                modifiedAfter: {
-                  type: "string",
-                  description: "ISO 8601 date string for files modified after this date",
-                },
-                modifiedBefore: {
-                  type: "string",
-                  description: "ISO 8601 date string for files modified before this date",
-                },
-                createdAfter: {
-                  type: "string",
-                  description: "ISO 8601 date string for files created after this date",
-                },
-                createdBefore: {
-                  type: "string",
-                  description: "ISO 8601 date string for files created before this date",
-                },
-                sharedWithMe: {
-                  type: "boolean",
-                  description: "Only show files shared with me",
-                },
-                ownedByMe: {
-                  type: "boolean",
-                  description: "Only show files I own",
-                },
-                parents: {
-                  type: "string",
-                  description: "Parent folder ID to search within",
-                },
-                trashed: {
-                  type: "boolean",
-                  description: "Include trashed files (default: false)",
-                },
-              },
-            },
-            pageSize: {
-              type: "number",
-              description: "Number of results to return (default: 10, max: 100)",
-              default: 10,
-            },
-            orderBy: {
-              type: "string",
-              description: "Sort order (e.g., 'modifiedTime desc', 'name', 'createdTime')",
-            },
-          },
-          required: ["query"],
-        },
-      },
-      {
-        name: "read",
-        description: "Read the contents of a Google Drive file",
-        inputSchema: {
-          type: "object",
-          properties: {
-            fileId: {
-              type: "string",
-              description: "The ID of the file to read",
-            },
-          },
-          required: ["fileId"],
-        },
-      },
-      {
-        name: "createFile",
-        description: "Create a new file in Google Drive",
-        inputSchema: {
-          type: "object",
-          properties: {
-            name: {
-              type: "string",
-              description: "The name of the file",
-            },
-            content: {
-              type: "string",
-              description: "The content of the file",
-            },
-            mimeType: {
-              type: "string",
-              description: "The MIME type of the file (default: text/plain)",
-              default: "text/plain",
-            },
-            parentId: {
-              type: "string",
-              description: "The ID of the parent folder (optional)",
-            },
-          },
-          required: ["name", "content"],
-        },
-      },
-      {
-        name: "updateFile",
-        description: "Update the content of an existing file",
-        inputSchema: {
-          type: "object",
-          properties: {
-            fileId: {
-              type: "string",
-              description: "The ID of the file to update",
-            },
-            content: {
-              type: "string",
-              description: "The new content of the file",
-            },
-          },
-          required: ["fileId", "content"],
-        },
-      },
-      {
-        name: "createFolder",
-        description: "Create a new folder in Google Drive",
-        inputSchema: {
-          type: "object",
-          properties: {
-            name: {
-              type: "string",
-              description: "The name of the folder",
-            },
-            parentId: {
-              type: "string",
-              description: "The ID of the parent folder (optional)",
-            },
-          },
-          required: ["name"],
-        },
-      },
-      {
         name: "sheets",
         description: "Consolidated Google Sheets tool supporting operations for list, read, create, rename, delete, update, updateFormula, format, conditionalFormat, append, freeze, and setColumnWidth",
         inputSchema: {
@@ -993,75 +836,145 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         },
       },
       {
-        name: "createForm",
-        description: "Create a new Google Form with questions",
+        name: "drive",
+        description: "Consolidated Google Drive tool supporting operations for search, enhancedSearch, read, create, update, createFolder, and batch",
         inputSchema: {
           type: "object",
           properties: {
+            operation: {
+              type: "string",
+              enum: [
+                "search",
+                "enhancedSearch",
+                "read",
+                "create",
+                "update",
+                "createFolder",
+                "batch"
+              ],
+              description: "The drive operation to execute",
+            },
+            query: {
+              type: "string",
+              description: "Search query for search and enhancedSearch operations",
+            },
+            filters: {
+              type: "object",
+              description: "Advanced filters for enhancedSearch operation",
+              properties: {
+                mimeType: { type: "string" },
+                modifiedAfter: { type: "string" },
+                modifiedBefore: { type: "string" },
+                createdAfter: { type: "string" },
+                createdBefore: { type: "string" },
+                sharedWithMe: { type: "boolean" },
+                ownedByMe: { type: "boolean" },
+                parents: { type: "string" },
+                trashed: { type: "boolean" },
+              },
+            },
+            pageSize: {
+              type: "number",
+              description: "Number of results for search operations (default: 10, max: 100)",
+              default: 10,
+            },
+            orderBy: {
+              type: "string",
+              description: "Sort order for enhancedSearch (e.g., 'modifiedTime desc')",
+            },
+            fileId: {
+              type: "string",
+              description: "File ID for read and update operations",
+            },
+            name: {
+              type: "string",
+              description: "File or folder name for create and createFolder operations",
+            },
+            content: {
+              type: "string",
+              description: "File content for create and update operations",
+            },
+            mimeType: {
+              type: "string",
+              description: "MIME type for create operation (default: 'text/plain')",
+            },
+            parentId: {
+              type: "string",
+              description: "Parent folder ID for create and createFolder operations",
+            },
+            operations: {
+              type: "array",
+              description: "Array of operations for batch operation",
+              items: {
+                type: "object",
+                properties: {
+                  type: {
+                    type: "string",
+                    enum: ["create", "update", "delete", "move"],
+                  },
+                  fileId: { type: "string" },
+                  name: { type: "string" },
+                  content: { type: "string" },
+                  mimeType: { type: "string" },
+                  parentId: { type: "string" },
+                },
+              },
+            },
+          },
+          required: ["operation"],
+        },
+      },
+      {
+        name: "forms",
+        description: "Consolidated Google Forms tool supporting operations for create, read, addQuestion, and listResponses",
+        inputSchema: {
+          type: "object",
+          properties: {
+            operation: {
+              type: "string",
+              enum: [
+                "create",
+                "read",
+                "addQuestion",
+                "listResponses"
+              ],
+              description: "The forms operation to execute",
+            },
+            formId: {
+              type: "string",
+              description: "Form ID for read, addQuestion, and listResponses operations",
+            },
             title: {
               type: "string",
-              description: "The title of the form",
+              description: "Form title for create operation, or question title for addQuestion operation",
             },
             description: {
               type: "string",
-              description: "The description of the form (optional)",
-            },
-          },
-          required: ["title"],
-        },
-      },
-      {
-        name: "getForm",
-        description: "Get details of a Google Form including questions and settings",
-        inputSchema: {
-          type: "object",
-          properties: {
-            formId: {
-              type: "string",
-              description: "The ID of the Google Form",
-            },
-          },
-          required: ["formId"],
-        },
-      },
-      {
-        name: "addQuestion",
-        description: "Add a question to an existing Google Form",
-        inputSchema: {
-          type: "object",
-          properties: {
-            formId: {
-              type: "string",
-              description: "The ID of the Google Form",
-            },
-            title: {
-              type: "string",
-              description: "The question title/text",
+              description: "Form description for create operation",
             },
             type: {
               type: "string",
               enum: ["TEXT", "PARAGRAPH_TEXT", "MULTIPLE_CHOICE", "CHECKBOX", "DROPDOWN", "LINEAR_SCALE", "DATE", "TIME"],
-              description: "The type of question",
+              description: "Question type for addQuestion operation",
             },
             required: {
               type: "boolean",
-              description: "Whether the question is required",
-              default: false,
+              description: "Whether question is required for addQuestion operation",
             },
             options: {
               type: "array",
-              items: { type: "string" },
-              description: "Options for multiple choice, checkbox, or dropdown questions",
+              description: "Options for multiple choice/checkbox/dropdown questions",
+              items: {
+                type: "string",
+              },
             },
             scaleMin: {
               type: "number",
-              description: "Minimum value for linear scale (default: 1)",
-              default: 1,
+              description: "Minimum value for linear scale questions (default: 1)",
             },
             scaleMax: {
               type: "number",
-              description: "Maximum value for linear scale (default: 5)",
-              default: 5,
+              description: "Maximum value for linear scale questions (default: 5)",
             },
             scaleMinLabel: {
               type: "string",
@@ -1072,124 +985,81 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
               description: "Label for maximum value in linear scale",
             },
           },
-          required: ["formId", "title", "type"],
+          required: ["operation"],
         },
       },
       {
-        name: "listResponses",
-        description: "List all responses to a Google Form",
+        name: "docs",
+        description: "Consolidated Google Docs tool supporting operations for create, insertText, replaceText, applyTextStyle, and insertTable",
         inputSchema: {
           type: "object",
           properties: {
-            formId: {
+            operation: {
               type: "string",
-              description: "The ID of the Google Form",
+              enum: [
+                "create",
+                "insertText",
+                "replaceText",
+                "applyTextStyle",
+                "insertTable"
+              ],
+              description: "The docs operation to execute",
             },
-          },
-          required: ["formId"],
-        },
-      },
-      {
-        name: "createDocument",
-        description: "Create a new Google Docs document",
-        inputSchema: {
-          type: "object",
-          properties: {
+            documentId: {
+              type: "string",
+              description: "Document ID for insertText, replaceText, applyTextStyle, and insertTable operations",
+            },
             title: {
               type: "string",
-              description: "The title of the document",
+              description: "Document title for create operation",
             },
             content: {
               type: "string",
-              description: "Initial content for the document (optional)",
+              description: "Initial content for create operation",
             },
             parentId: {
               type: "string",
-              description: "The ID of the parent folder (optional)",
-            },
-          },
-          required: ["title"],
-        },
-      },
-      {
-        name: "insertText",
-        description: "Insert text at a specific location in a Google Docs document",
-        inputSchema: {
-          type: "object",
-          properties: {
-            documentId: {
-              type: "string",
-              description: "The ID of the Google Docs document",
+              description: "Parent folder ID for create operation",
             },
             text: {
               type: "string",
-              description: "The text to insert",
+              description: "Text to insert for insertText operation",
             },
             index: {
               type: "number",
-              description: "The zero-based index where to insert the text (1 for beginning of document)",
-              default: 1,
-            },
-          },
-          required: ["documentId", "text"],
-        },
-      },
-      {
-        name: "replaceText",
-        description: "Replace all occurrences of text in a Google Docs document",
-        inputSchema: {
-          type: "object",
-          properties: {
-            documentId: {
-              type: "string",
-              description: "The ID of the Google Docs document",
+              description: "Index position for insertText and insertTable operations (default: 1)",
             },
             searchText: {
               type: "string",
-              description: "The text to search for",
+              description: "Text to search for in replaceText operation",
             },
             replaceText: {
               type: "string",
-              description: "The text to replace with",
+              description: "Replacement text for replaceText operation",
             },
             matchCase: {
               type: "boolean",
-              description: "Whether to match case when searching",
-              default: false,
-            },
-          },
-          required: ["documentId", "searchText", "replaceText"],
-        },
-      },
-      {
-        name: "applyTextStyle",
-        description: "Apply text styling to a range in a Google Docs document",
-        inputSchema: {
-          type: "object",
-          properties: {
-            documentId: {
-              type: "string",
-              description: "The ID of the Google Docs document",
+              description: "Whether to match case in replaceText operation",
             },
             startIndex: {
               type: "number",
-              description: "The start index of the range",
+              description: "Start index for applyTextStyle operation",
             },
             endIndex: {
               type: "number",
-              description: "The end index of the range",
+              description: "End index for applyTextStyle operation",
             },
             bold: {
               type: "boolean",
-              description: "Make text bold",
+              description: "Apply bold styling",
             },
             italic: {
               type: "boolean",
-              description: "Make text italic",
+              description: "Apply italic styling",
             },
             underline: {
               type: "boolean",
-              description: "Underline text",
+              description: "Apply underline styling",
             },
             fontSize: {
               type: "number",
@@ -1199,85 +1069,21 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
               type: "object",
               description: "Text color (RGB values 0-1)",
               properties: {
-                red: { type: "number" },
-                green: { type: "number" },
-                blue: { type: "number" },
+                red: { type: "number", minimum: 0, maximum: 1 },
+                green: { type: "number", minimum: 0, maximum: 1 },
+                blue: { type: "number", minimum: 0, maximum: 1 },
               },
-            },
-          },
-          required: ["documentId", "startIndex", "endIndex"],
-        },
-      },
-      {
-        name: "insertTable",
-        description: "Insert a table at a specific location in a Google Docs document",
-        inputSchema: {
-          type: "object",
-          properties: {
-            documentId: {
-              type: "string",
-              description: "The ID of the Google Docs document",
             },
             rows: {
               type: "number",
-              description: "Number of rows in the table",
+              description: "Number of rows for insertTable operation",
             },
             columns: {
               type: "number",
-              description: "Number of columns in the table",
-            },
-            index: {
-              type: "number",
-              description: "The zero-based index where to insert the table",
-              default: 1,
+              description: "Number of columns for insertTable operation",
             },
           },
-          required: ["documentId", "rows", "columns"],
-        },
-      },
-      {
-        name: "batchFileOperations",
-        description: "Perform batch operations on multiple files (create, update, delete, move)",
-        inputSchema: {
-          type: "object",
-          properties: {
-            operations: {
-              type: "array",
-              description: "Array of operations to perform",
-              items: {
-                type: "object",
-                properties: {
-                  type: {
-                    type: "string",
-                    enum: ["create", "update", "delete", "move"],
-                    description: "Type of operation",
-                  },
-                  fileId: {
-                    type: "string",
-                    description: "File ID (required for update, delete, move)",
-                  },
-                  name: {
-                    type: "string",
-                    description: "File name (required for create, optional for update)",
-                  },
-                  content: {
-                    type: "string",
-                    description: "File content (required for create and update)",
-                  },
-                  mimeType: {
-                    type: "string",
-                    description: "MIME type for create operation",
-                  },
-                  parentId: {
-                    type: "string",
-                    description: "Parent folder ID (for create and move)",
-                  },
-                },
-                required: ["type"],
-              },
-            },
-          },
-          required: ["operations"],
+          required: ["operation"],
         },
       },
       {
@@ -1643,6 +1449,37 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         return await handleSheetsTool(args ?? {}, {
           logger,
           sheets,
+          cacheManager,
+          performanceMonitor,
+          startTime,
+        });
+      }
+
+      case "drive": {
+        return await handleDriveTool(args ?? {}, {
+          logger,
+          drive,
+          cacheManager,
+          performanceMonitor,
+          startTime,
+        });
+      }
+
+      case "forms": {
+        return await handleFormsTool(args ?? {}, {
+          logger,
+          forms,
+          cacheManager,
+          performanceMonitor,
+          startTime,
+        });
+      }
+
+      case "docs": {
+        return await handleDocsTool(args ?? {}, {
+          logger,
+          docs,
+          drive,
           cacheManager,
           performanceMonitor,
           startTime,
