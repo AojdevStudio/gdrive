@@ -75,6 +75,48 @@ docker compose exec gdrive-mcp-server node dist/index.js health
 
 **📖 [Complete Docker Guide →](./docs/Deployment/DOCKER.md)**
 
+## 🚨 Breaking Changes in v2.0.0
+
+**Major Version Update:** Google Drive MCP Server v2.0.0 introduces significant architectural improvements that require migration from previous versions.
+
+### What Changed?
+
+We've consolidated **41+ individual tools** into **5 operation-based tools**, following the 2025 MCP architecture patterns from [HOW2MCP](https://github.com/modelcontextprotocol/servers).
+
+**Before (v1.x):** Each operation was a separate tool
+```json
+{
+  "name": "listSheets",
+  "args": { "spreadsheetId": "abc123" }
+}
+```
+
+**After (v2.0.0):** Operations are parameters within consolidated tools
+```json
+{
+  "name": "sheets",
+  "args": {
+    "operation": "list",
+    "spreadsheetId": "abc123"
+  }
+}
+```
+
+### Why This Improves Your Experience
+
+- **88% Reduction in Tool Count** (41+ → 5) - LLMs can select the right tool faster
+- **Better Type Safety** - Zod discriminated unions for reliable operation routing
+- **Cleaner API** - Logical grouping by service (sheets, drive, forms, docs, batch)
+- **Future-Proof** - Follows 2025 MCP architecture best practices
+
+### Migration Required
+
+**📖 [Complete Migration Guide](./docs/MIGRATION_V2.md)** - Step-by-step instructions for updating your code
+
+All existing tool calls must be updated to use the new operation-based format. See the migration guide for comprehensive before/after examples covering all 32 operations.
+
+---
+
 ## 🔐 Authentication
 
 The server features **automatic OAuth token refresh** with enterprise-grade encryption - authenticate once, works forever.
@@ -139,8 +181,132 @@ node ./dist/index.js auth
 
 ### 📊 **Google Sheets Integration**
 - **Data Access** - Read and write sheet data with A1 notation support
-- **Sheet Management** - List sheets, update cells, append rows
+- **Sheet Management** - Create, rename, delete, and list sheets; update cells; append rows
+- **Formula Automation** - Apply formulas to specific cells with `updateCellsWithFormula`
+- **Cell Formatting** - Apply bold/italic text, colors, and number formats with `formatCells`
+- **Conditional Formatting** - Highlight trends with custom rules (e.g., green gains, red losses)
+- **Layout Controls** - Freeze header rows/columns and adjust column widths for better readability
 - **CSV Export** - Automatic conversion for data analysis
+
+#### Formula Automation Examples
+
+**Add a SUM formula to total a column:**
+```javascript
+await updateCellsWithFormula({
+  spreadsheetId: "your-spreadsheet-id",
+  range: "Sheet1!D25",
+  formula: "=SUM(D2:D24)"
+});
+```
+
+**Apply formulas to multiple cells (with relative references):**
+```javascript
+// This applies the formula to cells E2:E25
+// Google Sheets automatically adjusts relative references
+// So E2 gets =D2*1.1, E3 gets =D3*1.1, etc.
+await updateCellsWithFormula({
+  spreadsheetId: "your-spreadsheet-id",
+  range: "E2:E25",
+  formula: "=D2*1.1"
+});
+```
+
+**Calculate running totals:**
+```javascript
+await updateCellsWithFormula({
+  spreadsheetId: "your-spreadsheet-id",
+  range: "Budget!F10",
+  formula: "=SUM(F2:F9)"
+});
+```
+
+**Use VLOOKUP for data matching:**
+```javascript
+await updateCellsWithFormula({
+  spreadsheetId: "your-spreadsheet-id",
+  range: "Sheet1!C2",
+  formula: "=VLOOKUP(A2,Prices!A:B,2,FALSE)"
+});
+```
+
+#### Security Considerations for Formula Operations
+
+When using `updateCellsWithFormula`, be aware of these security considerations:
+
+- **Formula Execution Context**: Formulas execute within Google Sheets' security sandbox
+- **External URL Access**: User-crafted formulas can access external URLs via functions like `IMPORTXML`, `IMPORTDATA`, or `IMPORTHTML`
+- **Input Validation**: If accepting formula input from users in your application:
+  - Validate formula content before passing to the MCP server
+  - Consider restricting dangerous functions (IMPORTXML, IMPORTHTML, etc.)
+  - Implement allowlists for permitted functions
+- **Permission Model**: The MCP server respects Google Drive file permissions - users can only update sheets they have edit access to
+- **Data Exposure**: Be cautious with formulas that might expose sensitive data through external requests
+
+**Example validation pattern:**
+```javascript
+// Validate user-provided formulas
+function isSafeFormula(formula) {
+  const dangerousFunctions = ['IMPORTXML', 'IMPORTHTML', 'IMPORTDATA', 'IMAGE'];
+  const upperFormula = formula.toUpperCase();
+
+  return !dangerousFunctions.some(fn => upperFormula.includes(fn));
+}
+
+// Only allow safe formulas
+if (isSafeFormula(userFormula)) {
+  await updateCellsWithFormula({ spreadsheetId, range, formula: userFormula });
+} else {
+  throw new Error('Formula contains potentially unsafe functions');
+}
+```
+
+#### Cell Formatting Examples
+
+**Make headers bold with gray background:**
+```javascript
+await formatCells({
+  spreadsheetId: "your-spreadsheet-id",
+  range: "Sheet1!A1:Z1",
+  format: {
+    bold: true,
+    backgroundColor: {
+      red: 0.85,
+      green: 0.85,
+      blue: 0.85
+    }
+  }
+});
+```
+
+**Apply currency formatting:**
+```javascript
+await formatCells({
+  spreadsheetId: "your-spreadsheet-id",
+  range: "Sheet1!C2:C100",
+  format: {
+    numberFormat: {
+      type: "CURRENCY",
+      pattern: "$#,##0.00"
+    }
+  }
+});
+```
+
+**Highlight warnings in red:**
+```javascript
+await formatCells({
+  spreadsheetId: "your-spreadsheet-id",
+  range: "Sheet1!A10:D10",
+  format: {
+    foregroundColor: {
+      red: 0.8,
+      green: 0.2,
+      blue: 0.2
+    },
+    bold: true
+  }
+});
+```
 
 ### 📝 **Google Docs Manipulation**
 - **Document Creation** - Create documents with content and formatting
@@ -196,26 +362,120 @@ graph TB
 
 ### Core Components
 
-- **index.ts** - Main MCP server implementation with comprehensive tool handlers
+- **index.ts** - Main MCP server implementation with consolidated tool handlers
 - **AuthManager** - OAuth 2.0 authentication with automatic token refresh
 - **TokenManager** - Secure encrypted token storage and lifecycle management
 - **CacheManager** - Redis-based caching with intelligent invalidation
 - **PerformanceMonitor** - Real-time performance tracking and metrics collection
 
+### Operation-Based Tool Architecture (v2.0.0)
+
+Following [HOW2MCP 2025 best practices](https://github.com/modelcontextprotocol/servers), the server implements an **operation-based tool pattern**:
+
+**Design Pattern:**
+```typescript
+// Each service has ONE tool with multiple operations
+{
+  name: "sheets",
+  args: {
+    operation: "list" | "read" | "create" | ...,  // Operation discriminator
+    spreadsheetId: "...",                          // Common parameters
+    // ... operation-specific parameters
+  }
+}
+```
+
+**Key Architectural Benefits:**
+- **Zod Discriminated Unions** - Type-safe operation routing with compile-time validation
+- **Centralized Handlers** - Single tool registration point per service prevents overwriting
+- **Cleaner Codebase** - Reduced duplication with shared validation and error handling
+- **Better LLM Performance** - 88% reduction in tool count (41+ → 5) enables faster tool selection
+
+**File Structure:**
+```
+src/
+  sheets/
+    sheets-handler.ts    # Operation router
+    sheets-schemas.ts    # Zod discriminated union schemas
+  drive/
+    drive-handler.ts
+    drive-schemas.ts
+  forms/, docs/, batch/  # Similar structure
+```
+
+This architecture ensures maintainability, type safety, and optimal LLM integration performance.
+
 ## 📚 API Reference
 
-### 📖 Available Tools
+### 📖 Available Tools (v2.0.0)
 
-The server provides **22 comprehensive tools** for Google Workspace integration across **6 categories**:
+The server provides **5 consolidated operation-based tools** with **32 total operations**:
 
-- **🔍 Search & Read** (6 tools): search, enhancedSearch, read, listSheets, readSheet, getAppScript
-- **📁 File & Folder** (4 tools): createFile, updateFile, createFolder, batchFileOperations
-- **📊 Sheets** (2 tools): updateCells, appendRows
-- **📋 Forms** (4 tools): createForm, getForm, addQuestion, listResponses
-- **📝 Docs** (5 tools): createDocument, insertText, replaceText, applyTextStyle, insertTable
-- **📂 Resources**: MCP resource access via `gdrive:///<file_id>` URIs
+#### `sheets` - Google Sheets Operations (12 operations)
+Unified tool for all Google Sheets functionality:
+- `list` - List all sheets in a spreadsheet
+- `read` - Read data from a specific range
+- `create` - Create a new sheet in a spreadsheet
+- `rename` - Rename an existing sheet
+- `delete` - Delete a sheet
+- `update` - Update cell values in a range
+- `updateFormula` - Apply formulas to cells
+- `format` - Apply formatting (bold, colors, number formats)
+- `conditionalFormat` - Add conditional formatting rules
+- `append` - Append rows to a sheet
+- `freeze` - Freeze header rows/columns
+- `setColumnWidth` - Adjust column widths
+
+#### `drive` - Google Drive Operations (7 operations)
+Unified tool for file and folder management:
+- `search` - Search files with natural language queries
+- `enhancedSearch` - Advanced search with filters
+- `read` - Read file contents
+- `create` - Create new files
+- `update` - Update existing files
+- `createFolder` - Create new folders
+- `batch` - Batch file operations
+
+#### `forms` - Google Forms Operations (4 operations)
+Unified tool for form creation and management:
+- `create` - Create new forms
+- `get` - Retrieve form details
+- `addQuestion` - Add questions to forms
+- `listResponses` - Get form responses
+
+#### `docs` - Google Docs Operations (5 operations)
+Unified tool for document manipulation:
+- `create` - Create new documents
+- `insertText` - Insert text at positions
+- `replaceText` - Find and replace text
+- `applyTextStyle` - Apply formatting (bold, italic, colors)
+- `insertTable` - Insert tables
+
+#### `batch` - Batch File Operations (4 operations)
+Unified tool for efficient multi-file processing:
+- `create` - Create multiple files
+- `update` - Update multiple files
+- `delete` - Delete multiple files
+- `move` - Move multiple files
+
+### 📂 Resources
+- **MCP Resource Access**: `gdrive:///<file_id>` URIs for file access
 
 **📖 [Complete API Documentation →](./docs/Developer-Guidelines/API.md)**
+
+### 🔄 Migration from v1.x
+
+If you're migrating from v1.x, each old tool maps to an operation parameter:
+
+| Old Tool (v1.x) | New Tool (v2.0.0) | Operation |
+|-----------------|-------------------|-----------|
+| `listSheets` | `sheets` | `"list"` |
+| `readSheet` | `sheets` | `"read"` |
+| `createSheet` | `sheets` | `"create"` |
+| `updateCells` | `sheets` | `"update"` |
+| _...and 28 more_ | See [Migration Guide](./docs/MIGRATION_V2.md) | |
+
+**📖 [Complete Migration Guide with All 32 Operations →](./docs/MIGRATION_V2.md)**
 
 ### 🎯 Key Capabilities Summary
 
@@ -313,24 +573,37 @@ node ./dist/index.js health
 
 ## 💡 Usage Examples
 
-### 🔍 Quick Examples
+### 🔍 Quick Examples (v2.0.0)
 
 ```javascript
-// Natural language search
-await callTool("search", { query: "spreadsheets modified last week" });
+// Natural language search with drive tool
+await callTool("drive", {
+  operation: "search",
+  query: "spreadsheets modified last week"
+});
 
-// Create document with formatting
-await callTool("createDocument", {
+// Create document with docs tool
+await callTool("docs", {
+  operation: "create",
   title: "Project Report",
   content: "# Project Overview\n\nThis document outlines..."
 });
 
-// Batch file operations
-await callTool("batchFileOperations", {
+// Batch file operations with batch tool
+await callTool("batch", {
+  operation: "create",
   operations: [
     { type: "create", name: "report.txt", content: "..." },
-    { type: "update", fileId: "1xyz...", content: "..." }
+    { type: "create", name: "notes.txt", content: "..." }
   ]
+});
+
+// Update spreadsheet cells with sheets tool
+await callTool("sheets", {
+  operation: "update",
+  spreadsheetId: "abc123",
+  range: "Sheet1!A1:B2",
+  values: [["Name", "Age"], ["John", 30]]
 });
 ```
 

@@ -5,7 +5,124 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0] - 2025-10-11
+
+### 🚨 BREAKING CHANGES
+
+- **Consolidated 41+ individual tools into 5 operation-based tools**
+  - `sheets` - Unified tool for all Google Sheets operations (12 operations)
+  - `drive` - Unified tool for all Google Drive file operations (7 operations)
+  - `forms` - Unified tool for all Google Forms operations (4 operations)
+  - `docs` - Unified tool for all Google Docs operations (5 operations)
+  - `batch` - Batch file operations (4 operations)
+
+### ⚠️ Migration Required
+
+If you're using individual tools like `listSheets`, `readSheet`, etc., you must migrate to the new operation-based tools:
+
+**Before (v1.x):**
+```json
+{
+  "name": "listSheets",
+  "args": {
+    "spreadsheetId": "abc123"
+  }
+}
+```
+
+**After (v2.0.0):**
+```json
+{
+  "name": "sheets",
+  "args": {
+    "operation": "list",
+    "spreadsheetId": "abc123"
+  }
+}
+```
+
+### ✨ Benefits
+
+- **Improved LLM Tool Selection:** 88% reduction in tool count (41+ → 5)
+- **Better Type Safety:** Zod discriminated unions for operation routing
+- **Cleaner Codebase:** Reduced code duplication, centralized handlers
+- **HOW2MCP 2025 Compliance:** Follows modern MCP architecture patterns
+
+### 📚 Documentation
+
+- Added comprehensive migration guide to `docs/MIGRATION_V2.md`
+- Updated README.md with breaking changes section and quick migration examples
+- Updated API documentation with all 32 operations
+- Added examples for each operation type
+
+### 🔧 Technical Changes
+
+- Implemented Zod discriminated unions for type-safe operation routing
+- Centralized logger pattern (single logger instance)
+- Single ListTools handler to prevent tool registration overwriting
+- New file structure: `src/sheets/`, `src/drive/`, `src/forms/`, `src/docs/`, `src/batch/`
+
+### 🧪 Testing
+
+- All 32 operations tested end-to-end with MCP Inspector
+- 100% functional compatibility maintained
+- No performance degradation
+
+---
+
+**Full Migration Documentation:** See [Migration Guide](./docs/MIGRATION_V2.md)
+**Epic Reference:** [Epic-001: Consolidate Workspace Tools](./docs/epics/consolidate-workspace-tools.md)
+**HOW2MCP Reference:** [2025 MCP Architecture Patterns](https://github.com/modelcontextprotocol/servers)
+
 ## [Unreleased]
+
+### Added
+
+- **Google Sheets Formula Support** - `updateCellsWithFormula` tool for applying formulas to cells
+  - Reusable range helpers and comprehensive unit tests (29 tests)
+  - JSDoc documentation for all formula helper functions
+  - Usage examples and security considerations in README
+  - Maximum cell limit (10,000 cells) to prevent memory exhaustion
+  - Structured error logging with error type tracking
+
+- **Google Sheets Cell Formatting** - `formatCells` tool for styling cells
+  - Bold/italic text formatting
+  - Text and background colors (RGB 0.0-1.0 format)
+  - Number format presets (CURRENCY, PERCENT, DATE, NUMBER, TEXT)
+  - Dynamic field mask generation for efficient API calls
+  - Spreadsheet metadata caching to reduce API calls
+  - 5 additional unit tests for formatting helpers
+
+- **Google Sheets Conditional Formatting** - `addConditionalFormatting` tool for rule-based cell highlighting
+  - Number comparisons (NUMBER_GREATER, NUMBER_LESS)
+  - Text matching (TEXT_CONTAINS)
+  - Custom formula conditions (CUSTOM_FORMULA)
+  - Color and bold text formatting for matching cells
+  - Comprehensive validation and error handling
+  - 3 unit tests for rule construction and validation
+  - Complete documentation with examples in docs/Examples
+
+- **Google Sheets Management Tools** - `renameSheet` and `deleteSheet` for sheet lifecycle management
+  - Unified `resolveSheetMetadata` helper for flexible sheet identification
+  - Support for both sheetId (numeric) and sheetName (string) parameters
+  - Enhanced `createSheet` with `sheetName` alias and default row/column handling
+  - Automatic cache invalidation after sheet operations
+  - Comprehensive error logging and validation
+
+- **Google Sheets Layout Controls** - `freezeRowsColumns` and `setColumnWidth` for UI optimization
+  - Freeze header rows and columns for better scrolling UX
+  - Set pixel widths for multiple columns in one operation
+  - Dedicated `layoutHelpers.ts` module with JSDoc documentation
+  - Batch operations for efficient API usage
+  - Automatic cache invalidation and performance tracking
+
+### Improved
+
+- Test coverage expanded to 37 tests total (29 formula + 5 formatting + 3 conditional)
+- Error handling with detailed logging including error types and context
+- Documentation with practical examples for formulas, formatting, and conditional rules
+- Unified helpers module combining formula and formatting operations
+- createSheet now defaults to 1000 rows × 26 columns (standard Google Sheets)
 
 ## [0.8.0] - 2025-08-19
 
@@ -198,13 +315,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Development environment configuration
 - Project documentation foundation
 
-[unreleased]: https://github.com/AojdevStudio/gdrive/compare/v0.8.0...HEAD
+[unreleased]: https://github.com/AojdevStudio/gdrive/compare/v2.0.0...HEAD
+[2.0.0]: https://github.com/AojdevStudio/gdrive/compare/v0.8.0...v2.0.0
 [0.8.0]: https://github.com/AojdevStudio/gdrive/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/AojdevStudio/gdrive/compare/v0.6.2...v0.7.0
 [0.6.2]: https://github.com/AojdevStudio/gdrive/compare/v0.1.0...v0.6.2
 [0.1.0]: https://github.com/AojdevStudio/gdrive/releases/tag/v0.1.0
 
 ## Links
-[Unreleased]: https://github.com/AojdevStudio/gdrive/compare/v0.8.0...HEAD
+[Unreleased]: https://github.com/AojdevStudio/gdrive/compare/v2.0.0...HEAD
+[2.0.0]: https://github.com/AojdevStudio/gdrive/releases/tag/v2.0.0
 [0.8.0]: https://github.com/AojdevStudio/gdrive/releases/tag/v0.8.0
 [0.7.0]: https://github.com/AojdevStudio/gdrive/releases/tag/v0.7.0

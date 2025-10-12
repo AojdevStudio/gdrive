@@ -24,7 +24,7 @@ The Google Drive MCP Server is a production-ready TypeScript implementation of t
 │  │              Request Handlers                    │   │
 │  │  • ListResourcesRequestSchema (gdrive:///)      │   │
 │  │  • ReadResourceRequestSchema (file content)     │   │
-│  │  │  • ListToolsRequestSchema (22 tools)           │   │
+│  │  • ListToolsRequestSchema (5 tools)            │   │
 │  │  • CallToolRequestSchema (tool execution)       │   │
 │  └─────────────────────────────────────────────────┘   │
 └─────────────────────────────────────────────────────────┘
@@ -144,7 +144,179 @@ The main server implementation featuring:
 - **Performance Tracking**: Per-tool execution metrics
 - **Cache Management**: Intelligent cache invalidation after write operations
 
-### 5. Tools Implementation (22 Tools)
+### 5. Tool Architecture (Operation-Based Pattern)
+
+**⚠️ ARCHITECTURE CHANGE (v2.0.0):** As of Epic-001 completion, this server has migrated from individual tools to **operation-based tools** following [HOW2MCP 2025 best practices](https://github.com/modelcontextprotocol/docs/blob/main/docs/guides/tools.md). This architectural shift reduces tool count by 88% (41+ → 5 tools) while maintaining 100% functional compatibility.
+
+#### Pattern Overview
+
+The operation-based pattern consolidates related operations under a single tool with an `operation` parameter, rather than exposing each operation as a separate tool. This improves LLM tool selection performance and maintains cleaner tool namespace.
+
+**Pattern Structure:**
+
+Each consolidated tool implements:
+1. **Zod Discriminated Union** - Type-safe operation routing with compile-time validation
+2. **Operation Router** - Switch statement in handler for clean dispatch
+3. **Centralized Logger** - Context-based logging passed to all operations
+4. **Consistent Error Handling** - Uniform error patterns across operations
+
+#### Consolidated Tools
+
+| Tool | Operations | Description |
+|------|-----------|-------------|
+| `sheets` | 12 | All Google Sheets operations (list, read, create, update, format, conditional formatting, freeze, column width, append, delete, rename) |
+| `drive` | 7 | All Google Drive file operations (search, enhancedSearch, read, create, update, createFolder, batch) |
+| `forms` | 4 | All Google Forms operations (create, read, addQuestion, listResponses) |
+| `docs` | 5 | All Google Docs operations (create, insertText, replaceText, applyTextStyle, insertTable) |
+| `getAppScript` | 1 | Standalone tool for Apps Script project viewing (non-consolidated legacy tool) |
+
+**Total: 5 tools, 29 operations** (down from 41+ individual tools in v1.x)
+
+#### Example: Sheets Tool Implementation
+
+**Schema (Zod Discriminated Union):**
+```typescript
+// src/sheets/sheets-schemas.ts
+import { z } from 'zod';
+
+export const SheetsToolSchema = z.discriminatedUnion('operation', [
+  // List operation
+  z.object({
+    operation: z.literal('list'),
+    spreadsheetId: z.string(),
+  }),
+
+  // Read operation
+  z.object({
+    operation: z.literal('read'),
+    spreadsheetId: z.string(),
+    range: z.string().optional(),
+  }),
+
+  // Create operation
+  z.object({
+    operation: z.literal('create'),
+    spreadsheetId: z.string(),
+    sheetName: z.string(),
+    rowCount: z.number().optional(),
+    columnCount: z.number().optional(),
+  }),
+
+  // ... 9 more operation schemas
+]);
+
+export type SheetsToolInput = z.infer<typeof SheetsToolSchema>;
+```
+
+**Handler (Operation Router):**
+```typescript
+// src/sheets/sheets-handler.ts
+import { Logger } from 'winston';
+import { SheetsToolInput } from './sheets-schemas';
+
+export async function handleSheetsTool(
+  args: SheetsToolInput,
+  context: { logger: Logger; /* other dependencies */ }
+) {
+  const { logger } = context;
+
+  switch (args.operation) {
+    case 'list':
+      logger.info('Executing sheets:list operation');
+      return await handleListSheets(args, context);
+
+    case 'read':
+      logger.info('Executing sheets:read operation');
+      return await handleReadSheet(args, context);
+
+    case 'create':
+      logger.info('Executing sheets:create operation');
+      return await handleCreateSheet(args, context);
+
+    // ... 9 more case handlers
+
+    default:
+      throw new Error(`Unknown sheets operation: ${(args as any).operation}`);
+  }
+}
+```
+
+**Registration (index.ts):**
+```typescript
+// index.ts - Tool registration in ListToolsRequestSchema handler
+server.setRequestHandler(ListToolsRequestSchema, async () => {
+  return {
+    tools: [
+      {
+        name: 'sheets',
+        description: 'Perform operations on Google Sheets spreadsheets',
+        inputSchema: zodToJsonSchema(SheetsToolSchema),
+      },
+      // ... other 4 tools
+    ],
+  };
+});
+
+// Tool execution in CallToolRequestSchema handler
+server.setRequestHandler(CallToolRequestSchema, async (request) => {
+  const { name, arguments: args } = request.params;
+
+  switch (name) {
+    case 'sheets':
+      return await handleSheetsTool(args, { logger, /* deps */ });
+    // ... other 4 tool handlers
+  }
+});
+```
+
+#### Benefits
+
+**LLM Efficiency:**
+- 88% fewer tools to evaluate (41+ → 5)
+- Faster tool selection with reduced namespace
+- Clearer tool categorization by service
+
+**Type Safety:**
+- Zod discriminated unions ensure type correctness
+- Compile-time validation of operation parameters
+- IDE autocomplete for all operations
+
+**Maintainability:**
+- Centralized handlers reduce code duplication
+- Consistent patterns across all services
+- Easy to add new operations to existing tools
+
+**Consistency:**
+- Uniform error handling patterns
+- Shared logging infrastructure
+- Common validation approach
+
+**Extensibility:**
+- Adding new operations doesn't pollute tool namespace
+- Service-level organization matches Google API structure
+- Easy to version operations within tools
+
+#### Migration from v1.x
+
+Previous versions (< 2.0.0) exposed individual tools. v2.0.0 consolidates these into operation parameters:
+
+```typescript
+// Old (v1.x) - 12 separate tools
+{ name: "listSheets", args: { spreadsheetId: "123" } }
+{ name: "readSheet", args: { spreadsheetId: "123", range: "A1:B10" } }
+{ name: "createSheet", args: { spreadsheetId: "123", sheetName: "New" } }
+// ... 9 more tools
+
+// New (v2.0.0) - 1 tool with operation parameter
+{ name: "sheets", args: { operation: "list", spreadsheetId: "123" } }
+{ name: "sheets", args: { operation: "read", spreadsheetId: "123", range: "A1:B10" } }
+{ name: "sheets", args: { operation: "create", spreadsheetId: "123", sheetName: "New" } }
+// ... 9 more operations
+```
+
+**Breaking Change:** v2.0.0 is a breaking change requiring client updates. See [MIGRATION_V2.md](../MIGRATION_V2.md) and [CHANGELOG.md](../../CHANGELOG.md) for complete migration guide.
+
+### 6. Tools Implementation (Operation Details)
 
 #### File Operations
 ```typescript
