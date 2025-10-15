@@ -163,6 +163,11 @@ node ./dist/index.js auth
 }
 ```
 
+**Claude Code CLI Setup:**
+```bash
+claude mcp add --transport stdio gdrive -- docker exec -i gdrive-mcp-server node dist/index.js
+```
+
 **📖 [Complete Integration Guide →](./docs/Guides/05-claude-desktop-integration.md)**
 
 ## 🚀 Key Features
