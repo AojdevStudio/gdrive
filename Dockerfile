@@ -16,9 +16,6 @@ COPY tsconfig.json ./
 # Install dependencies without running prepare script
 RUN npm ci --ignore-scripts
 
-# Rebuild native modules (isolated-vm requires native compilation)
-RUN npm rebuild isolated-vm
-
 # Copy source code
 COPY . .
 

@@ -18,8 +18,48 @@ import { AuthManager, AuthState } from "./src/auth/AuthManager.js";
 import { TokenManager } from "./src/auth/TokenManager.js";
 import { KeyRotationManager } from "./src/auth/KeyRotationManager.js";
 import { performHealthCheck, HealthStatus } from "./src/health-check.js";
-import { EXECUTE_CODE_SCHEMA, executeCode } from "./src/tools/executeCode.js";
 import { LIST_TOOLS_RESOURCE, generateToolStructure } from "./src/tools/listTools.js";
+
+// Import module types for type casting
+import type {
+  SearchOptions,
+  EnhancedSearchOptions,
+  ReadOptions,
+  CreateFileOptions,
+  CreateFolderOptions,
+  UpdateFileOptions,
+  BatchOperationsOptions,
+} from "./src/modules/drive/index.js";
+
+import type {
+  ListSheetsOptions,
+  ReadSheetOptions,
+  CreateSheetOptions,
+  RenameSheetOptions,
+  DeleteSheetOptions,
+  UpdateCellsOptions,
+  UpdateFormulaOptions,
+  FormatCellsOptions,
+  ConditionalFormatOptions,
+  FreezeOptions,
+  SetColumnWidthOptions,
+  AppendRowsOptions,
+} from "./src/modules/sheets/index.js";
+
+import type {
+  CreateFormOptions,
+  ReadFormOptions,
+  AddQuestionOptions,
+  ListResponsesOptions,
+} from "./src/modules/forms/index.js";
+
+import type {
+  CreateDocumentOptions,
+  InsertTextOptions,
+  ReplaceTextOptions,
+  ApplyTextStyleOptions,
+  InsertTableOptions,
+} from "./src/modules/docs/index.js";
 
 const drive = google.drive("v3");
 const sheets = google.sheets("v4");
@@ -318,7 +358,7 @@ let tokenManager: TokenManager | null = null;
 const server = new Server(
   {
     name: "gdrive-mcp-server",
-    version: "3.0.0",
+    version: "3.1.0",
   },
   {
     capabilities: {
@@ -328,7 +368,7 @@ const server = new Server(
   },
 );
 
-// List available resources - v3.0.0 ONLY returns progressive disclosure resource
+// List available resources - v3.1.0 operation-based progressive disclosure
 server.setRequestHandler(ListResourcesRequestSchema, async (_request) => {
   const startTime = Date.now();
 
@@ -338,8 +378,8 @@ server.setRequestHandler(ListResourcesRequestSchema, async (_request) => {
       throw new Error('Not authenticated. Please run with "auth" argument first.');
     }
 
-    // v3.0.0: ONLY progressive disclosure resource (no individual file listing)
-    // Users read gdrive://tools to see available operations, then write code
+    // v3.1.0: Operation-based progressive disclosure
+    // Users read gdrive://tools to see available operations, then call tools directly
     const resources = [LIST_TOOLS_RESOURCE];
 
     performanceMonitor.track('listResources', Date.now() - startTime);
@@ -389,102 +429,255 @@ server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
   }
 });
 
-// Temporary search tool schema (while fixing sandbox)
-const SEARCH_TOOL_SCHEMA = {
-  name: "search",
-  description: "Search for files in Google Drive by name or query",
-  inputSchema: {
-    type: "object",
-    properties: {
-      query: { type: "string", description: "Search query" },
-      pageSize: { type: "number", description: "Number of results to return (max 100)", default: 10 }
-    },
-    required: ["query"]
-  }
-};
-
-// List available tools - executeCode + temporary search
+// List available tools - operation-based progressive disclosure
 server.setRequestHandler(ListToolsRequestSchema, async () => {
   return {
-    tools: [EXECUTE_CODE_SCHEMA, SEARCH_TOOL_SCHEMA],
+    tools: [
+      {
+        name: "drive",
+        description: "Google Drive operations. Read gdrive://tools resource to see available operations.",
+        inputSchema: {
+          type: "object",
+          properties: {
+            operation: {
+              type: "string",
+              enum: ["search", "enhancedSearch", "read", "createFile", "createFolder", "updateFile", "batchOperations"],
+              description: "Operation to perform"
+            },
+            params: {
+              type: "object",
+              description: "Operation-specific parameters. See gdrive://tools for details."
+            }
+          },
+          required: ["operation", "params"]
+        }
+      },
+      {
+        name: "sheets",
+        description: "Google Sheets operations. Read gdrive://tools resource to see available operations.",
+        inputSchema: {
+          type: "object",
+          properties: {
+            operation: {
+              type: "string",
+              enum: ["listSheets", "readSheet", "createSheet", "renameSheet", "deleteSheet", "updateCells", "updateFormula", "formatCells", "addConditionalFormat", "freezeRowsColumns", "setColumnWidth", "appendRows"],
+              description: "Operation to perform"
+            },
+            params: {
+              type: "object",
+              description: "Operation-specific parameters. See gdrive://tools for details."
+            }
+          },
+          required: ["operation", "params"]
+        }
+      },
+      {
+        name: "forms",
+        description: "Google Forms operations. Read gdrive://tools resource to see available operations.",
+        inputSchema: {
+          type: "object",
+          properties: {
+            operation: {
+              type: "string",
+              enum: ["createForm", "readForm", "addQuestion", "listResponses"],
+              description: "Operation to perform"
+            },
+            params: {
+              type: "object",
+              description: "Operation-specific parameters. See gdrive://tools for details."
+            }
+          },
+          required: ["operation", "params"]
+        }
+      },
+      {
+        name: "docs",
+        description: "Google Docs operations. Read gdrive://tools resource to see available operations.",
+        inputSchema: {
+          type: "object",
+          properties: {
+            operation: {
+              type: "string",
+              enum: ["createDocument", "insertText", "replaceText", "applyTextStyle", "insertTable"],
+              description: "Operation to perform"
+            },
+            params: {
+              type: "object",
+              description: "Operation-specific parameters. See gdrive://tools for details."
+            }
+          },
+          required: ["operation", "params"]
+        }
+      }
+    ]
   };
 });
 
-// Handle tool calls - ONLY executeCode in v3.0
+// Handle tool calls - operation-based dynamic dispatch
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
   const startTime = Date.now();
 
   try {
-    // Ensure we're authenticated
     if (!authManager || authManager.getState() !== AuthState.AUTHENTICATED) {
       throw new Error('Not authenticated. Please run with "auth" argument first.');
     }
 
     const { name, arguments: args } = request.params;
+    const { operation, params } = args as { operation: string; params: unknown };
 
-    logger.info('Tool called', { tool: name, args });
+    logger.info('Tool called', { tool: name, operation, params });
 
-    if (name === "search") {
-      // Temporary search implementation
-      const query = args && typeof args === 'object' && 'query' in args && typeof args.query === 'string' ? args.query : '';
-      const pageSize = args && typeof args === 'object' && 'pageSize' in args && typeof args.pageSize === 'number' ? args.pageSize : 10;
+    // Build context for operations
+    const context = {
+      logger,
+      drive,
+      sheets,
+      forms,
+      docs,
+      cacheManager,
+      performanceMonitor,
+      startTime,
+    };
 
-      if (!query) {
-        throw new Error('query parameter is required');
+    let result;
+
+    switch (name) {
+      case "drive": {
+        const driveModule = await import('./src/modules/drive/index.js');
+
+        switch (operation) {
+          case "search":
+            result = await driveModule.search(params as SearchOptions, context);
+            break;
+          case "enhancedSearch":
+            result = await driveModule.enhancedSearch(params as EnhancedSearchOptions, context);
+            break;
+          case "read":
+            result = await driveModule.read(params as ReadOptions, context);
+            break;
+          case "createFile":
+            result = await driveModule.createFile(params as CreateFileOptions, context);
+            break;
+          case "createFolder":
+            result = await driveModule.createFolder(params as CreateFolderOptions, context);
+            break;
+          case "updateFile":
+            result = await driveModule.updateFile(params as UpdateFileOptions, context);
+            break;
+          case "batchOperations":
+            result = await driveModule.batchOperations(params as BatchOperationsOptions, context);
+            break;
+          default:
+            throw new Error(`Unknown drive operation: ${operation}`);
+        }
+        break;
       }
 
-      const response = await drive.files.list({
-        q: `name contains '${query}' and trashed = false`,
-        pageSize: Math.min(pageSize, 100),
-        fields: "files(id, name, mimeType, createdTime, modifiedTime, webViewLink, size)",
-      });
+      case "sheets": {
+        const sheetsModule = await import('./src/modules/sheets/index.js');
 
-      const files = response.data.files || [];
-      performanceMonitor.track('search', Date.now() - startTime);
-
-      return {
-        content: [{
-          type: "text",
-          text: JSON.stringify({ found: files.length, files }, null, 2),
-        }],
-      };
-    }
-
-    if (name === "executeCode") {
-      // Extract code and timeout from arguments
-      const code = args && typeof args === 'object' && 'code' in args && typeof args.code === 'string' ? args.code : '';
-      const timeout = args && typeof args === 'object' && 'timeout' in args && typeof args.timeout === 'number' ? args.timeout : 30000;
-
-      if (!code) {
-        throw new Error('code parameter is required');
+        switch (operation) {
+          case "listSheets":
+            result = await sheetsModule.listSheets(params as ListSheetsOptions, context);
+            break;
+          case "readSheet":
+            result = await sheetsModule.readSheet(params as ReadSheetOptions, context);
+            break;
+          case "createSheet":
+            result = await sheetsModule.createSheet(params as CreateSheetOptions, context);
+            break;
+          case "renameSheet":
+            result = await sheetsModule.renameSheet(params as RenameSheetOptions, context);
+            break;
+          case "deleteSheet":
+            result = await sheetsModule.deleteSheet(params as DeleteSheetOptions, context);
+            break;
+          case "updateCells":
+            result = await sheetsModule.updateCells(params as UpdateCellsOptions, context);
+            break;
+          case "updateFormula":
+            result = await sheetsModule.updateFormula(params as UpdateFormulaOptions, context);
+            break;
+          case "formatCells":
+            result = await sheetsModule.formatCells(params as FormatCellsOptions, context);
+            break;
+          case "addConditionalFormat":
+            result = await sheetsModule.addConditionalFormat(params as ConditionalFormatOptions, context);
+            break;
+          case "freezeRowsColumns":
+            result = await sheetsModule.freezeRowsColumns(params as FreezeOptions, context);
+            break;
+          case "setColumnWidth":
+            result = await sheetsModule.setColumnWidth(params as SetColumnWidthOptions, context);
+            break;
+          case "appendRows":
+            result = await sheetsModule.appendRows(params as AppendRowsOptions, context);
+            break;
+          default:
+            throw new Error(`Unknown sheets operation: ${operation}`);
+        }
+        break;
       }
 
-      // Build context with all API clients and utilities
-      const context = {
-        logger,
-        drive,
-        sheets,
-        forms,
-        docs,
-        cacheManager,
-        performanceMonitor,
-        startTime,
-      };
+      case "forms": {
+        const formsModule = await import('./src/modules/forms/index.js');
 
-      // Execute the code in sandbox
-      const result = await executeCode(code, timeout, context, logger);
+        switch (operation) {
+          case "createForm":
+            result = await formsModule.createForm(params as CreateFormOptions, context);
+            break;
+          case "readForm":
+            result = await formsModule.readForm(params as ReadFormOptions, context);
+            break;
+          case "addQuestion":
+            result = await formsModule.addQuestion(params as AddQuestionOptions, context);
+            break;
+          case "listResponses":
+            result = await formsModule.listResponses(params as ListResponsesOptions, context);
+            break;
+          default:
+            throw new Error(`Unknown forms operation: ${operation}`);
+        }
+        break;
+      }
 
-      performanceMonitor.track('executeCode', Date.now() - startTime);
+      case "docs": {
+        const docsModule = await import('./src/modules/docs/index.js');
 
-      return {
-        content: [{
-          type: "text",
-          text: JSON.stringify(result, null, 2),
-        }],
-      };
+        switch (operation) {
+          case "createDocument":
+            result = await docsModule.createDocument(params as CreateDocumentOptions, context);
+            break;
+          case "insertText":
+            result = await docsModule.insertText(params as InsertTextOptions, context);
+            break;
+          case "replaceText":
+            result = await docsModule.replaceText(params as ReplaceTextOptions, context);
+            break;
+          case "applyTextStyle":
+            result = await docsModule.applyTextStyle(params as ApplyTextStyleOptions, context);
+            break;
+          case "insertTable":
+            result = await docsModule.insertTable(params as InsertTableOptions, context);
+            break;
+          default:
+            throw new Error(`Unknown docs operation: ${operation}`);
+        }
+        break;
+      }
+
+      default:
+        throw new Error(`Unknown tool: ${name}`);
     }
 
-    throw new Error(`Unknown tool: ${name}`);
+    performanceMonitor.track(`${name}.${operation}`, Date.now() - startTime);
+
+    return {
+      content: [{
+        type: "text",
+        text: JSON.stringify(result, null, 2),
+      }],
+    };
   } catch (error) {
     performanceMonitor.track(request.params.name, Date.now() - startTime, true);
     logger.error('Tool execution failed', {
