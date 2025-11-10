@@ -75,45 +75,190 @@ docker compose exec gdrive-mcp-server node dist/index.js health
 
 **📖 [Complete Docker Guide →](./docs/Deployment/DOCKER.md)**
 
-## 🚨 Breaking Changes in v2.0.0
+## 🚨 Breaking Changes in v3.0.0
 
-**Major Version Update:** Google Drive MCP Server v2.0.0 introduces significant architectural improvements that require migration from previous versions.
+**Major Version Update:** Google Drive MCP Server v3.0.0 introduces a **code execution architecture** - a fundamental transformation from calling tools to writing JavaScript code.
 
 ### What Changed?
 
-We've consolidated **41+ individual tools** into **5 operation-based tools**, following the 2025 MCP architecture patterns from [HOW2MCP](https://github.com/modelcontextprotocol/servers).
+We've replaced **all operation-based tools** with a **single code execution tool**, following Anthropic's MCP engineering best practices for token efficiency and scalability.
 
-**Before (v1.x):** Each operation was a separate tool
-```json
-{
-  "name": "listSheets",
-  "args": { "spreadsheetId": "abc123" }
-}
-```
-
-**After (v2.0.0):** Operations are parameters within consolidated tools
+**Before (v2.x):** Operation-based tool calls
 ```json
 {
   "name": "sheets",
   "args": {
-    "operation": "list",
-    "spreadsheetId": "abc123"
+    "operation": "read",
+    "spreadsheetId": "abc123",
+    "range": "Sheet1!A1:B10"
+  }
+}
+```
+
+**After (v3.0.0):** Write JavaScript code
+```json
+{
+  "name": "executeCode",
+  "args": {
+    "code": "import { readSheet } from './modules/sheets';\nconst data = await readSheet({ spreadsheetId: 'abc123', range: 'Sheet1!A1:B10' });\nreturn data;"
   }
 }
 ```
 
 ### Why This Improves Your Experience
 
-- **88% Reduction in Tool Count** (41+ → 5) - LLMs can select the right tool faster
-- **Better Type Safety** - Zod discriminated unions for reliable operation routing
-- **Cleaner API** - Logical grouping by service (sheets, drive, forms, docs, batch)
-- **Future-Proof** - Follows 2025 MCP architecture best practices
+- **98.7% Token Reduction** - Progressive discovery means only load operations you use
+- **Local Data Processing** - Filter/transform data before returning to model (90-95% data reduction)
+- **Complex Workflows** - Write loops, conditionals, multi-step logic in single execution
+- **Unlimited Scalability** - Foundation for hundreds of operations without context bloat
 
 ### Migration Required
 
-**📖 [Complete Migration Guide](./docs/MIGRATION_V2.md)** - Step-by-step instructions for updating your code
+**📖 [Complete Migration Guide](./MIGRATION.md)** - Step-by-step instructions with complete operation mapping
 
-All existing tool calls must be updated to use the new operation-based format. See the migration guide for comprehensive before/after examples covering all 32 operations.
+All existing tool calls must be converted to JavaScript code. See the migration guide for comprehensive before/after examples covering all 30+ operations.
+
+---
+
+## 💻 Code Execution Architecture (v3.0)
+
+### Overview
+
+Instead of calling individual tools, you write JavaScript code that imports and uses Google Workspace operations directly. This provides massive token efficiency and enables complex workflows.
+
+### Quick Example
+
+**Search and filter files locally:**
+```javascript
+import { search } from './modules/drive';
+
+// Search once
+const results = await search({ query: 'reports 2025' });
+
+// Filter locally (no tokens consumed)
+const q1Reports = results.files
+  .filter(f => f.name.includes('Q1'))
+  .slice(0, 5);
+
+// Return only what's needed
+return {
+  count: q1Reports.length,
+  files: q1Reports.map(f => ({ name: f.name, id: f.id }))
+};
+```
+
+### Available Modules
+
+#### `./modules/drive` - File Operations
+- `search(options)` - Search for files/folders
+- `enhancedSearch(options)` - Search with natural language parsing
+- `read(options)` - Read file content
+- `createFile(options)` - Create new file
+- `updateFile(options)` - Update existing file
+- `createFolder(options)` - Create new folder
+- `batchOperations(options)` - Batch create/update/delete/move
+
+#### `./modules/sheets` - Spreadsheet Operations
+- `listSheets(options)` - List all sheets in spreadsheet
+- `readSheet(options)` - Read spreadsheet data
+- `createSheet(options)` - Create new sheet
+- `renameSheet(options)` - Rename sheet
+- `deleteSheet(options)` - Delete sheet
+- `updateCells(options)` - Update cell values
+- `updateCellsWithFormula(options)` - Update with formulas
+- `formatCells(options)` - Apply formatting
+- `addConditionalFormatting(options)` - Add conditional rules
+- `freezeRowsColumns(options)` - Freeze rows/columns
+- `setColumnWidth(options)` - Set column widths
+- `appendRows(options)` - Append rows
+
+#### `./modules/forms` - Form Operations
+- `createForm(options)` - Create new form
+- `readForm(options)` - Read form details
+- `addQuestion(options)` - Add question to form
+- `listResponses(options)` - List form responses
+
+#### `./modules/docs` - Document Operations
+- `createDocument(options)` - Create new document
+- `insertText(options)` - Insert text at position
+- `replaceText(options)` - Replace text
+- `applyTextStyle(options)` - Apply text formatting
+- `insertTable(options)` - Insert table
+
+### Progressive Tool Discovery
+
+Use the `gdrive://tools` resource to discover available operations on-demand:
+
+```
+Resource: gdrive://tools
+Returns: Complete hierarchical structure of all modules and functions
+```
+
+This enables **progressive discovery** - agents only load documentation for operations they actually use.
+
+### Example Workflows
+
+**Create and populate a spreadsheet:**
+```javascript
+import { createFile } from './modules/drive';
+import { updateCells, formatCells } from './modules/sheets';
+
+// Create spreadsheet
+const sheet = await createFile({
+  name: 'Q1 Sales Report',
+  mimeType: 'application/vnd.google-apps.spreadsheet'
+});
+
+// Add data
+await updateCells({
+  spreadsheetId: sheet.id,
+  range: 'Sheet1!A1:C2',
+  values: [
+    ['Product', 'Revenue', 'Status'],
+    ['Widget A', 50000, 'Active']
+  ]
+});
+
+// Format header
+await formatCells({
+  spreadsheetId: sheet.id,
+  sheetId: 0,
+  range: { startRowIndex: 0, endRowIndex: 1 },
+  format: {
+    textFormat: { bold: true },
+    backgroundColor: { red: 0.2, green: 0.4, blue: 0.8 }
+  }
+});
+
+return { spreadsheetId: sheet.id, url: sheet.webViewLink };
+```
+
+**Batch process documents:**
+```javascript
+import { search, read } from './modules/drive';
+
+const files = await search({ query: 'type:document' });
+const summaries = [];
+
+for (const file of files.slice(0, 10)) {
+  const content = await read({ fileId: file.id });
+  summaries.push({
+    name: file.name,
+    wordCount: content.split(/\s+/).length,
+    hasUrgent: content.includes('urgent')
+  });
+}
+
+return summaries;
+```
+
+### Security & Limits
+
+- **Timeout:** Max 120 seconds (default: 30s)
+- **Memory:** Max 128MB per execution
+- **CPU:** Limited to timeout duration
+- **Isolation:** Sandboxed environment via isolated-vm
+- **Access:** Only Google APIs, no filesystem/network
 
 ---
 

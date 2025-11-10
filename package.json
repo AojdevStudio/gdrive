@@ -1,7 +1,7 @@
 {
   "name": "@modelcontextprotocol/server-gdrive",
-  "version": "2.0.0",
-  "description": "MCP server for Google Workspace with operation-based tools (Sheets, Drive, Forms, Docs, Batch)",
+  "version": "3.0.0",
+  "description": "MCP server for Google Workspace with code execution architecture - write JavaScript to interact with Drive, Sheets, Forms, and Docs APIs",
   "license": "MIT",
   "author": "Anthropic, PBC (https://anthropic.com)",
   "homepage": "https://modelcontextprotocol.io",
@@ -32,20 +32,24 @@
     "@google-cloud/local-auth": "^3.0.1",
     "@modelcontextprotocol/sdk": "1.0.1",
     "googleapis": "^144.0.0",
+    "isolated-vm": "^6.0.2",
     "redis": "^5.6.1",
     "winston": "^3.17.0"
   },
+  "engines": {
+    "node": ">=22.0.0"
+  },
   "devDependencies": {
-    "@types/node": "^22",
-    "@types/jest": "^29.5.12",
+    "@eslint/js": "^9.21.0",
     "@jest/globals": "^29.7.0",
-    "jest": "^29.7.0",
-    "ts-jest": "^29.1.2",
-    "shx": "^0.3.4",
-    "typescript": "^5.6.2",
+    "@types/jest": "^29.5.12",
+    "@types/node": "^22",
     "@typescript-eslint/eslint-plugin": "^8.20.0",
     "@typescript-eslint/parser": "^8.20.0",
-    "@eslint/js": "^9.21.0",
-    "eslint": "^9.21.0"
+    "eslint": "^9.21.0",
+    "jest": "^29.7.0",
+    "shx": "^0.3.4",
+    "ts-jest": "^29.1.2",
+    "typescript": "^5.6.2"
   }
 }

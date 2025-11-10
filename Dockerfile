@@ -1,4 +1,4 @@
-FROM node:20-slim
+FROM node:22-slim
 
 # Install system dependencies
 RUN apt-get update && apt-get install -y \
@@ -15,6 +15,9 @@ COPY tsconfig.json ./
 
 # Install dependencies without running prepare script
 RUN npm ci --ignore-scripts
+
+# Rebuild native modules (isolated-vm requires native compilation)
+RUN npm rebuild isolated-vm
 
 # Copy source code
 COPY . .

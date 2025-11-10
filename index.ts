@@ -18,28 +18,13 @@ import { AuthManager, AuthState } from "./src/auth/AuthManager.js";
 import { TokenManager } from "./src/auth/TokenManager.js";
 import { KeyRotationManager } from "./src/auth/KeyRotationManager.js";
 import { performHealthCheck, HealthStatus } from "./src/health-check.js";
-import { handleSheetsTool } from "./src/sheets/sheets-handler.js";
-import { handleDriveTool } from "./src/drive/drive-handler.js";
-import { handleFormsTool } from "./src/forms/forms-handler.js";
-import { handleDocsTool } from "./src/docs/docs-handler.js";
+import { EXECUTE_CODE_SCHEMA, executeCode } from "./src/tools/executeCode.js";
+import { LIST_TOOLS_RESOURCE, generateToolStructure } from "./src/tools/listTools.js";
 
 const drive = google.drive("v3");
 const sheets = google.sheets("v4");
 const forms = google.forms("v1");
 const docs = google.docs("v1");
-const script = google.script("v1");
-
-// Apps Script type definitions
-interface AppsScriptFile {
-  name: string;
-  type: 'SERVER_JS' | 'HTML' | 'JSON';
-  source: string;
-  functionSet?: {
-    values?: Array<{
-      name: string;
-    }>;
-  };
-}
 
 // Performance monitoring types
 interface PerformanceStats {
@@ -333,7 +318,7 @@ let tokenManager: TokenManager | null = null;
 const server = new Server(
   {
     name: "gdrive-mcp-server",
-    version: "0.6.2",
+    version: "3.0.0",
   },
   {
     capabilities: {
@@ -343,7 +328,7 @@ const server = new Server(
   },
 );
 
-// List available resources
+// List available resources - v3.0.0 ONLY returns progressive disclosure resource
 server.setRequestHandler(ListResourcesRequestSchema, async (_request) => {
   const startTime = Date.now();
 
@@ -353,33 +338,14 @@ server.setRequestHandler(ListResourcesRequestSchema, async (_request) => {
       throw new Error('Not authenticated. Please run with "auth" argument first.');
     }
 
-    const cacheKey = 'resources:list';
-    const cached = await cacheManager.get(cacheKey);
-    if (cached) {
-      logger.debug('Returning cached resources list');
-      performanceMonitor.track('listResources', Date.now() - startTime);
-      return cached;
-    }
-
-    const response = await drive.files.list({
-      pageSize: 10,
-      fields: "files(id, name, mimeType, webViewLink)",
-    });
-
-    const resources = response.data.files?.map((file) => ({
-      uri: `gdrive:///${file.id}`,
-      name: file.name ?? "Untitled",
-      mimeType: file.mimeType,
-      description: `Google Drive file: ${file.name}`,
-    })) ?? [];
-
-    const result = { resources };
-    await cacheManager.set(cacheKey, result);
+    // v3.0.0: ONLY progressive disclosure resource (no individual file listing)
+    // Users read gdrive://tools to see available operations, then write code
+    const resources = [LIST_TOOLS_RESOURCE];
 
     performanceMonitor.track('listResources', Date.now() - startTime);
-    logger.info('Listed resources', { count: resources.length });
+    logger.info('Listed resources (progressive disclosure only)', { count: resources.length });
 
-    return result;
+    return { resources };
   } catch (error) {
     performanceMonitor.track('listResources', Date.now() - startTime, true);
     logger.error('Failed to list resources', { error });
@@ -387,7 +353,7 @@ server.setRequestHandler(ListResourcesRequestSchema, async (_request) => {
   }
 });
 
-// Read a specific resource
+// Read a specific resource - Handle both files and tool discovery
 server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
   const startTime = Date.now();
 
@@ -397,97 +363,25 @@ server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
       throw new Error('Not authenticated. Please run with "auth" argument first.');
     }
 
-    const fileId = request.params.uri.replace("gdrive:///", "");
+    // v3.0.0: ONLY handle tool discovery resource
+    if (request.params.uri === "gdrive://tools") {
+      const structure = await generateToolStructure();
 
-    const cacheKey = `resource:${fileId}`;
-    const cached = await cacheManager.get(cacheKey);
-    if (cached) {
-      logger.debug('Returning cached resource', { fileId });
       performanceMonitor.track('readResource', Date.now() - startTime);
-      return cached;
+      logger.info('Read tool discovery resource');
+
+      return {
+        contents: [{
+          uri: request.params.uri,
+          mimeType: "application/json",
+          text: JSON.stringify(structure, null, 2),
+        }],
+      };
     }
 
-    const file = await drive.files.get({
-      fileId,
-      fields: "id, name, mimeType",
-    });
-
-    let text = "";
-    let blob = undefined;
-
-    try {
-      if (file.data.mimeType?.startsWith("application/vnd.google-apps.")) {
-        // Export Google Workspace files
-        let exportMimeType = "text/plain";
-        if (file.data.mimeType === "application/vnd.google-apps.document") {
-          exportMimeType = "text/markdown";
-        } else if (file.data.mimeType === "application/vnd.google-apps.spreadsheet") {
-          exportMimeType = "text/csv";
-        } else if (file.data.mimeType === "application/vnd.google-apps.presentation") {
-          exportMimeType = "text/plain";
-        } else if (file.data.mimeType === "application/vnd.google-apps.drawing") {
-          const response = await drive.files.export({
-            fileId,
-            mimeType: "image/png",
-          }, { responseType: "arraybuffer" });
-
-          blob = Buffer.from(response.data as ArrayBuffer).toString("base64");
-
-          const result = {
-            contents: [{
-              uri: request.params.uri,
-              mimeType: "image/png",
-              blob,
-            }],
-          };
-
-          await cacheManager.set(cacheKey, result);
-          performanceMonitor.track('readResource', Date.now() - startTime);
-          logger.info('Read resource (drawing)', { fileId, mimeType: file.data.mimeType });
-
-          return result;
-        }
-
-        const response = await drive.files.export({
-          fileId,
-          mimeType: exportMimeType,
-        });
-        text = response.data as string;
-      } else if (file.data.mimeType?.startsWith("text/")) {
-        // Download text files
-        const response = await drive.files.get({
-          fileId,
-          alt: "media",
-        });
-        text = response.data as string;
-      } else {
-        // Binary files - return as base64 blob
-        const response = await drive.files.get({
-          fileId,
-          alt: "media",
-        }, { responseType: "arraybuffer" });
-
-        blob = Buffer.from(response.data as ArrayBuffer).toString("base64");
-      }
-    } catch (error) {
-      logger.error('Failed to read file content', { error, fileId });
-      text = `Error reading file: ${String(error)}`;
-    }
-
-    const result = {
-      contents: [{
-        uri: request.params.uri,
-        mimeType: blob ? file.data.mimeType : "text/plain",
-        text: blob ? undefined : text,
-        blob: blob,
-      }],
-    };
-
-    await cacheManager.set(cacheKey, result);
-    performanceMonitor.track('readResource', Date.now() - startTime);
-    logger.info('Read resource', { fileId, mimeType: file.data.mimeType });
-
-    return result;
+    // v3.0.0: Individual file resources removed
+    // Use executeCode tool to read files instead
+    throw new Error(`Unknown resource: ${request.params.uri}. Only gdrive://tools is supported in v3.0.0. Use executeCode to interact with Drive files.`);
   } catch (error) {
     performanceMonitor.track('readResource', Date.now() - startTime, true);
     logger.error('Failed to read resource', { error, uri: request.params.uri });
@@ -495,475 +389,28 @@ server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
   }
 });
 
-// List available tools
+// Temporary search tool schema (while fixing sandbox)
+const SEARCH_TOOL_SCHEMA = {
+  name: "search",
+  description: "Search for files in Google Drive by name or query",
+  inputSchema: {
+    type: "object",
+    properties: {
+      query: { type: "string", description: "Search query" },
+      pageSize: { type: "number", description: "Number of results to return (max 100)", default: 10 }
+    },
+    required: ["query"]
+  }
+};
+
+// List available tools - executeCode + temporary search
 server.setRequestHandler(ListToolsRequestSchema, async () => {
   return {
-    tools: [
-      {
-        name: "sheets",
-        description: "Consolidated Google Sheets tool supporting operations for list, read, create, rename, delete, update, updateFormula, format, conditionalFormat, append, freeze, and setColumnWidth",
-        inputSchema: {
-          type: "object",
-          properties: {
-            operation: {
-              type: "string",
-              enum: [
-                "list",
-                "read",
-                "create",
-                "rename",
-                "delete",
-                "update",
-                "updateFormula",
-                "format",
-                "conditionalFormat",
-                "append",
-                "freeze",
-                "setColumnWidth"
-              ],
-              description: "The sheets tool operation to execute",
-            },
-            spreadsheetId: {
-              type: "string",
-              description: "The ID of the target spreadsheet",
-            },
-            range: {
-              type: "string",
-              description: "A1 notation range used by read, update, updateFormula, format, and conditionalFormat operations",
-            },
-            sheetName: {
-              type: "string",
-              description: "Optional sheet title used by create, append, freeze, setColumnWidth, and as an alternative identifier for rename/delete/updateFormula",
-            },
-            sheetId: {
-              type: "number",
-              description: "Optional numeric sheet identifier for rename and delete operations",
-            },
-            newName: {
-              type: "string",
-              description: "New sheet name for the rename operation",
-            },
-            values: {
-              type: "array",
-              description: "2D array of cell values for update and append operations",
-              items: {
-                type: "array",
-                items: {},
-              },
-            },
-            formula: {
-              type: "string",
-              description: "Formula string for the updateFormula operation",
-            },
-            format: {
-              type: "object",
-              description: "Formatting options for the format operation",
-              properties: {
-                bold: { type: "boolean" },
-                italic: { type: "boolean" },
-                fontSize: { type: "number" },
-                foregroundColor: {
-                  type: "object",
-                  properties: {
-                    red: { type: "number", minimum: 0, maximum: 1 },
-                    green: { type: "number", minimum: 0, maximum: 1 },
-                    blue: { type: "number", minimum: 0, maximum: 1 },
-                    alpha: { type: "number", minimum: 0, maximum: 1 },
-                  },
-                },
-                backgroundColor: {
-                  type: "object",
-                  properties: {
-                    red: { type: "number", minimum: 0, maximum: 1 },
-                    green: { type: "number", minimum: 0, maximum: 1 },
-                    blue: { type: "number", minimum: 0, maximum: 1 },
-                    alpha: { type: "number", minimum: 0, maximum: 1 },
-                  },
-                },
-                numberFormat: {
-                  type: "object",
-                  properties: {
-                    type: { type: "string" },
-                    pattern: { type: "string" },
-                  },
-                },
-              },
-            },
-            rule: {
-              type: "object",
-              description: "Conditional formatting rule for the conditionalFormat operation",
-              properties: {
-                condition: {
-                  type: "object",
-                  properties: {
-                    type: {
-                      type: "string",
-                      enum: ["NUMBER_GREATER", "NUMBER_LESS", "TEXT_CONTAINS", "CUSTOM_FORMULA"],
-                    },
-                    values: {
-                      type: "array",
-                      items: { type: "string" },
-                    },
-                    formula: { type: "string" },
-                  },
-                },
-                format: {
-                  type: "object",
-                  properties: {
-                    backgroundColor: {
-                      type: "object",
-                      properties: {
-                        red: { type: "number", minimum: 0, maximum: 1 },
-                        green: { type: "number", minimum: 0, maximum: 1 },
-                        blue: { type: "number", minimum: 0, maximum: 1 },
-                        alpha: { type: "number", minimum: 0, maximum: 1 },
-                      },
-                    },
-                    foregroundColor: {
-                      type: "object",
-                      properties: {
-                        red: { type: "number", minimum: 0, maximum: 1 },
-                        green: { type: "number", minimum: 0, maximum: 1 },
-                        blue: { type: "number", minimum: 0, maximum: 1 },
-                        alpha: { type: "number", minimum: 0, maximum: 1 },
-                      },
-                    },
-                    bold: { type: "boolean" },
-                  },
-                },
-              },
-            },
-            rowCount: {
-              type: "number",
-              description: "Initial row count for the create operation",
-              default: 1000,
-            },
-            columnCount: {
-              type: "number",
-              description: "Initial column count for the create operation",
-              default: 26,
-            },
-            frozenRowCount: {
-              type: "number",
-              description: "Number of rows to freeze for the freeze operation",
-              default: 0,
-            },
-            frozenColumnCount: {
-              type: "number",
-              description: "Number of columns to freeze for the freeze operation",
-              default: 0,
-            },
-            columns: {
-              type: "array",
-              description: "Column definitions for the setColumnWidth operation",
-              items: {
-                type: "object",
-                properties: {
-                  columnIndex: { type: "number" },
-                  width: { type: "number" },
-                },
-              },
-            },
-            index: {
-              type: "number",
-              description: "Optional zero-based index for where the new sheet should be inserted",
-            },
-            hidden: {
-              type: "boolean",
-              description: "Whether the new sheet should be hidden on creation",
-            },
-            rightToLeft: {
-              type: "boolean",
-              description: "Whether the new sheet should use right-to-left layout",
-            },
-            tabColor: {
-              type: "object",
-              description: "Tab color for the create operation",
-              properties: {
-                red: { type: "number", minimum: 0, maximum: 1 },
-                green: { type: "number", minimum: 0, maximum: 1 },
-                blue: { type: "number", minimum: 0, maximum: 1 },
-                alpha: { type: "number", minimum: 0, maximum: 1 },
-              },
-            },
-            title: {
-              type: "string",
-              description: "Optional alias for sheetName when creating or identifying sheets",
-            },
-          },
-          required: ["operation", "spreadsheetId"],
-        },
-      },
-      {
-        name: "drive",
-        description: "Consolidated Google Drive tool supporting operations for search, enhancedSearch, read, create, update, createFolder, and batch",
-        inputSchema: {
-          type: "object",
-          properties: {
-            operation: {
-              type: "string",
-              enum: [
-                "search",
-                "enhancedSearch",
-                "read",
-                "create",
-                "update",
-                "createFolder",
-                "batch"
-              ],
-              description: "The drive operation to execute",
-            },
-            query: {
-              type: "string",
-              description: "Search query for search and enhancedSearch operations",
-            },
-            filters: {
-              type: "object",
-              description: "Advanced filters for enhancedSearch operation",
-              properties: {
-                mimeType: { type: "string" },
-                modifiedAfter: { type: "string" },
-                modifiedBefore: { type: "string" },
-                createdAfter: { type: "string" },
-                createdBefore: { type: "string" },
-                sharedWithMe: { type: "boolean" },
-                ownedByMe: { type: "boolean" },
-                parents: { type: "string" },
-                trashed: { type: "boolean" },
-              },
-            },
-            pageSize: {
-              type: "number",
-              description: "Number of results for search operations (default: 10, max: 100)",
-              default: 10,
-            },
-            orderBy: {
-              type: "string",
-              description: "Sort order for enhancedSearch (e.g., 'modifiedTime desc')",
-            },
-            fileId: {
-              type: "string",
-              description: "File ID for read and update operations",
-            },
-            name: {
-              type: "string",
-              description: "File or folder name for create and createFolder operations",
-            },
-            content: {
-              type: "string",
-              description: "File content for create and update operations",
-            },
-            mimeType: {
-              type: "string",
-              description: "MIME type for create operation (default: 'text/plain')",
-            },
-            parentId: {
-              type: "string",
-              description: "Parent folder ID for create and createFolder operations",
-            },
-            operations: {
-              type: "array",
-              description: "Array of operations for batch operation",
-              items: {
-                type: "object",
-                properties: {
-                  type: {
-                    type: "string",
-                    enum: ["create", "update", "delete", "move"],
-                  },
-                  fileId: { type: "string" },
-                  name: { type: "string" },
-                  content: { type: "string" },
-                  mimeType: { type: "string" },
-                  parentId: { type: "string" },
-                },
-              },
-            },
-          },
-          required: ["operation"],
-        },
-      },
-      {
-        name: "forms",
-        description: "Consolidated Google Forms tool supporting operations for create, read, addQuestion, and listResponses",
-        inputSchema: {
-          type: "object",
-          properties: {
-            operation: {
-              type: "string",
-              enum: [
-                "create",
-                "read",
-                "addQuestion",
-                "listResponses"
-              ],
-              description: "The forms operation to execute",
-            },
-            formId: {
-              type: "string",
-              description: "Form ID for read, addQuestion, and listResponses operations",
-            },
-            title: {
-              type: "string",
-              description: "Form title for create operation, or question title for addQuestion operation",
-            },
-            description: {
-              type: "string",
-              description: "Form description for create operation",
-            },
-            type: {
-              type: "string",
-              enum: ["TEXT", "PARAGRAPH_TEXT", "MULTIPLE_CHOICE", "CHECKBOX", "DROPDOWN", "LINEAR_SCALE", "DATE", "TIME"],
-              description: "Question type for addQuestion operation",
-            },
-            required: {
-              type: "boolean",
-              description: "Whether question is required for addQuestion operation",
-            },
-            options: {
-              type: "array",
-              description: "Options for multiple choice/checkbox/dropdown questions",
-              items: {
-                type: "string",
-              },
-            },
-            scaleMin: {
-              type: "number",
-              description: "Minimum value for linear scale questions (default: 1)",
-            },
-            scaleMax: {
-              type: "number",
-              description: "Maximum value for linear scale questions (default: 5)",
-            },
-            scaleMinLabel: {
-              type: "string",
-              description: "Label for minimum value in linear scale",
-            },
-            scaleMaxLabel: {
-              type: "string",
-              description: "Label for maximum value in linear scale",
-            },
-          },
-          required: ["operation"],
-        },
-      },
-      {
-        name: "docs",
-        description: "Consolidated Google Docs tool supporting operations for create, insertText, replaceText, applyTextStyle, and insertTable",
-        inputSchema: {
-          type: "object",
-          properties: {
-            operation: {
-              type: "string",
-              enum: [
-                "create",
-                "insertText",
-                "replaceText",
-                "applyTextStyle",
-                "insertTable"
-              ],
-              description: "The docs operation to execute",
-            },
-            documentId: {
-              type: "string",
-              description: "Document ID for insertText, replaceText, applyTextStyle, and insertTable operations",
-            },
-            title: {
-              type: "string",
-              description: "Document title for create operation",
-            },
-            content: {
-              type: "string",
-              description: "Initial content for create operation",
-            },
-            parentId: {
-              type: "string",
-              description: "Parent folder ID for create operation",
-            },
-            text: {
-              type: "string",
-              description: "Text to insert for insertText operation",
-            },
-            index: {
-              type: "number",
-              description: "Index position for insertText and insertTable operations (default: 1)",
-            },
-            searchText: {
-              type: "string",
-              description: "Text to search for in replaceText operation",
-            },
-            replaceText: {
-              type: "string",
-              description: "Replacement text for replaceText operation",
-            },
-            matchCase: {
-              type: "boolean",
-              description: "Whether to match case in replaceText operation",
-            },
-            startIndex: {
-              type: "number",
-              description: "Start index for applyTextStyle operation",
-            },
-            endIndex: {
-              type: "number",
-              description: "End index for applyTextStyle operation",
-            },
-            bold: {
-              type: "boolean",
-              description: "Apply bold styling",
-            },
-            italic: {
-              type: "boolean",
-              description: "Apply italic styling",
-            },
-            underline: {
-              type: "boolean",
-              description: "Apply underline styling",
-            },
-            fontSize: {
-              type: "number",
-              description: "Font size in points",
-            },
-            foregroundColor: {
-              type: "object",
-              description: "Text color (RGB values 0-1)",
-              properties: {
-                red: { type: "number", minimum: 0, maximum: 1 },
-                green: { type: "number", minimum: 0, maximum: 1 },
-                blue: { type: "number", minimum: 0, maximum: 1 },
-              },
-            },
-            rows: {
-              type: "number",
-              description: "Number of rows for insertTable operation",
-            },
-            columns: {
-              type: "number",
-              description: "Number of columns for insertTable operation",
-            },
-          },
-          required: ["operation"],
-        },
-      },
-      {
-        name: "getAppScript",
-        description: "Get Google Apps Script code by script ID",
-        inputSchema: {
-          type: "object",
-          properties: {
-            scriptId: {
-              type: "string",
-              description: "The Google Apps Script project ID",
-            },
-          },
-          required: ["scriptId"],
-        },
-      },
-    ],
+    tools: [EXECUTE_CODE_SCHEMA, SEARCH_TOOL_SCHEMA],
   };
 });
 
-// Handle tool calls
+// Handle tool calls - ONLY executeCode in v3.0
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
   const startTime = Date.now();
 
@@ -977,116 +424,67 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
     logger.info('Tool called', { tool: name, args });
 
-    switch (name) {
-      case "sheets": {
-        return await handleSheetsTool(args ?? {}, {
-          logger,
-          sheets,
-          cacheManager,
-          performanceMonitor,
-          startTime,
-        });
+    if (name === "search") {
+      // Temporary search implementation
+      const query = args && typeof args === 'object' && 'query' in args && typeof args.query === 'string' ? args.query : '';
+      const pageSize = args && typeof args === 'object' && 'pageSize' in args && typeof args.pageSize === 'number' ? args.pageSize : 10;
+
+      if (!query) {
+        throw new Error('query parameter is required');
       }
 
-      case "drive": {
-        return await handleDriveTool(args ?? {}, {
-          logger,
-          drive,
-          cacheManager,
-          performanceMonitor,
-          startTime,
-        });
-      }
+      const response = await drive.files.list({
+        q: `name contains '${query}' and trashed = false`,
+        pageSize: Math.min(pageSize, 100),
+        fields: "files(id, name, mimeType, createdTime, modifiedTime, webViewLink, size)",
+      });
 
-      case "forms": {
-        return await handleFormsTool(args ?? {}, {
-          logger,
-          forms,
-          cacheManager,
-          performanceMonitor,
-          startTime,
-        });
-      }
+      const files = response.data.files || [];
+      performanceMonitor.track('search', Date.now() - startTime);
 
-      case "docs": {
-        return await handleDocsTool(args ?? {}, {
-          logger,
-          docs,
-          drive,
-          cacheManager,
-          performanceMonitor,
-          startTime,
-        });
-      }
-
-      case "getAppScript": {
-        const startTime = Date.now();
-        if (!args || typeof args.scriptId !== 'string') {
-          throw new Error('scriptId parameter is required');
-        }
-        const { scriptId } = args;
-
-        // Check cache first
-        const cached = await cacheManager.get(`script:${scriptId}`);
-        if (cached) {
-          performanceMonitor.recordCacheHit();
-          logger.info('getAppScript cache hit', { scriptId });
-
-          // Format the cached response
-          const filesText = (cached as { files: AppsScriptFile[] }).files.map((file: AppsScriptFile) => {
-            let fileInfo = `File: ${file.name} (${file.type})\n`;
-            fileInfo += '```' + (file.type === 'HTML' ? 'html' : 'javascript') + '\n';
-            fileInfo += file.source;
-            fileInfo += '\n```';
-            return fileInfo;
-          }).join('\n\n');
-
-          return {
-            content: [{
-              type: "text",
-              text: `Apps Script Project (ID: ${scriptId})\n\n${filesText}`,
-            }],
-          };
-        }
-
-        performanceMonitor.recordCacheMiss();
-
-        // Get script content from API
-        const response = await script.projects.getContent({
-          scriptId: scriptId,
-        });
-
-        const content = response.data;
-
-        // Cache the result
-        await cacheManager.set(`script:${scriptId}`, content as CacheData);
-
-        // Format the response
-        if (!content.files) {
-          throw new Error('No files found in script content');
-        }
-
-        const filesText = (content.files as AppsScriptFile[]).map((file: AppsScriptFile) => {
-          let fileInfo = `File: ${file.name} (${file.type})\n`;
-          fileInfo += '```' + (file.type === 'HTML' ? 'html' : 'javascript') + '\n';
-          fileInfo += file.source;
-          fileInfo += '\n```';
-          return fileInfo;
-        }).join('\n\n');
-
-        performanceMonitor.track('getAppScript', Date.now() - startTime);
-
-        return {
-          content: [{
-            type: "text",
-            text: `Apps Script Project (ID: ${scriptId})\n\n${filesText}`,
-          }],
-        };
-      }
-
-      default:
-        throw new Error(`Unknown tool: ${name}`);
+      return {
+        content: [{
+          type: "text",
+          text: JSON.stringify({ found: files.length, files }, null, 2),
+        }],
+      };
     }
+
+    if (name === "executeCode") {
+      // Extract code and timeout from arguments
+      const code = args && typeof args === 'object' && 'code' in args && typeof args.code === 'string' ? args.code : '';
+      const timeout = args && typeof args === 'object' && 'timeout' in args && typeof args.timeout === 'number' ? args.timeout : 30000;
+
+      if (!code) {
+        throw new Error('code parameter is required');
+      }
+
+      // Build context with all API clients and utilities
+      const context = {
+        logger,
+        drive,
+        sheets,
+        forms,
+        docs,
+        cacheManager,
+        performanceMonitor,
+        startTime,
+      };
+
+      // Execute the code in sandbox
+      const result = await executeCode(code, timeout, context, logger);
+
+      performanceMonitor.track('executeCode', Date.now() - startTime);
+
+      return {
+        content: [{
+          type: "text",
+          text: JSON.stringify(result, null, 2),
+        }],
+      };
+    }
+
+    throw new Error(`Unknown tool: ${name}`);
   } catch (error) {
     performanceMonitor.track(request.params.name, Date.now() - startTime, true);
     logger.error('Tool execution failed', {
