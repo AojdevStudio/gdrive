@@ -131,6 +131,116 @@ const resolveSheetMetadata = async (
   return result;
 };
 
+const fetchSheetTitleById = async (
+  context: SheetsHandlerContext,
+  spreadsheetId: string,
+  sheetId: number,
+  operation: string,
+): Promise<string> => {
+  try {
+    const response = await context.sheets.spreadsheets.get({
+      spreadsheetId,
+      fields: 'sheets(properties(sheetId,title))',
+    });
+
+    const match = response.data.sheets?.find((sheet) => sheet.properties?.sheetId === sheetId);
+    const title = match?.properties?.title;
+
+    if (typeof title === 'string' && title.trim() !== '') {
+      return title;
+    }
+
+    throw new Error(`Sheet ID ${sheetId} not found in spreadsheet ${spreadsheetId}`);
+  } catch (error) {
+    context.logger.error('Failed to resolve sheet title', {
+      spreadsheetId,
+      sheetId,
+      operation,
+      error,
+    });
+    throw new Error(`Failed to resolve sheet title for ${operation} in spreadsheet ${spreadsheetId}: ${toErrorMessage(error)}`);
+  }
+};
+
+interface RangeResolutionArgs {
+  spreadsheetId: string;
+  range: string;
+  sheetName?: string;
+  sheetId?: number;
+}
+
+const resolveRangeWithSheet = async (
+  context: SheetsHandlerContext,
+  args: RangeResolutionArgs,
+  operation: string,
+): Promise<{ resolvedRange: string; sheetTitle?: string }> => {
+  const trimmedRange = args.range.trim();
+  const { sheetName: rangeSheetName } = parseRangeInput(trimmedRange);
+
+  const providedSheetName = typeof args.sheetName === 'string' ? args.sheetName.trim() : undefined;
+  const providedSheetId = args.sheetId;
+
+  if (rangeSheetName) {
+    if (providedSheetName && providedSheetName !== rangeSheetName) {
+      throw new Error('sheetName does not match the sheet specified in range');
+    }
+
+    if (providedSheetId !== undefined) {
+      const resolved = await resolveSheetMetadata(
+        context,
+        args.spreadsheetId,
+        {
+          sheetId: providedSheetId,
+          sheetName: providedSheetName ?? rangeSheetName,
+        },
+        operation,
+      );
+
+      const resolvedTitle = resolved.title ?? rangeSheetName;
+      if (resolvedTitle !== rangeSheetName) {
+        throw new Error('sheetId does not match the sheet specified in range');
+      }
+    }
+
+    return { resolvedRange: trimmedRange, sheetTitle: rangeSheetName };
+  }
+
+  if (providedSheetName !== undefined || providedSheetId !== undefined) {
+    const identifier: SheetIdentifier = {
+      ...(providedSheetId !== undefined ? { sheetId: providedSheetId } : {}),
+      ...(providedSheetName ? { sheetName: providedSheetName } : {}),
+    };
+
+    context.logger.info('DEBUG: Resolving sheet with identifier', { identifier, operation });
+
+    const resolved = await resolveSheetMetadata(
+      context,
+      args.spreadsheetId,
+      identifier,
+      operation,
+    );
+
+    context.logger.info('DEBUG: Resolved metadata', { resolved, operation });
+
+    const title = resolved.title ?? providedSheetName ?? await fetchSheetTitleById(
+      context,
+      args.spreadsheetId,
+      resolved.sheetId,
+      operation,
+    );
+
+    context.logger.info('DEBUG: Final title and range', { title, trimmedRange, operation });
+
+    const normalizedRange = trimmedRange === title ? title : `${title}!${trimmedRange}`;
+
+    context.logger.info('DEBUG: Normalized range', { normalizedRange, operation });
+
+    return { resolvedRange: normalizedRange, sheetTitle: title };
+  }
+
+  return { resolvedRange: trimmedRange };
+};
+
 export async function handleSheetsTool(
   rawArgs: unknown,
   context: SheetsHandlerContext,
@@ -209,7 +319,18 @@ async function handleListSheets(args: ListArgs, context: SheetsHandlerContext) {
 }
 
 async function handleReadSheet(args: ReadArgs, context: SheetsHandlerContext) {
-  const cacheKey = `sheet:${args.spreadsheetId}:${args.range}`;
+  const { resolvedRange } = await resolveRangeWithSheet(
+    context,
+    {
+      spreadsheetId: args.spreadsheetId,
+      range: args.range,
+      ...(args.sheetName !== undefined ? { sheetName: args.sheetName } : {}),
+      ...(args.sheetId !== undefined ? { sheetId: args.sheetId } : {}),
+    },
+    'readSheet',
+  );
+
+  const cacheKey = `sheet:${args.spreadsheetId}:${resolvedRange}`;
   const cached = await context.cacheManager.get(cacheKey);
   if (cached) {
     context.performanceMonitor.track('readSheet', Date.now() - context.startTime);
@@ -218,7 +339,7 @@ async function handleReadSheet(args: ReadArgs, context: SheetsHandlerContext) {
 
   const response = await context.sheets.spreadsheets.values.get({
     spreadsheetId: args.spreadsheetId,
-    range: args.range,
+    range: resolvedRange,
   });
 
   const result = {
@@ -428,9 +549,20 @@ async function handleDeleteSheet(args: DeleteArgs, context: SheetsHandlerContext
 }
 
 async function handleUpdateCells(args: UpdateArgs, context: SheetsHandlerContext) {
+  const { resolvedRange } = await resolveRangeWithSheet(
+    context,
+    {
+      spreadsheetId: args.spreadsheetId,
+      range: args.range,
+      ...(args.sheetName !== undefined ? { sheetName: args.sheetName } : {}),
+      ...(args.sheetId !== undefined ? { sheetId: args.sheetId } : {}),
+    },
+    'updateSheet',
+  );
+
   await context.sheets.spreadsheets.values.update({
     spreadsheetId: args.spreadsheetId,
-    range: args.range,
+    range: resolvedRange,
     valueInputOption: 'USER_ENTERED',
     requestBody: {
       values: args.values,
@@ -442,13 +574,13 @@ async function handleUpdateCells(args: UpdateArgs, context: SheetsHandlerContext
   context.performanceMonitor.track('updateCells', Date.now() - context.startTime);
   context.logger.info('Cells updated', {
     spreadsheetId: args.spreadsheetId,
-    range: args.range,
+    range: resolvedRange,
   });
 
   return {
     content: [{
       type: 'text',
-      text: `Successfully updated ${args.values.length} rows in range ${args.range}`,
+      text: `Successfully updated ${args.values.length} rows in range ${resolvedRange}`,
     }],
   };
 }

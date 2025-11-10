@@ -61,34 +61,6 @@ This is a Model Context Protocol (MCP) server for Google Drive integration. It p
 - Docker support for containerized deployment with Redis
 - **BMAD Framework Integration** - Agent-driven development methodology for structured brownfield and greenfield projects
 
-## BMAD Framework Integration
-
-This project now includes the BMAD (Brownfield/Multi-Agent Development) framework for structured development workflows:
-
-### Available Agents
-- **Business Analyst** - Market research, brainstorming, competitive analysis
-- **Product Manager** - PRD creation, product strategy, roadmap planning
-- **Architect** - System design, technology selection, API design
-- **Developer** - Code implementation, debugging, refactoring
-- **QA** - Test design, quality assurance, validation
-- **UX Expert** - UI/UX design, wireframes, user experience optimization
-- **Product Owner** - Backlog management, story refinement, acceptance criteria
-- **Scrum Master** - Story creation, epic management, agile process guidance
-
-### BMAD Commands
-- `npx bmad-method list:agents` - List all available agents
-- `npx bmad-method install -f -i codex` - Reinstall BMAD core and regenerate AGENTS.md
-- `npx bmad-method validate` - Validate BMAD configuration
-
-### Workflow Templates
-Located in `.bmad-core/workflows/`:
-- Brownfield development workflows
-- Greenfield project workflows
-- Full-stack, service, and UI-specific templates
-
-### Usage with Claude Code
-Reference agents naturally in development tasks, e.g., "As dev, implement..." or "As architect, design..."
-
 ## Key Commands
 
 ### Build & Development

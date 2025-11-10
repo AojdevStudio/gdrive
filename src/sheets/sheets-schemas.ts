@@ -100,6 +100,8 @@ export const SheetsListSchema = SheetsBaseSchema.extend({
 export const SheetsReadSchema = SheetsBaseSchema.extend({
   operation: z.literal('read'),
   range: z.string().min(1, 'Range is required'),
+  sheetName: z.string().min(1).optional(),
+  sheetId: z.coerce.number().int().min(0).optional(),
 });
 
 export const SheetsCreateSchema = SheetsBaseSchema.extend({
@@ -137,6 +139,8 @@ export const SheetsUpdateSchema = SheetsBaseSchema.extend({
   operation: z.literal('update'),
   range: z.string().min(1),
   values: z.array(z.array(z.unknown())),
+  sheetName: z.string().min(1).optional(),
+  sheetId: z.coerce.number().int().min(0).optional(),
 });
 
 export const SheetsUpdateFormulaSchema = SheetsBaseSchema.extend({
