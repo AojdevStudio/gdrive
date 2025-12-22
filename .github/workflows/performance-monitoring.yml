@@ -186,10 +186,10 @@ jobs:
           # Run the baseline test
           node performance-test.mjs
           
-          # Set output
-          echo "results<<EOF" >> $GITHUB_OUTPUT
+          # Set output using unique delimiter
+          echo "results<<PERF_RESULTS_EOF" >> $GITHUB_OUTPUT
           cat baseline-results.json >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
+          echo "PERF_RESULTS_EOF" >> $GITHUB_OUTPUT
           
       - name: Memory usage analysis
         run: |

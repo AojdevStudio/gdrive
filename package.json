@@ -30,7 +30,7 @@
   },
   "dependencies": {
     "@google-cloud/local-auth": "^3.0.1",
-    "@modelcontextprotocol/sdk": "1.0.1",
+    "@modelcontextprotocol/sdk": "^1.25.1",
     "googleapis": "^144.0.0",
     "isolated-vm": "^6.0.2",
     "redis": "^5.6.1",

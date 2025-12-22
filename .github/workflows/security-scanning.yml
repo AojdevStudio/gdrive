@@ -240,7 +240,7 @@ jobs:
           console.log('Advisory check completed. Manual review recommended.');
           EOF
           
-          node node check-advisories.mjs
+          node check-advisories.mjs
 
       - name: Upload dependency scan results
         uses: actions/upload-artifact@v4
@@ -569,7 +569,7 @@ jobs:
           }
           EOF
           
-          node node check-licenses.mjs > license-compliance-summary.md
+          node check-licenses.mjs > license-compliance-summary.md
 
       - name: Upload license scan results
         uses: actions/upload-artifact@v4
