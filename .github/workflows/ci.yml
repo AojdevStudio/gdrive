@@ -20,7 +20,8 @@ permissions:
 env:
   NODE_VERSION: '22'
   REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}
+  # Note: Docker requires lowercase image names
+  IMAGE_NAME: aojdevstudio/gdrive
 
 jobs:
   # Job 1: Code Quality and Testing
