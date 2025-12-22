@@ -81,7 +81,7 @@ jobs:
       - name: Run ESLint security rules
         run: |
           # Install security-focused ESLint plugins
-          npm install --no-save eslint-plugin-security eslint-plugin-node-security
+          npm install --no-save eslint-plugin-security
           
           # Create security-focused ESLint config
           cat > .eslintrc.security.mjs << 'EOF'
@@ -648,7 +648,7 @@ jobs:
         uses: actions/github-script@v7
         with:
           script: |
-            import fs from 'fs';
+            const fs = require('fs');
             const summary = fs.readFileSync('security-summary.md', 'utf8');
             
             // Find existing security comment
