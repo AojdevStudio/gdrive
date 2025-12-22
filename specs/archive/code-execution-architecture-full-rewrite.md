@@ -2,9 +2,15 @@
 
 **Created:** 2025-11-10
 **Project:** Google Drive MCP Server
+**Status:** ⏸️ SUPERSEDED
+**Superseded By:** `progressive-disclosure.md` (simpler approach, same token benefits)
 **Scope:** Complete transformation to code execution-based architecture
 **Estimated Duration:** 2-3 weeks
 **Risk Level:** HIGH (Breaking changes for existing users)
+
+> **Note:** This spec was superseded by the Progressive Disclosure approach implemented in v3.1.0.
+> The simpler operation-based tools (drive, sheets, forms, docs) achieved 92% token reduction
+> without the complexity of isolated-vm sandboxing. This document is retained for reference.
 
 ---
 
