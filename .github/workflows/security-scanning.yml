@@ -32,7 +32,7 @@ permissions:
   pull-requests: write
 
 env:
-  NODE_VERSION: '20'
+  NODE_VERSION: '22'
 
 jobs:
   # Job 1: Static Application Security Testing (SAST)

@@ -39,7 +39,7 @@ permissions:
   issues: write
 
 env:
-  NODE_VERSION: '20'
+  NODE_VERSION: '22'
 
 jobs:
   # Job 1: Performance baseline
