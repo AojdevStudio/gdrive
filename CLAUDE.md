@@ -52,6 +52,7 @@ This is a Model Context Protocol (MCP) server for Google Drive integration. It p
 - Comprehensive Google Sheets operations (read, update, append)
 - Google Forms creation and management with question types
 - **Google Docs API integration** - Create documents, insert text, replace text, apply formatting, insert tables
+- **Gmail API integration** - Read, search, compose, send emails, manage labels (v3.2.0+)
 - **Batch file operations** - Process multiple files in a single operation (create, update, delete, move)
 - Enhanced search with natural language parsing
 - Forms response handling and analysis
@@ -89,6 +90,7 @@ This is a Model Context Protocol (MCP) server for Google Drive integration. It p
 - **Sheets API Integration** - Google Sheets v4 API for spreadsheet operations
 - **Forms API Integration** - Google Forms v1 API for form creation and management
 - **Docs API Integration** - Google Docs v1 API for document manipulation
+- **Gmail API Integration** - Gmail v1 API for email operations (v3.2.0+)
 - **Redis Cache Manager** - High-performance caching with automatic invalidation
 - **Performance Monitor** - Real-time performance tracking and statistics
 - **Winston Logger** - Structured logging with file rotation and console output
@@ -101,6 +103,7 @@ This is a Model Context Protocol (MCP) server for Google Drive integration. It p
   - **Sheets Operations**: createSheet, renameSheet, deleteSheet, updateCells, updateCellsWithFormula, formatCells, addConditionalFormatting, freezeRowsColumns, setColumnWidth, appendRows
   - **Forms Operations**: createForm, getForm, addQuestion, listResponses
   - **Docs Operations**: createDocument, insertText, replaceText, applyTextStyle, insertTable
+  - **Gmail Operations**: listMessages, listThreads, getMessage, getThread, searchMessages, createDraft, sendMessage, sendDraft, listLabels, modifyLabels
   - **Batch Operations**: batchFileOperations (create, update, delete, move multiple files)
   - **Enhanced Search**: enhancedSearch with natural language parsing
 - **Transport**: StdioServerTransport for MCP communication

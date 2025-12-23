@@ -18,9 +18,10 @@ permissions:
   security-events: write
 
 env:
-  NODE_VERSION: '20'
+  NODE_VERSION: '22'
   REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}
+  # Note: Docker requires lowercase image names
+  IMAGE_NAME: aojdevstudio/gdrive
 
 jobs:
   # Job 1: Code Quality and Testing
@@ -30,7 +31,7 @@ jobs:
     
     strategy:
       matrix:
-        node-version: [18, 20, 22]
+        node-version: [22]
     
     steps:
       - name: Checkout repository
@@ -173,8 +174,8 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: .
-          platforms: linux/amd64,linux/arm64
           push: false
+          load: true
           tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:test
           cache-from: type=gha
           cache-to: type=gha,mode=max

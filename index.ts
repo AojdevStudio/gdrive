@@ -61,10 +61,24 @@ import type {
   InsertTableOptions,
 } from "./src/modules/docs/index.js";
 
+import type {
+  ListMessagesOptions,
+  ListThreadsOptions,
+  GetMessageOptions,
+  GetThreadOptions,
+  SearchMessagesOptions,
+  CreateDraftOptions,
+  SendMessageOptions,
+  SendDraftOptions,
+  ListLabelsOptions,
+  ModifyLabelsOptions,
+} from "./src/modules/gmail/index.js";
+
 const drive = google.drive("v3");
 const sheets = google.sheets("v4");
 const forms = google.forms("v1");
 const docs = google.docs("v1");
+const gmail = google.gmail("v1");
 
 // Performance monitoring types
 interface PerformanceStats {
@@ -508,6 +522,25 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           },
           required: ["operation", "params"]
         }
+      },
+      {
+        name: "gmail",
+        description: "Google Gmail operations. Read gdrive://tools resource to see available operations.",
+        inputSchema: {
+          type: "object",
+          properties: {
+            operation: {
+              type: "string",
+              enum: ["listMessages", "listThreads", "getMessage", "getThread", "searchMessages", "createDraft", "sendMessage", "sendDraft", "listLabels", "modifyLabels"],
+              description: "Operation to perform"
+            },
+            params: {
+              type: "object",
+              description: "Operation-specific parameters. See gdrive://tools for details."
+            }
+          },
+          required: ["operation", "params"]
+        }
       }
     ]
   };
@@ -534,6 +567,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       sheets,
       forms,
       docs,
+      gmail,
       cacheManager,
       performanceMonitor,
       startTime,
@@ -666,6 +700,46 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         break;
       }
 
+      case "gmail": {
+        const gmailModule = await import('./src/modules/gmail/index.js');
+
+        switch (operation) {
+          case "listMessages":
+            result = await gmailModule.listMessages(params as ListMessagesOptions, context);
+            break;
+          case "listThreads":
+            result = await gmailModule.listThreads(params as ListThreadsOptions, context);
+            break;
+          case "getMessage":
+            result = await gmailModule.getMessage(params as GetMessageOptions, context);
+            break;
+          case "getThread":
+            result = await gmailModule.getThread(params as GetThreadOptions, context);
+            break;
+          case "searchMessages":
+            result = await gmailModule.searchMessages(params as SearchMessagesOptions, context);
+            break;
+          case "createDraft":
+            result = await gmailModule.createDraft(params as CreateDraftOptions, context);
+            break;
+          case "sendMessage":
+            result = await gmailModule.sendMessage(params as SendMessageOptions, context);
+            break;
+          case "sendDraft":
+            result = await gmailModule.sendDraft(params as SendDraftOptions, context);
+            break;
+          case "listLabels":
+            result = await gmailModule.listLabels(params as ListLabelsOptions, context);
+            break;
+          case "modifyLabels":
+            result = await gmailModule.modifyLabels(params as ModifyLabelsOptions, context);
+            break;
+          default:
+            throw new Error(`Unknown gmail operation: ${operation}`);
+        }
+        break;
+      }
+
       default:
         throw new Error(`Unknown tool: ${name}`);
     }
@@ -712,7 +786,12 @@ async function authenticateAndSaveCredentials() {
       "https://www.googleapis.com/auth/spreadsheets",
       "https://www.googleapis.com/auth/documents",
       "https://www.googleapis.com/auth/forms",
-      "https://www.googleapis.com/auth/script.projects.readonly"
+      "https://www.googleapis.com/auth/script.projects.readonly",
+      // Gmail scopes (added in v3.2.0)
+      "https://www.googleapis.com/auth/gmail.readonly",    // Read operations: listMessages, getMessage, getThread, searchMessages
+      "https://www.googleapis.com/auth/gmail.send",        // messages.send only
+      "https://www.googleapis.com/auth/gmail.compose",     // Draft operations: drafts.create, drafts.send
+      "https://www.googleapis.com/auth/gmail.modify"       // Label/message modification: modifyLabels, listLabels
     ],
   });
 
