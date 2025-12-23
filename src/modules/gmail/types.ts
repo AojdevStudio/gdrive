@@ -160,7 +160,7 @@ export interface SearchMessagesOptions {
 /**
  * Search result (same as list result)
  */
-export interface SearchMessagesResult extends ListMessagesResult {}
+export type SearchMessagesResult = ListMessagesResult;
 
 // ============================================================================
 // Compose Operations
@@ -263,11 +263,9 @@ export interface SendDraftResult {
 // ============================================================================
 
 /**
- * Options for listing labels
+ * Options for listing labels (empty for API consistency - Gmail doesn't paginate labels)
  */
-export interface ListLabelsOptions {
-  /** This option exists for API consistency but Gmail doesn't have pagination for labels */
-}
+export type ListLabelsOptions = Record<string, never>;
 
 /**
  * A Gmail label
