@@ -5,7 +5,7 @@
 [![Docker](https://img.shields.io/badge/Docker-2496ED?logo=docker&logoColor=white)](https://www.docker.com/)
 [![Redis](https://img.shields.io/badge/Redis-DC382D?logo=redis&logoColor=white)](https://redis.io/)
 
-A powerful **Model Context Protocol (MCP) server** that provides comprehensive integration with **Google Workspace** (Drive, Sheets, Docs, Forms, and Apps Script). This server enables AI assistants and applications to seamlessly interact with Google services through a standardized, secure interface.
+A powerful **Model Context Protocol (MCP) server** that provides comprehensive integration with **Google Workspace** (Drive, Sheets, Docs, Forms, Gmail, and Apps Script). This server enables AI assistants and applications to seamlessly interact with Google services through a standardized, secure interface.
 
 ## 🚀 Quick Start
 
@@ -19,7 +19,7 @@ You'll need a Google account and Node.js 18+ installed.
 
 1. **Google Cloud Setup**
    - Create project at [Google Cloud Console](https://console.cloud.google.com/projectcreate)
-   - Enable APIs: Drive, Sheets, Docs, Forms, Apps Script
+   - Enable APIs: Drive, Sheets, Docs, Forms, Gmail, Apps Script
    - Create OAuth credentials and download as `gcp-oauth.keys.json`
    
    **📖 [Detailed Google Cloud Setup →](./docs/Guides/01-initial-setup.md)**
@@ -500,6 +500,7 @@ graph TB
     B --> L[Google Docs API]
     B --> M[Google Forms API]
     B --> N[Google Apps Script API]
+    B --> O[Gmail API]
     
     F --> O[Winston Logger]
     

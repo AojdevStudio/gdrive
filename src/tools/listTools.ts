@@ -126,116 +126,129 @@ export async function generateToolStructure(): Promise<ModuleStructure> {
     ],
     forms: [
       {
-        name: 'Available via context',
-        signature: 'See Google Forms API documentation',
-        description: 'Forms API not yet exposed in v3.0.0 sandbox',
+        name: 'createForm',
+        signature: 'createForm({ title: string, description?: string })',
+        description: 'Create a new Google Form',
+        example: 'forms.createForm({ title: "Customer Survey", description: "Feedback form" })',
+      },
+      {
+        name: 'readForm',
+        signature: 'readForm({ formId: string })',
+        description: 'Get form metadata and structure',
+        example: 'forms.readForm({ formId: "abc123" })',
+      },
+      {
+        name: 'addQuestion',
+        signature: 'addQuestion({ formId: string, title: string, questionType: string, ... })',
+        description: 'Add a question to a form',
+        example: 'forms.addQuestion({ formId: "abc123", title: "Your rating", questionType: "SCALE" })',
+      },
+      {
+        name: 'listResponses',
+        signature: 'listResponses({ formId: string })',
+        description: 'List all responses to a form',
+        example: 'forms.listResponses({ formId: "abc123" })',
       },
     ],
     docs: [
       {
-        name: 'Available via context',
-        signature: 'See Google Docs API documentation',
-        description: 'Docs API not yet exposed in v3.0.0 sandbox',
+        name: 'createDocument',
+        signature: 'createDocument({ title: string })',
+        description: 'Create a new Google Doc',
+        example: 'docs.createDocument({ title: "Meeting Notes" })',
+      },
+      {
+        name: 'insertText',
+        signature: 'insertText({ documentId: string, text: string, index?: number })',
+        description: 'Insert text at a position in the document',
+        example: 'docs.insertText({ documentId: "abc123", text: "Hello World", index: 1 })',
+      },
+      {
+        name: 'replaceText',
+        signature: 'replaceText({ documentId: string, searchText: string, replaceText: string })',
+        description: 'Replace text throughout the document',
+        example: 'docs.replaceText({ documentId: "abc123", searchText: "old", replaceText: "new" })',
+      },
+      {
+        name: 'applyTextStyle',
+        signature: 'applyTextStyle({ documentId: string, startIndex: number, endIndex: number, style: object })',
+        description: 'Apply formatting to a text range',
+        example: 'docs.applyTextStyle({ documentId: "abc123", startIndex: 1, endIndex: 10, style: { bold: true } })',
+      },
+      {
+        name: 'insertTable',
+        signature: 'insertTable({ documentId: string, rows: number, columns: number, index?: number })',
+        description: 'Insert a table at a position in the document',
+        example: 'docs.insertTable({ documentId: "abc123", rows: 3, columns: 4, index: 1 })',
+      },
+    ],
+    gmail: [
+      {
+        name: 'listMessages',
+        signature: 'listMessages({ maxResults?: number, labelIds?: string[], pageToken?: string, includeSpamTrash?: boolean })',
+        description: 'List messages in the user\'s mailbox',
+        example: 'gmail.listMessages({ maxResults: 10, labelIds: ["INBOX"] })',
+      },
+      {
+        name: 'listThreads',
+        signature: 'listThreads({ maxResults?: number, labelIds?: string[], pageToken?: string, includeSpamTrash?: boolean })',
+        description: 'List email threads in the user\'s mailbox',
+        example: 'gmail.listThreads({ maxResults: 10, labelIds: ["INBOX"] })',
+      },
+      {
+        name: 'getMessage',
+        signature: 'getMessage({ id: string, format?: "minimal" | "full" | "raw" | "metadata" })',
+        description: 'Get a specific message by ID with full content',
+        example: 'gmail.getMessage({ id: "18c123abc", format: "full" })',
+      },
+      {
+        name: 'getThread',
+        signature: 'getThread({ id: string, format?: "minimal" | "full" | "metadata" })',
+        description: 'Get a thread with all its messages',
+        example: 'gmail.getThread({ id: "18c123abc", format: "full" })',
+      },
+      {
+        name: 'searchMessages',
+        signature: 'searchMessages({ query: string, maxResults?: number, pageToken?: string, includeSpamTrash?: boolean })',
+        description: 'Search messages using Gmail query syntax',
+        example: 'gmail.searchMessages({ query: "from:boss@company.com is:unread", maxResults: 20 })',
+      },
+      {
+        name: 'createDraft',
+        signature: 'createDraft({ to: string[], subject: string, body: string, cc?: string[], bcc?: string[], isHtml?: boolean, from?: string })',
+        description: 'Create a draft email',
+        example: 'gmail.createDraft({ to: ["user@example.com"], subject: "Hello", body: "Hi there!" })',
+      },
+      {
+        name: 'sendMessage',
+        signature: 'sendMessage({ to: string[], subject: string, body: string, cc?: string[], bcc?: string[], isHtml?: boolean, from?: string, threadId?: string })',
+        description: 'Send a new email message (supports send-as aliases via from parameter)',
+        example: 'gmail.sendMessage({ to: ["user@example.com"], subject: "Hello", body: "Hi there!" })',
+      },
+      {
+        name: 'sendDraft',
+        signature: 'sendDraft({ draftId: string })',
+        description: 'Send an existing draft',
+        example: 'gmail.sendDraft({ draftId: "r1234567890" })',
+      },
+      {
+        name: 'listLabels',
+        signature: 'listLabels({})',
+        description: 'List all labels in the user\'s mailbox',
+        example: 'gmail.listLabels({})',
+      },
+      {
+        name: 'modifyLabels',
+        signature: 'modifyLabels({ messageId: string, addLabelIds?: string[], removeLabelIds?: string[] })',
+        description: 'Add or remove labels from a message',
+        example: 'gmail.modifyLabels({ messageId: "18c123abc", removeLabelIds: ["UNREAD", "INBOX"] })',
       },
     ],
   };
 }
 
-/**
- * Parse TypeScript file content to extract function definitions
- *
- * DEPRECATED in v3.0.0: No longer used (hardcoded structure instead)
- * Keeping for potential future use
- *
- * @param content - TypeScript file content
- * @returns Array of tool definitions found in the file
- */
-// @ts-ignore - Unused in v3.0.0 but kept for future use
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-function parseToolDefinitions(content: string): ToolDefinition[] {
-  const tools: ToolDefinition[] = [];
-
-  // Regex to find exported async functions
-  // Matches: export async function name(params): Promise<ReturnType>
-  const exportPattern = /export\s+async\s+function\s+(\w+)\s*\((.*?)\)\s*:\s*Promise<(.*?)>\s*\{/gs;
-
-  // Regex to find JSDoc comments
-  // Matches: /** ... */
-  const docPattern = /\/\*\*([\s\S]*?)\*\//g;
-
-  let match;
-  while ((match = exportPattern.exec(content)) !== null) {
-    const [, functionName, params, returnType] = match;
-
-    // Guard against undefined matches
-    if (!functionName || !params || !returnType) {
-      continue;
-    }
-
-    // Find the JSDoc comment immediately before this function
-    const beforeFunction = content.substring(0, match.index);
-    const docMatches = [...beforeFunction.matchAll(docPattern)];
-    const lastDoc = docMatches[docMatches.length - 1];
-
-    let description = '';
-    let example: string | undefined;
-
-    if (lastDoc && lastDoc[1]) {
-      const docContent = lastDoc[1];
-
-      // Extract description (lines without @tags)
-      const descriptionLines: string[] = [];
-      const exampleLines: string[] = [];
-      let inExample = false;
-
-      for (const line of docContent.split('\n')) {
-        const trimmed = line.trim().replace(/^\*\s?/, '');
-
-        if (trimmed.startsWith('@example')) {
-          inExample = true;
-          continue;
-        }
-
-        if (trimmed.startsWith('@')) {
-          inExample = false;
-          continue;
-        }
-
-        if (inExample) {
-          exampleLines.push(trimmed);
-        } else if (trimmed && !trimmed.startsWith('*')) {
-          descriptionLines.push(trimmed);
-        }
-      }
-
-      description = descriptionLines.join(' ').trim();
-      const exampleText = exampleLines.join('\n').trim();
-      example = exampleText.length > 0 ? exampleText : undefined;
-    }
-
-    // Build the full signature
-    const signature = `async function ${functionName}(${params}): Promise<${returnType}>`;
-
-    // Create tool definition with explicit handling of optional example property
-    // Using spread to handle exactOptionalPropertyTypes strictness
-    const tool: ToolDefinition = example
-      ? {
-          name: functionName,
-          signature,
-          description: description || `${functionName} operation`,
-          example,
-        }
-      : {
-          name: functionName,
-          signature,
-          description: description || `${functionName} operation`,
-        };
-
-    tools.push(tool);
-  }
-
-  return tools;
-}
+// v3.2.0: Removed deprecated parseToolDefinitions function
+// The function was unused since v3.0.0 (hardcoded structure is used instead)
 
 /**
  * Format tool structure as human-readable text

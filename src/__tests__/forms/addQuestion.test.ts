@@ -217,7 +217,7 @@ describe('addQuestion JSON Structure Validation', () => {
 
         // Ensure required field is properly nested
         expect(createItemRequest.createItem.item.questionItem.question.required).toBe(true);
-        expect((createItemRequest.createItem.item.questionItem as any).required).toBeUndefined();
+        expect((createItemRequest.createItem.item.questionItem).required).toBeUndefined();
       }
     });
 
