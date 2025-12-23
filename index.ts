@@ -788,10 +788,10 @@ async function authenticateAndSaveCredentials() {
       "https://www.googleapis.com/auth/forms",
       "https://www.googleapis.com/auth/script.projects.readonly",
       // Gmail scopes (added in v3.2.0)
-      "https://www.googleapis.com/auth/gmail.readonly",    // Read emails
-      "https://www.googleapis.com/auth/gmail.send",        // Send emails
-      "https://www.googleapis.com/auth/gmail.compose",     // Compose drafts
-      "https://www.googleapis.com/auth/gmail.modify"       // Modify labels
+      "https://www.googleapis.com/auth/gmail.readonly",    // Read operations: listMessages, getMessage, getThread, searchMessages
+      "https://www.googleapis.com/auth/gmail.send",        // messages.send only
+      "https://www.googleapis.com/auth/gmail.compose",     // Draft operations: drafts.create, drafts.send
+      "https://www.googleapis.com/auth/gmail.modify"       // Label/message modification: modifyLabels, listLabels
     ],
   });
 
