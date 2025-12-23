@@ -1,8 +1,39 @@
 # Google Drive MCP Server Architecture
 
+## Table of Contents
+1. [Overview](#overview)
+2. [System Architecture](#system-architecture)
+3. [Technology Stack](#technology-stack)
+4. [Core Components](#core-components)
+5. [Project Structure](#project-structure)
+6. [Data Flow Architecture](#data-flow-architecture)
+7. [Infrastructure Components](#infrastructure-components)
+8. [Performance Architecture](#performance-architecture)
+9. [Security Architecture](#security-architecture)
+10. [Deployment Architecture](#deployment-architecture)
+11. [Monitoring and Observability](#monitoring-and-observability)
+12. [Extension Architecture](#extension-architecture)
+13. [Development Best Practices](#development-best-practices)
+14. [Coding Standards](#coding-standards)
+
+---
+
 ## Overview
 
 The Google Drive MCP Server is a production-ready TypeScript implementation of the Model Context Protocol (MCP) that provides comprehensive access to Google Workspace services. The architecture follows enterprise-grade patterns with robust authentication, caching, monitoring, and Docker support.
+
+### Key Capabilities
+- Full read/write access to Google Drive files and folders
+- Resource access to Google Drive files via `gdrive:///<file_id>` URIs
+- Comprehensive Google Sheets operations (read, update, append, format)
+- Google Forms creation and management with question types
+- Google Docs API integration (create, insert, replace, format)
+- Batch file operations for efficient processing
+- Redis caching infrastructure for high performance
+- Performance monitoring and structured logging
+- Docker support for containerized deployment
+
+---
 
 ## System Architecture
 
@@ -78,6 +109,118 @@ The Google Drive MCP Server is a production-ready TypeScript implementation of t
 └─────────────────────────────────────────────────────────┘
 ```
 
+---
+
+## Technology Stack
+
+### Core Technologies
+
+#### Runtime & Language
+- **Node.js**: v20+ (required for ES2022 support)
+  - Using ES modules (`"type": "module"` in package.json)
+  - Native async/await and modern JavaScript features
+- **TypeScript**: v5.6.2
+  - Target: ES2022
+  - Strict mode enabled
+  - ES module output with source maps
+
+#### MCP Framework
+- **@modelcontextprotocol/sdk**: v1.0.1
+  - StdioServerTransport for JSON-RPC communication
+  - Built-in request/response schemas
+  - Error handling and validation
+
+### Google API Integration
+
+#### Google Cloud Libraries
+- **@google-cloud/local-auth**: v3.0.1
+  - OAuth 2.0 authentication flow
+  - Local development authorization
+  - Token management integration
+
+- **googleapis**: v144.0.0
+  - Google Drive API v3
+  - Google Sheets API v4
+  - Google Docs API v1
+  - Google Forms API v1
+  - Google Apps Script API v1
+
+#### OAuth Scopes
+```javascript
+const SCOPES = [
+  "https://www.googleapis.com/auth/drive",
+  "https://www.googleapis.com/auth/spreadsheets",
+  "https://www.googleapis.com/auth/documents",
+  "https://www.googleapis.com/auth/forms",
+  "https://www.googleapis.com/auth/script.projects.readonly"
+];
+```
+
+### Infrastructure Dependencies
+
+#### Caching
+- **Redis**: v5.6.1 (client library)
+  - Redis Server: v7-alpine (Docker)
+  - Connection: `redis://localhost:6379`
+  - Default TTL: 5 minutes
+  - Pattern-based invalidation
+
+#### Logging
+- **Winston**: v3.17.0
+  - Structured JSON logging
+  - Multiple transports (file, console)
+  - Log rotation (5MB files, max 5)
+  - Level-based filtering
+
+### Development Dependencies
+
+#### Build Tools
+- **TypeScript**: v5.6.2 (compiler)
+- **shx**: v0.3.4 (cross-platform shell commands)
+
+#### Testing Framework
+- **Jest**: v29.7.0
+  - **ts-jest**: v29.1.2 (TypeScript support)
+  - **@types/jest**: v29.5.12
+  - **@jest/globals**: v29.7.0
+
+#### Type Definitions
+- **@types/node**: v22 (Node.js type definitions)
+
+### Container & Deployment
+
+#### Docker
+- **Base Image**: node:20-slim
+- **Multi-stage Build**: Yes
+- **Health Checks**: Built-in
+- **Volumes**:
+  - `/credentials` (read-only)
+  - `/data` (persistent)
+  - `/app/logs` (log persistence)
+
+#### Docker Compose
+- **Version**: 3.8
+- **Services**: gdrive-mcp (main server), redis (caching layer)
+- **Networks**: Bridge network (mcp-network)
+- **Restart Policy**: unless-stopped
+
+### API Versions & Compatibility
+
+| Service | API Version | Features Used |
+|---------|-------------|---------------|
+| Drive | v3 | Files, folders, search, export |
+| Sheets | v4 | Read, write, append, batch operations |
+| Docs | v1 | Create, insert, replace, style, tables |
+| Forms | v1 | Create, questions, responses |
+| Apps Script | v1 | Read-only project access |
+
+### MCP Protocol
+- **Version**: 0.6.2
+- **Transport**: stdio (JSON-RPC)
+- **Handlers**: 4 (resources, tools, list tools, call tool)
+
+---
+
 ## Core Components
 
 ### 1. MCP Server Core (`index.ts`)
@@ -124,7 +267,7 @@ The main server implementation featuring:
 #### ReadResourceRequestSchema Handler
 - **Multi-format Support**: Automatic format conversion for Google Workspace files
   - Google Docs → Markdown export
-  - Google Sheets → CSV export  
+  - Google Sheets → CSV export
   - Google Presentations → Plain text
   - Google Drawings → PNG images
   - Text files → UTF-8 content
@@ -133,7 +276,7 @@ The main server implementation featuring:
 - **Error Resilience**: Graceful handling of read failures
 
 #### ListToolsRequestSchema Handler
-- **Tool Registry**: 22 comprehensive tools with detailed JSON schemas
+- **Tool Registry**: 5 consolidated tools with detailed JSON schemas
 - **Parameter Validation**: Complete input validation specifications
 - **Documentation**: Rich descriptions and usage examples
 - **Type Safety**: TypeScript interfaces for all tool parameters
@@ -146,7 +289,7 @@ The main server implementation featuring:
 
 ### 5. Tool Architecture (Operation-Based Pattern)
 
-**⚠️ ARCHITECTURE CHANGE (v2.0.0):** As of Epic-001 completion, this server has migrated from individual tools to **operation-based tools** following [HOW2MCP 2025 best practices](https://github.com/modelcontextprotocol/docs/blob/main/docs/guides/tools.md). This architectural shift reduces tool count by 88% (41+ → 5 tools) while maintaining 100% functional compatibility.
+**⚠️ ARCHITECTURE CHANGE (v2.0.0):** This server has migrated from individual tools to **operation-based tools** following HOW2MCP 2025 best practices. This architectural shift reduces tool count by 88% (41+ → 5 tools) while maintaining 100% functional compatibility.
 
 #### Pattern Overview
 
@@ -314,7 +457,7 @@ Previous versions (< 2.0.0) exposed individual tools. v2.0.0 consolidates these 
 // ... 9 more operations
 ```
 
-**Breaking Change:** v2.0.0 is a breaking change requiring client updates. See [MIGRATION_V2.md](../MIGRATION_V2.md) and [CHANGELOG.md](../../CHANGELOG.md) for complete migration guide.
+**Breaking Change:** v2.0.0 is a breaking change requiring client updates. See MIGRATION_V2.md and CHANGELOG.md for complete migration guide.
 
 ### 6. Tools Implementation (Operation Details)
 
@@ -457,7 +600,7 @@ interface GetFormTool {
 interface AddQuestionTool {
   formId: string;
   title: string;
-  type: 'TEXT' | 'PARAGRAPH_TEXT' | 'MULTIPLE_CHOICE' | 'CHECKBOX' | 
+  type: 'TEXT' | 'PARAGRAPH_TEXT' | 'MULTIPLE_CHOICE' | 'CHECKBOX' |
         'DROPDOWN' | 'LINEAR_SCALE' | 'DATE' | 'TIME';
   required?: boolean;
   options?: string[];
@@ -478,6 +621,217 @@ interface GetAppScriptTool {
   scriptId: string;
 }
 ```
+
+---
+
+## Project Structure
+
+### Root Directory
+
+```
+gdrive/
+├── index.ts                    # Main entry point - MCP server implementation
+├── package.json                # Project metadata and dependencies
+├── tsconfig.json              # TypeScript compiler configuration
+├── jest.config.js             # Jest testing configuration (if exists)
+├── .env.example               # Environment variable template
+├── .gitignore                 # Git ignore patterns
+├── Dockerfile                 # Container build instructions
+├── docker-compose.yml         # Multi-service orchestration
+├── README.md                  # Project documentation
+├── CLAUDE.md                  # Claude Code guidance file
+└── LICENSE                    # MIT license file
+```
+
+### Source Code (`/src`)
+
+#### Authentication Module (`/src/auth`)
+```
+src/auth/
+├── AuthManager.ts             # OAuth2 flow and token lifecycle management
+│   ├── Class: AuthManager
+│   ├── Methods: initialize(), refreshAccessToken(), monitorTokenExpiry()
+│   └── State: oauth2Client, authState, refreshTimer
+│
+└── TokenManager.ts            # Encrypted token storage and retrieval
+    ├── Class: TokenManager
+    ├── Methods: saveTokens(), loadTokens(), deleteTokens()
+    └── Encryption: AES-256-GCM
+```
+
+**Purpose**: Handles all authentication concerns including OAuth2 flow, token storage, refresh logic, and security.
+
+#### Health Monitoring (`/src/health-check.ts`)
+```
+src/health-check.ts            # Standalone health check utility
+├── Function: performHealthCheck()
+├── Interfaces: HealthCheckResult, HealthStatus
+└── Checks: Token validity, refresh capability, memory usage
+```
+
+**Purpose**: Provides health monitoring capabilities for Docker and external monitoring systems.
+
+### Distribution (`/dist`)
+
+```
+dist/                          # Compiled JavaScript output
+├── index.js                   # Compiled server entry point
+├── index.d.ts                 # TypeScript declarations
+├── index.js.map              # Source maps for debugging
+└── src/                      # Compiled source modules
+    ├── auth/
+    │   ├── AuthManager.js
+    │   ├── AuthManager.d.ts
+    │   └── TokenManager.js
+    └── health-check.js
+```
+
+**Purpose**: Contains transpiled JavaScript code ready for production execution.
+
+### Credentials Directory
+
+```
+credentials/                   # OAuth and token storage (gitignored)
+├── gcp-oauth.keys.json       # Google Cloud OAuth2 credentials
+│   └── Structure: {client_id, client_secret, redirect_uris}
+│
+├── .gdrive-server-credentials.json  # Legacy token format
+│   └── Deprecated: Migrated to new format
+│
+├── .gdrive-mcp-tokens.json   # Encrypted token storage
+│   └── Structure: Encrypted {access_token, refresh_token, expiry}
+│
+└── gdrive-mcp-audit.log      # Token lifecycle audit trail
+    └── Format: JSON lines with timestamp, event, metadata
+```
+
+**Security**: This directory is excluded from version control and mounted read-only in Docker.
+
+### Data Directory
+
+```
+data/                         # Application data (Docker volume)
+├── cache/                    # Local file cache (if implemented)
+├── temp/                     # Temporary file storage
+└── exports/                  # Exported file storage
+```
+
+**Purpose**: Persistent data storage for Docker deployments.
+
+### Logs Directory
+
+```
+logs/                         # Application logs (Docker volume)
+├── error.log                 # Error-level logs only
+│   └── Format: JSON, rotated at 5MB
+│
+├── combined.log              # All application logs
+│   └── Format: JSON, includes info/warn/error
+│
+└── gdrive-mcp-audit.log     # Duplicate of credentials audit log
+    └── Purpose: Container-friendly log access
+```
+
+**Purpose**: Centralized logging with rotation and multiple severity levels.
+
+### Documentation (`/docs`)
+
+```
+docs/
+├── Architecture/             # System design documentation
+│   └── ARCHITECTURE.md       # This file - comprehensive system design
+│
+├── Examples/                 # Usage examples
+│   ├── basic-usage.md       # Getting started examples
+│   ├── advanced-tools.md    # Complex tool usage
+│   └── integration.md       # Integration patterns
+│
+├── Features/                 # Feature documentation
+│   ├── authentication.md    # Auth system details
+│   ├── caching.md          # Redis caching strategy
+│   └── tools/              # Individual tool docs
+│
+├── Guides/                   # Setup and operation guides
+│   ├── installation.md      # Setup instructions
+│   ├── docker-setup.md      # Container deployment
+│   └── troubleshooting.md   # Common issues
+│
+└── API.md                   # Legacy API reference
+```
+
+**Purpose**: Comprehensive documentation for developers and users.
+
+### Scripts Directory
+
+```
+scripts/                      # Utility scripts
+├── auth.sh                   # Host-based authentication helper
+│   └── Purpose: Simplify OAuth setup process
+│
+├── health-check.sh          # Health monitoring script
+│   └── Purpose: External health checks
+│
+└── changelog/               # Changelog management
+    └── update-changelog.py  # Automated changelog generation
+```
+
+**Purpose**: Automation and utility scripts for common tasks.
+
+### Test Structure
+
+```
+tests/                       # Test suites (planned)
+├── unit/                    # Unit tests
+│   ├── auth/               # Auth module tests
+│   ├── tools/              # Individual tool tests
+│   └── utils/              # Utility function tests
+│
+├── integration/             # Integration tests
+│   ├── google-api/         # API integration tests
+│   ├── redis/              # Cache integration tests
+│   └── mcp/                # MCP protocol tests
+│
+└── e2e/                     # End-to-end tests
+    ├── workflows/          # Complete workflow tests
+    └── performance/        # Performance benchmarks
+```
+
+**Purpose**: Comprehensive testing coverage (currently not implemented).
+
+### File Naming Conventions
+
+#### Source Files
+- **Classes**: PascalCase (e.g., `AuthManager.ts`)
+- **Utilities**: kebab-case (e.g., `health-check.ts`)
+- **Interfaces**: Prefix with 'I' for complex types
+- **Tests**: `*.test.ts` or `*.spec.ts`
+
+#### Configuration Files
+- **Hidden files**: Prefixed with `.` (e.g., `.env`)
+- **Config files**: Direct names (e.g., `tsconfig.json`)
+- **Docker files**: Capitalized (e.g., `Dockerfile`)
+
+### Module Dependencies
+
+#### Dependency Graph
+```
+index.ts (Entry Point)
+├── @modelcontextprotocol/sdk
+├── googleapis
+├── src/auth/AuthManager
+│   ├── google-auth-library
+│   └── src/auth/TokenManager
+├── redis (CacheManager)
+└── winston (Logger)
+```
+
+#### Import Hierarchy
+1. **Core modules** (Node.js built-ins)
+2. **External packages** (npm dependencies)
+3. **Internal modules** (project code)
+4. **Type imports** (TypeScript types)
+
+---
 
 ## Data Flow Architecture
 
@@ -627,57 +981,7 @@ MCP Error Response
 Client Error Handling
 ```
 
-## Project Structure
-
-```
-gdrive/
-├── index.ts                    # Main server implementation
-├── package.json                # Dependencies and build configuration
-├── tsconfig.json              # TypeScript compilation settings
-├── Dockerfile                 # Multi-stage Docker build
-├── docker-compose.yml         # Redis + MCP server orchestration
-├── .env.example              # Environment variable template
-│
-├── src/                      # Source code modules
-│   ├── auth/                 # Authentication system
-│   │   ├── AuthManager.ts    # OAuth state & token management
-│   │   └── TokenManager.ts   # Encrypted token storage
-│   └── health-check.ts       # Health monitoring system
-│
-├── credentials/              # OAuth keys and tokens (gitignored)
-│   ├── gcp-oauth.keys.json  # Google Cloud OAuth credentials
-│   ├── .gdrive-server-credentials.json  # Legacy credentials
-│   ├── .gdrive-mcp-tokens.json         # Encrypted token storage
-│   └── gdrive-mcp-audit.log            # Token lifecycle audit log
-│
-├── data/                     # Application data (Docker volume)
-├── logs/                     # Application logs (Docker volume)
-│   ├── error.log            # Error-level logs only
-│   ├── combined.log         # All application logs
-│   └── gdrive-mcp-audit.log # Token audit trail
-│
-├── docs/                     # Documentation
-│   ├── Architecture/
-│   │   └── ARCHITECTURE.md   # This file - system design
-│   ├── Examples/             # Usage examples and use cases
-│   ├── Features/             # Feature documentation
-│   ├── Guides/              # Installation and setup guides
-│   └── API.md               # API reference (legacy)
-│
-├── scripts/                  # Utility scripts
-│   ├── auth.sh              # Host-based authentication script
-│   └── health-check.sh      # Health monitoring script
-│
-├── dist/                     # Compiled TypeScript output
-│   ├── index.js             # Main server executable
-│   ├── src/                 # Compiled modules
-│   └── health-check.js      # Health check executable
-│
-└── tests/                    # Test suites (configured)
-    ├── unit/                # Unit tests
-    ├── integration/         # Integration tests
-    └── e2e/                 # End-to-end tests
-```
+---
 
 ## Infrastructure Components
 
@@ -690,11 +994,11 @@ class PerformanceMonitor {
     totalTime: number;
     errors: number;
   }>;
-  
+
   // Cache performance tracking
   private cacheHits: number;
   private cacheMisses: number;
-  
+
   // Methods
   track(operation: string, duration: number, error?: boolean): void;
   recordCacheHit(): void;
@@ -714,13 +1018,13 @@ const logger = winston.createLogger({
     winston.format.json()
   ),
   transports: [
-    new winston.transports.File({ 
-      filename: 'logs/error.log', 
+    new winston.transports.File({
+      filename: 'logs/error.log',
       level: 'error',
       maxsize: 5242880, // 5MB rotation
       maxFiles: 5
     }),
-    new winston.transports.File({ 
+    new winston.transports.File({
       filename: 'logs/combined.log',
       maxsize: 5242880,
       maxFiles: 5
@@ -821,6 +1125,8 @@ services:
       retries: 3
 ```
 
+---
+
 ## Performance Architecture
 
 ### Current Optimizations
@@ -866,6 +1172,8 @@ interface PerformanceStats {
 - **Token Refresh Optimization**: Preemptive refresh (10-minute buffer)
 - **Redis Fallback**: Graceful degradation when cache unavailable
 
+---
+
 ## Security Architecture
 
 ### Authentication Security
@@ -883,7 +1191,7 @@ class TokenManager {
     const cipher = crypto.createCipher('aes-256-gcm', this.encryptionKey);
     // Secure encryption implementation
   }
-  
+
   private decryptTokens(encryptedData: string): TokenData {
     const decipher = crypto.createDecipher('aes-256-gcm', this.encryptionKey);
     // Secure decryption implementation
@@ -915,6 +1223,8 @@ class TokenManager {
 - **Token Transmission**: Secure token handling in memory only
 - **Rate Limiting**: Built-in protection against API abuse
 - **Error Handling**: Secure error messages without credential exposure
+
+---
 
 ## Deployment Architecture
 
@@ -1072,6 +1382,8 @@ const healthChecks = {
 - **Monitoring Integration**: Health check endpoints for external monitoring
 - **Log Management**: Structured logging with rotation and external aggregation support
 
+---
+
 ## Monitoring and Observability
 
 ### Performance Metrics (Active)
@@ -1111,14 +1423,14 @@ const logger = winston.createLogger({
   defaultMeta: { service: 'gdrive-mcp-server' },
   transports: [
     // Error-only log file
-    new winston.transports.File({ 
-      filename: 'logs/error.log', 
+    new winston.transports.File({
+      filename: 'logs/error.log',
       level: 'error',
       maxsize: 5242880,  // 5MB rotation
       maxFiles: 5
     }),
     // Combined log file
-    new winston.transports.File({ 
+    new winston.transports.File({
       filename: 'logs/combined.log',
       maxsize: 5242880,
       maxFiles: 5
@@ -1147,7 +1459,7 @@ class TokenManager {
       userId: 'system',
       sessionId: process.pid
     };
-    
+
     // Append to audit log file
     fs.appendFileSync(
       process.env.GDRIVE_TOKEN_AUDIT_LOG_PATH || './gdrive-mcp-audit.log',
@@ -1162,7 +1474,7 @@ class TokenManager {
 // Comprehensive health check endpoint
 export async function performHealthCheck(): Promise<HealthCheckResult> {
   const startTime = Date.now();
-  
+
   const checks = {
     tokenStatus: await checkTokenHealth(),
     refreshCapability: await checkRefreshCapability(),
@@ -1170,7 +1482,7 @@ export async function performHealthCheck(): Promise<HealthCheckResult> {
     memoryUsage: process.memoryUsage(),
     uptime: process.uptime()
   };
-  
+
   return {
     status: determineOverallHealth(checks),
     timestamp: new Date().toISOString(),
@@ -1190,7 +1502,7 @@ try {
 } catch (error) {
   // Performance tracking with error flag
   performanceMonitor.track(operationName, duration, true);
-  
+
   // Structured error logging
   logger.error('Operation failed', {
     operation: operationName,
@@ -1202,7 +1514,7 @@ try {
       timestamp: new Date().toISOString()
     }
   });
-  
+
   throw error;
 }
 ```
@@ -1224,6 +1536,8 @@ healthcheck:
 - **APM Integration**: Ready for New Relic, DataDog, or custom APM tools
 - **Alert Triggers**: Health check status changes, error rate thresholds
 - **Performance Baselines**: Historical performance data for anomaly detection
+
+---
 
 ## Extension Architecture
 
@@ -1250,7 +1564,7 @@ case "newTool": {
   if (!args || typeof args.requiredParam !== 'string') {
     throw new Error('requiredParam is required');
   }
-  
+
   // Cache check
   const cacheKey = `newTool:${args.requiredParam}`;
   const cached = await cacheManager.get(cacheKey);
@@ -1258,17 +1572,17 @@ case "newTool": {
     performanceMonitor.track('newTool', Date.now() - startTime);
     return cached;
   }
-  
+
   // Implementation logic
   const result = await performNewToolOperation(args);
-  
+
   // Cache result
   await cacheManager.set(cacheKey, result);
-  
+
   // Performance tracking
   performanceMonitor.track('newTool', Date.now() - startTime);
   logger.info('New tool executed', { args });
-  
+
   return result;
 }
 ```
@@ -1293,7 +1607,7 @@ case "newApiTool": {
   const response = await newApi.resource.method({
     // API parameters
   });
-  
+
   return {
     content: [{
       type: "text",
@@ -1308,7 +1622,7 @@ case "newApiTool": {
 // Extend file reading pipeline
 if (file.data.mimeType?.startsWith("application/vnd.google-apps.")) {
   let exportMimeType = "text/plain";
-  
+
   if (file.data.mimeType === "application/vnd.google-apps.document") {
     exportMimeType = "text/markdown";
   } else if (file.data.mimeType === "application/vnd.google-apps.spreadsheet") {
@@ -1321,7 +1635,7 @@ if (file.data.mimeType?.startsWith("application/vnd.google-apps.")) {
   } else if (file.data.mimeType === "application/vnd.google-apps.newformat") {
     exportMimeType = "application/json";  // New format
   }
-  
+
   const response = await drive.files.export({
     fileId,
     mimeType: exportMimeType,
@@ -1337,7 +1651,7 @@ class AuthManager {
   async initializeServiceAccount(keyPath: string): Promise<void> {
     // Service account initialization
   }
-  
+
   // Add support for additional token types
   async handleCustomTokens(tokens: CustomTokens): Promise<void> {
     // Custom token handling
@@ -1351,19 +1665,21 @@ class AuthManager {
 class CacheManager {
   async setWithCustomTTL(key: string, value: any, ttl: number): Promise<void> {
     if (!this.connected) return;
-    
+
     try {
       await this.client.setEx(key, ttl, JSON.stringify(value));
     } catch (error) {
       logger.error('Custom cache set error', { error, key, ttl });
     }
   }
-  
+
   async invalidatePattern(pattern: string): Promise<void> {
     // Custom invalidation logic
   }
 }
 ```
+
+---
 
 ## Development Best Practices
 
@@ -1414,7 +1730,7 @@ try {
     error: error instanceof Error ? error.message : 'Unknown error',
     context: { params, timestamp: new Date().toISOString() }
   });
-  
+
   // Transform to MCP-compatible error
   throw new Error(`Operation failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
 }
@@ -1450,3 +1766,562 @@ describe('MCP Protocol', () => {
 - **Usage Examples**: Provide practical examples for all tools
 - **Setup Guides**: Maintain clear installation and configuration instructions
 - **Troubleshooting**: Document common issues and solutions
+
+---
+
+## Coding Standards
+
+### TypeScript Standards
+
+#### General Principles
+- **Type Safety First**: Always prefer explicit types over `any`
+- **Strict Mode**: All TypeScript strict flags are enabled
+- **ES2022 Features**: Use modern JavaScript features (async/await, optional chaining, nullish coalescing)
+- **Functional Approach**: Prefer immutability and pure functions where practical
+
+### Naming Conventions
+
+#### Files and Directories
+```typescript
+// Files: PascalCase for classes/types, camelCase for utilities
+AuthManager.ts       // Class file
+TokenManager.ts      // Class file
+health-check.ts      // Utility file
+index.ts             // Entry points
+
+// Directories: kebab-case
+src/auth/            // Authentication module
+src/health-check/    // Health monitoring
+```
+
+#### Variables and Functions
+```typescript
+// Constants: UPPER_SNAKE_CASE
+const MAX_RETRIES = 3;
+const TOKEN_REFRESH_INTERVAL = 1800000;
+
+// Variables: camelCase
+let authState: AuthState;
+const refreshToken = await getRefreshToken();
+
+// Functions: camelCase, verb-noun pattern
+async function refreshAccessToken(): Promise<void> { }
+function parseNaturalLanguageQuery(query: string): QueryResult { }
+
+// Private methods: prefix with underscore
+private _encryptTokens(tokens: TokenData): string { }
+```
+
+#### Classes and Interfaces
+```typescript
+// Classes: PascalCase
+class AuthManager {
+  private oauth2Client: OAuth2Client;
+  constructor() { }
+}
+
+// Interfaces: PascalCase, prefix with 'I' for complex types
+interface IHealthCheckResult {
+  status: HealthStatus;
+  timestamp: string;
+}
+
+// Type aliases: PascalCase
+type AuthState = 'authenticated' | 'expired' | 'failed';
+
+// Enums: PascalCase for name, UPPER_SNAKE_CASE for values
+enum HealthStatus {
+  HEALTHY = 'HEALTHY',
+  DEGRADED = 'DEGRADED',
+  UNHEALTHY = 'UNHEALTHY'
+}
+```
+
+### Code Organization
+
+#### Module Structure
+```typescript
+// 1. Imports (grouped and ordered)
+import { OAuth2Client } from 'google-auth-library';
+import { drive_v3 } from 'googleapis';
+import * as fs from 'fs/promises';
+
+// 2. Constants
+const SCOPES = ['https://www.googleapis.com/auth/drive'];
+
+// 3. Types/Interfaces
+interface TokenData {
+  access_token: string;
+  refresh_token?: string;
+}
+
+// 4. Main class/function
+export class AuthManager {
+  // 5. Properties
+  private oauth2Client: OAuth2Client;
+
+  // 6. Constructor
+  constructor(clientId: string) { }
+
+  // 7. Public methods
+  public async initialize(): Promise<void> { }
+
+  // 8. Private methods
+  private async _loadTokens(): Promise<void> { }
+}
+
+// 9. Helper functions
+function validateTokens(tokens: TokenData): boolean { }
+
+// 10. Exports
+export { TokenData };
+```
+
+### Error Handling
+
+#### Consistent Error Pattern
+```typescript
+// Always use try-catch with proper error typing
+try {
+  const result = await performOperation();
+  return result;
+} catch (error) {
+  // Type guard for Error instances
+  if (error instanceof Error) {
+    logger.error('Operation failed', {
+      error: error.message,
+      stack: error.stack,
+      context: { operation: 'performOperation' }
+    });
+
+    // Re-throw with context
+    throw new Error(`Operation failed: ${error.message}`);
+  }
+
+  // Handle unknown errors
+  logger.error('Unknown error occurred', { error });
+  throw new Error('Operation failed: Unknown error');
+}
+```
+
+#### Custom Error Classes
+```typescript
+// Define specific error types
+export class AuthenticationError extends Error {
+  constructor(message: string, public code?: string) {
+    super(message);
+    this.name = 'AuthenticationError';
+  }
+}
+
+// Usage
+throw new AuthenticationError('Invalid credentials', 'AUTH_INVALID');
+```
+
+### Async/Await Patterns
+
+#### Proper Async Usage
+```typescript
+// Always use async/await over promises
+// Good
+async function fetchFile(fileId: string): Promise<FileData> {
+  const file = await drive.files.get({ fileId });
+  return file.data;
+}
+
+// Avoid
+function fetchFile(fileId: string): Promise<FileData> {
+  return drive.files.get({ fileId }).then(file => file.data);
+}
+
+// Parallel operations
+const [file, metadata] = await Promise.all([
+  drive.files.get({ fileId }),
+  drive.files.get({ fileId, fields: 'metadata' })
+]);
+```
+
+### Performance Patterns
+
+#### Caching Implementation
+```typescript
+// Consistent caching pattern
+async function getCachedData<T>(
+  key: string,
+  fetcher: () => Promise<T>
+): Promise<T> {
+  // 1. Check cache
+  const cached = await cacheManager.get(key);
+  if (cached) {
+    performanceMonitor.recordCacheHit();
+    return cached as T;
+  }
+
+  // 2. Fetch data
+  performanceMonitor.recordCacheMiss();
+  const data = await fetcher();
+
+  // 3. Store in cache
+  await cacheManager.set(key, data);
+
+  return data;
+}
+```
+
+#### Performance Tracking
+```typescript
+// Standard performance tracking wrapper
+async function trackPerformance<T>(
+  operation: string,
+  fn: () => Promise<T>
+): Promise<T> {
+  const startTime = Date.now();
+
+  try {
+    const result = await fn();
+    performanceMonitor.track(operation, Date.now() - startTime);
+    return result;
+  } catch (error) {
+    performanceMonitor.track(operation, Date.now() - startTime, true);
+    throw error;
+  }
+}
+```
+
+### Testing Standards
+
+#### Test Organization
+```typescript
+// Test file naming: *.test.ts or *.spec.ts
+AuthManager.test.ts
+
+// Test structure
+describe('AuthManager', () => {
+  let authManager: AuthManager;
+
+  beforeEach(() => {
+    authManager = new AuthManager();
+  });
+
+  describe('initialize', () => {
+    it('should load tokens successfully', async () => {
+      // Arrange
+      const mockTokens = { access_token: 'test' };
+
+      // Act
+      await authManager.initialize();
+
+      // Assert
+      expect(authManager.isAuthenticated()).toBe(true);
+    });
+
+    it('should handle missing tokens gracefully', async () => {
+      // Test error cases
+    });
+  });
+});
+```
+
+### Documentation Standards
+
+#### JSDoc Comments
+```typescript
+/**
+ * Manages OAuth2 authentication for Google APIs
+ * @class AuthManager
+ * @example
+ * const auth = new AuthManager(clientId, clientSecret);
+ * await auth.initialize();
+ */
+export class AuthManager {
+  /**
+   * Refreshes the access token using the stored refresh token
+   * @returns {Promise<void>} Resolves when token is refreshed
+   * @throws {AuthenticationError} When refresh token is invalid
+   */
+  async refreshAccessToken(): Promise<void> {
+    // Implementation
+  }
+}
+```
+
+#### Inline Comments
+```typescript
+// Use comments to explain "why", not "what"
+// Good: Explains business logic
+// Google Sheets has a different export limit than other services
+const MAX_SHEET_CELLS = 5_000_000;
+
+// Avoid: States the obvious
+// Set variable to 5
+const retries = 5;
+```
+
+### MCP-Specific Standards
+
+#### Tool Implementation Pattern
+```typescript
+// Standard tool implementation structure
+case "toolName": {
+  // 1. Input validation
+  if (!args || !args.requiredParam) {
+    throw new Error('requiredParam is required');
+  }
+
+  // 2. Performance tracking start
+  const startTime = Date.now();
+
+  try {
+    // 3. Cache check
+    const cacheKey = `tool:${JSON.stringify(args)}`;
+    const cached = await cacheManager.get(cacheKey);
+    if (cached) {
+      performanceMonitor.track('toolName', Date.now() - startTime);
+      return cached;
+    }
+
+    // 4. Main operation
+    const result = await performToolOperation(args);
+
+    // 5. Cache result
+    await cacheManager.set(cacheKey, result);
+
+    // 6. Return MCP-formatted response
+    return {
+      content: [{
+        type: "text",
+        text: JSON.stringify(result, null, 2)
+      }]
+    };
+  } catch (error) {
+    // 7. Error handling
+    performanceMonitor.track('toolName', Date.now() - startTime, true);
+    throw error;
+  }
+}
+```
+
+#### Response Formatting
+```typescript
+// Consistent MCP response format
+interface MCPResponse {
+  content: Array<{
+    type: "text" | "image" | "resource";
+    text?: string;
+    data?: string;
+    mimeType?: string;
+  }>;
+}
+
+// Helper function for formatting
+function formatMCPResponse(data: any, type: string = "text"): MCPResponse {
+  return {
+    content: [{
+      type,
+      text: typeof data === 'string' ? data : JSON.stringify(data, null, 2)
+    }]
+  };
+}
+```
+
+### Logging Standards
+
+#### Structured Logging
+```typescript
+// Use consistent log structure
+logger.info('Operation completed', {
+  operation: 'fetchFile',
+  fileId: 'abc123',
+  duration: 150,
+  timestamp: new Date().toISOString()
+});
+
+// Error logging with context
+logger.error('Operation failed', {
+  operation: 'fetchFile',
+  error: error.message,
+  stack: error.stack,
+  context: {
+    fileId: 'abc123',
+    userId: 'user456'
+  }
+});
+```
+
+### Security Standards
+
+#### Token Handling
+```typescript
+// Never log sensitive data
+// Bad
+logger.info('Token refreshed', { token: accessToken });
+
+// Good
+logger.info('Token refreshed', {
+  tokenType: 'access',
+  expiresIn: 3600
+});
+
+// Always encrypt stored credentials
+const encrypted = crypto.createCipher('aes-256-gcm', key);
+```
+
+#### Input Validation
+```typescript
+// Validate all external inputs
+function validateFileId(fileId: string): void {
+  if (!fileId || typeof fileId !== 'string') {
+    throw new Error('Invalid file ID');
+  }
+
+  // Google Drive file ID pattern
+  if (!/^[a-zA-Z0-9_-]+$/.test(fileId)) {
+    throw new Error('Invalid file ID format');
+  }
+}
+```
+
+### Code Quality Rules
+
+#### Complexity Limits
+- Maximum function length: 50 lines
+- Maximum file length: 500 lines
+- Cyclomatic complexity: < 10
+- Maximum parameters: 4 (use objects for more)
+
+#### Import Organization
+```typescript
+// Order: External -> Internal -> Types
+// 1. Node built-ins
+import * as fs from 'fs';
+import * as path from 'path';
+
+// 2. External packages
+import { OAuth2Client } from 'google-auth-library';
+import { drive_v3 } from 'googleapis';
+
+// 3. Internal modules
+import { AuthManager } from './auth/AuthManager';
+import { logger } from './utils/logger';
+
+// 4. Types
+import type { TokenData, AuthState } from './types';
+```
+
+### Git Commit Standards
+
+#### Commit Message Format
+```
+<emoji> <type>: <description>
+
+[optional body]
+
+[optional footer]
+```
+
+#### Common Types
+- ✨ feat: New feature
+- 🐛 fix: Bug fix
+- 📝 docs: Documentation
+- 🎨 style: Code style
+- ♻️ refactor: Code refactoring
+- ✅ test: Testing
+- 🔧 chore: Maintenance
+
+### Review Checklist
+
+Before submitting code:
+- [ ] All tests pass
+- [ ] No TypeScript errors
+- [ ] Follows naming conventions
+- [ ] Proper error handling
+- [ ] Performance tracking added
+- [ ] Logging implemented
+- [ ] Documentation updated
+- [ ] Security considerations addressed
+
+---
+
+## Configuration Management
+
+### TypeScript Configuration
+```json
+{
+  "target": "ES2022",
+  "module": "ES2022",
+  "moduleResolution": "node",
+  "strict": true,
+  "esModuleInterop": true,
+  "declaration": true,
+  "sourceMap": true
+}
+```
+
+### Package Scripts
+- `build`: Compile TypeScript and set executable permissions
+- `watch`: Development mode with auto-recompilation
+- `test`: Run all tests
+- `test:coverage`: Generate coverage reports
+- `lint`: ESLint code analysis
+- `type-check`: TypeScript type validation
+
+### Environment Variables
+```bash
+# Core Configuration
+NODE_ENV=production|development
+LOG_LEVEL=silent|error|warn|info|debug
+
+# Authentication
+GDRIVE_CREDENTIALS_PATH=/credentials/.gdrive-server-credentials.json
+GDRIVE_OAUTH_PATH=/credentials/gcp-oauth.keys.json
+GDRIVE_TOKEN_STORAGE_PATH=/credentials/.gdrive-mcp-tokens.json
+GDRIVE_TOKEN_ENCRYPTION_KEY=<base64-encoded-32-byte-key>
+
+# Performance
+REDIS_URL=redis://localhost:6379
+GDRIVE_TOKEN_REFRESH_INTERVAL=1800000  # 30 minutes
+GDRIVE_TOKEN_PREEMPTIVE_REFRESH=600000 # 10 minutes
+GDRIVE_TOKEN_MAX_RETRIES=3
+GDRIVE_TOKEN_RETRY_DELAY=1000
+
+# Monitoring
+GDRIVE_TOKEN_HEALTH_CHECK=true
+GDRIVE_TOKEN_AUDIT_LOG_PATH=/app/logs/gdrive-mcp-audit.log
+```
+
+---
+
+## Known Limitations
+
+### API Rate Limits
+- Google Drive: 1,000 requests per 100 seconds
+- Google Sheets: 100 requests per 100 seconds
+- No custom rate limiting implementation
+
+### File Size Limits
+- Google Docs export: 10MB
+- Google Sheets export: 5 million cells
+- Binary file encoding: Memory dependent
+
+### Concurrency
+- Single-threaded Node.js process
+- No worker threads implementation
+- Async I/O for non-blocking operations
+
+---
+
+## Version Management
+
+### Semantic Versioning
+- Current Version: 0.6.2
+- Following semver principles
+- Breaking changes in major versions only
+
+### Dependency Updates
+- Regular security updates
+- Compatibility testing before major updates
+- Lock file maintained (package-lock.json)
+
+---
+
+*This architecture document is maintained as the single source of truth for the Google Drive MCP Server system design. Last updated: 2025-12-23*
