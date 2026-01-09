@@ -29,7 +29,7 @@ Added complete Google Calendar functionality with 9 operations following the est
 - Case-insensitive matching against PAI contact list
 
 **New OAuth Scopes Required:**
-```
+```text
 calendar.readonly    - Read calendars and events
 calendar.events      - Create, update, delete events
 ```

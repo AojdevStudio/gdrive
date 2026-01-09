@@ -14,9 +14,10 @@ import type { ContactEntry, ResolvedContact } from './types.js';
 
 /**
  * Default PAI contacts file path
- * Can be overridden via PAI_CONTACTS_PATH environment variable
+ * Set PAI_CONTACTS_PATH environment variable to enable contact resolution
+ * Without it, all inputs are treated as raw email addresses
  */
-const DEFAULT_CONTACTS_PATH = '/Users/ossieirondi/PAI/.claude/skills/CORE/USER/CONTACTS.md';
+const DEFAULT_CONTACTS_PATH: string | null = null;
 
 /**
  * Basic email validation regex
@@ -43,7 +44,9 @@ export function parseContactsFile(content: string): ContactEntry[] {
 
   for (const line of lines) {
     const trimmed = line.trim();
-    if (!trimmed) continue;
+    if (!trimmed) {
+      continue;
+    }
 
     const match = trimmed.match(contactPattern);
     if (match) {
@@ -74,6 +77,12 @@ export function parseContactsFile(content: string): ContactEntry[] {
 async function loadContacts(logger: Logger): Promise<Map<string, ContactEntry>> {
   const contactsPath = process.env.PAI_CONTACTS_PATH || DEFAULT_CONTACTS_PATH;
   const contactsMap = new Map<string, ContactEntry>();
+
+  // If no contacts path configured, return empty map (raw emails only mode)
+  if (!contactsPath) {
+    logger.info('PAI_CONTACTS_PATH not set; treating all inputs as raw emails');
+    return contactsMap;
+  }
 
   try {
     const content = await fs.readFile(contactsPath, 'utf-8');

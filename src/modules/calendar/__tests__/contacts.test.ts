@@ -30,10 +30,17 @@ const mockLogger: Logger = {
   debug: jest.fn(),
 } as unknown as Logger;
 
+// Test contacts path used when contact resolution is needed
+const TEST_CONTACTS_PATH = '/test/contacts.md';
+
 describe('resolveContacts', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    // Clear any environment variable overrides
+    // Set test contacts path by default - tests that need "no path" behavior will clear it
+    process.env.PAI_CONTACTS_PATH = TEST_CONTACTS_PATH;
+  });
+
+  afterEach(() => {
     delete process.env.PAI_CONTACTS_PATH;
   });
 
@@ -222,19 +229,25 @@ describe('resolveContacts', () => {
       expect(mockReadFile).toHaveBeenCalledWith('/custom/path/contacts.md', 'utf-8');
     });
 
-    it('should use default path when environment variable not set', async () => {
-      // Setup: No PAI_CONTACTS_PATH set
-      const contactsContent = `- **Mary** [Wife] - mary@example.com`;
-      mockReadFile.mockResolvedValue(contactsContent);
+    it('should treat all inputs as raw emails when PAI_CONTACTS_PATH not set (fallback mode)', async () => {
+      // Setup: Clear PAI_CONTACTS_PATH - new behavior is "raw emails only" fallback mode
+      // Since DEFAULT_CONTACTS_PATH is null, no file should be read
+      delete process.env.PAI_CONTACTS_PATH;
 
       // Execute
-      await resolveContacts(['Mary'], mockLogger);
+      const result = await resolveContacts(['Mary', 'test@example.com'], mockLogger);
 
-      // Verify: Should read from default path
-      expect(mockReadFile).toHaveBeenCalledWith(
-        '/Users/ossieirondi/PAI/.claude/skills/CORE/USER/CONTACTS.md',
-        'utf-8'
-      );
+      // Verify: Should NOT read any file (no default path)
+      expect(mockReadFile).not.toHaveBeenCalled();
+
+      // Verify: Both inputs treated as raw (fallback mode - no validation)
+      // "Mary" becomes {email: "Mary"} even though it's not a valid email format
+      expect(result).toHaveLength(2);
+      expect(result[0]!.email).toBe('Mary');
+      expect(result[1]!.email).toBe('test@example.com');
+
+      // Verify warning logged for non-email input
+      expect(mockLogger.info).toHaveBeenCalledWith('PAI_CONTACTS_PATH not set; treating all inputs as raw emails');
     });
   });
 });

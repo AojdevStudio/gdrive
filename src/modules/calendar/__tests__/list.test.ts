@@ -390,6 +390,46 @@ describe('listEvents', () => {
     );
   });
 
+  test('uses calendarId segment in cache key for invalidation', async () => {
+    const mockResponse = {
+      data: {
+        items: [{ id: 'event1', summary: 'Event 1' }],
+      },
+    };
+    mockCalendarApi.events.list.mockResolvedValue(mockResponse);
+
+    await listEvents(
+      {
+        calendarId: 'cal-123',
+        timeMin: '2026-01-09T00:00:00Z',
+        timeMax: '2026-01-09T23:59:59Z',
+        maxResults: 25,
+        pageToken: 'page-2',
+        singleEvents: false,
+        orderBy: 'startTime',
+        showDeleted: true,
+        timeZone: 'UTC',
+      },
+      mockContext
+    );
+
+    const expectedKey = `calendar:listEvents:cal-123:${JSON.stringify({
+      timeMin: '2026-01-09T00:00:00Z',
+      timeMax: '2026-01-09T23:59:59Z',
+      maxResults: 25,
+      pageToken: 'page-2',
+      singleEvents: false,
+      orderBy: 'startTime',
+      showDeleted: true,
+      timeZone: 'UTC',
+    })}`;
+
+    expect(mockContext.cacheManager.set).toHaveBeenCalledWith(
+      expectedKey,
+      expect.any(Object)
+    );
+  });
+
   test('handles pagination with nextPageToken', async () => {
     const mockResponse = {
       data: {
