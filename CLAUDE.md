@@ -53,6 +53,7 @@ This is a Model Context Protocol (MCP) server for Google Drive integration. It p
 - Google Forms creation and management with question types
 - **Google Docs API integration** - Create documents, insert text, replace text, apply formatting, insert tables
 - **Gmail API integration** - Read, search, compose, send emails, manage labels (v3.2.0+)
+- **Google Calendar API integration** - List calendars, manage events, check availability, quick add with natural language (v3.3.0+)
 - **Batch file operations** - Process multiple files in a single operation (create, update, delete, move)
 - Enhanced search with natural language parsing
 - Forms response handling and analysis
@@ -61,6 +62,23 @@ This is a Model Context Protocol (MCP) server for Google Drive integration. It p
 - Automatic export of Google Workspace files to readable formats
 - Docker support for containerized deployment with Redis
 - **BMAD Framework Integration** - Agent-driven development methodology for structured brownfield and greenfield projects
+
+## Git Workflow
+
+**IMPORTANT: Main branch is protected.** All changes must go through pull requests.
+
+```bash
+# Create feature branch
+git checkout -b feature/your-feature-name
+
+# Push and create PR
+git push -u origin feature/your-feature-name
+gh pr create --title "feat: Your feature" --body "Description"
+```
+
+- Direct pushes to `main` will be rejected
+- PRs require review before merging
+- Use conventional commit messages (feat:, fix:, docs:, etc.)
 
 ## Key Commands
 
@@ -91,6 +109,7 @@ This is a Model Context Protocol (MCP) server for Google Drive integration. It p
 - **Forms API Integration** - Google Forms v1 API for form creation and management
 - **Docs API Integration** - Google Docs v1 API for document manipulation
 - **Gmail API Integration** - Gmail v1 API for email operations (v3.2.0+)
+- **Calendar API Integration** - Google Calendar v3 API for calendar and event management (v3.3.0+)
 - **Redis Cache Manager** - High-performance caching with automatic invalidation
 - **Performance Monitor** - Real-time performance tracking and statistics
 - **Winston Logger** - Structured logging with file rotation and console output
@@ -104,6 +123,7 @@ This is a Model Context Protocol (MCP) server for Google Drive integration. It p
   - **Forms Operations**: createForm, getForm, addQuestion, listResponses
   - **Docs Operations**: createDocument, insertText, replaceText, applyTextStyle, insertTable
   - **Gmail Operations**: listMessages, listThreads, getMessage, getThread, searchMessages, createDraft, sendMessage, sendDraft, listLabels, modifyLabels
+  - **Calendar Operations**: listCalendars, getCalendar, listEvents, getEvent, createEvent, updateEvent, deleteEvent, quickAdd, checkFreeBusy
   - **Batch Operations**: batchFileOperations (create, update, delete, move multiple files)
   - **Enhanced Search**: enhancedSearch with natural language parsing
 - **Transport**: StdioServerTransport for MCP communication

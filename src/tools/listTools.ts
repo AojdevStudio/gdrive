@@ -244,6 +244,62 @@ export async function generateToolStructure(): Promise<ModuleStructure> {
         example: 'gmail.modifyLabels({ messageId: "18c123abc", removeLabelIds: ["UNREAD", "INBOX"] })',
       },
     ],
+    calendar: [
+      {
+        name: 'listCalendars',
+        signature: 'listCalendars({ maxResults?: number, pageToken?: string })',
+        description: 'List all calendars accessible by the user',
+        example: 'calendar.listCalendars({ maxResults: 10 })',
+      },
+      {
+        name: 'getCalendar',
+        signature: 'getCalendar({ calendarId: string })',
+        description: 'Get details of a specific calendar',
+        example: 'calendar.getCalendar({ calendarId: "primary" })',
+      },
+      {
+        name: 'listEvents',
+        signature: 'listEvents({ calendarId?: string, timeMin?: string, timeMax?: string, maxResults?: number })',
+        description: 'List events in a calendar within a time range',
+        example: 'calendar.listEvents({ timeMin: "2026-01-08T00:00:00Z", maxResults: 20 })',
+      },
+      {
+        name: 'getEvent',
+        signature: 'getEvent({ calendarId?: string, eventId: string })',
+        description: 'Get details of a specific event',
+        example: 'calendar.getEvent({ eventId: "abc123" })',
+      },
+      {
+        name: 'createEvent',
+        signature: 'createEvent({ summary: string, start: EventDateTime, end: EventDateTime, attendees?: string[], ... })',
+        description: 'Create a new calendar event with optional attendees and recurrence',
+        example: 'calendar.createEvent({ summary: "Team Standup", start: { dateTime: "2026-01-09T09:00:00-06:00" }, end: { dateTime: "2026-01-09T09:30:00-06:00" }, attendees: ["Mary", "Kelvin"] })',
+      },
+      {
+        name: 'updateEvent',
+        signature: 'updateEvent({ eventId: string, updates: Partial<EventOptions> })',
+        description: 'Update an existing event',
+        example: 'calendar.updateEvent({ eventId: "abc123", updates: { summary: "Updated Meeting Title" } })',
+      },
+      {
+        name: 'deleteEvent',
+        signature: 'deleteEvent({ eventId: string, sendUpdates?: "all" | "externalOnly" | "none" })',
+        description: 'Delete an event and optionally notify attendees',
+        example: 'calendar.deleteEvent({ eventId: "abc123", sendUpdates: "all" })',
+      },
+      {
+        name: 'quickAdd',
+        signature: 'quickAdd({ text: string, calendarId?: string })',
+        description: 'Create an event from natural language text',
+        example: 'calendar.quickAdd({ text: "Lunch with Mary tomorrow at noon" })',
+      },
+      {
+        name: 'checkFreeBusy',
+        signature: 'checkFreeBusy({ timeMin: string, timeMax: string, items: { id: string }[] })',
+        description: 'Check availability for calendars or attendees in a time range',
+        example: 'calendar.checkFreeBusy({ timeMin: "2026-01-09T00:00:00Z", timeMax: "2026-01-09T23:59:59Z", items: [{ id: "primary" }] })',
+      },
+    ],
   };
 }
 

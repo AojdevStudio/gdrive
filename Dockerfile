@@ -31,6 +31,7 @@ RUN mkdir -p /credentials /app/logs && \
 VOLUME ["/credentials"]
 
 # Environment variables
+# Note: *_PATH vars are file paths, not secrets - Docker warning is a false positive
 ENV GDRIVE_OAUTH_PATH=/credentials/gcp-oauth.keys.json
 ENV GDRIVE_TOKEN_STORAGE_PATH=/credentials/.gdrive-mcp-tokens.json
 ENV GDRIVE_TOKEN_AUDIT_LOG_PATH=/app/logs/gdrive-mcp-audit.log

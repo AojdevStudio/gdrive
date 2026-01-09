@@ -5,6 +5,65 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.3.0] - 2026-01-08
+
+### ✨ New Features
+
+#### Google Calendar API Integration
+Added complete Google Calendar functionality with 9 operations following the established operation-based architecture pattern.
+
+**New Calendar Operations:**
+- `listCalendars` - List all calendars with access role and time zone
+- `getCalendar` - Get calendar details by ID
+- `listEvents` - List events with time range filters and pagination
+- `getEvent` - Get full event details including attendees and recurrence
+- `createEvent` - Create events with attendees, recurrence, Google Meet, reminders
+- `updateEvent` - Partial updates to existing events
+- `deleteEvent` - Delete events with attendee notification options
+- `quickAdd` - Create events from natural language strings
+- `checkFreeBusy` - Query availability across multiple calendars
+
+**PAI Contact Resolution:**
+- Resolve contact names (e.g., "Mary") to email addresses automatically
+- Supports mixed inputs: `["Mary", "user@example.com"]`
+- Case-insensitive matching against PAI contact list
+
+**New OAuth Scopes Required:**
+```text
+calendar.readonly    - Read calendars and events
+calendar.events      - Create, update, delete events
+```
+
+⚠️ **Re-authentication required** - Users must re-authenticate after upgrading to grant Calendar permissions.
+
+**New Files:**
+- `src/modules/calendar/` - Complete Calendar module with 9 files
+- `src/modules/calendar/types.ts` - TypeScript interfaces
+- `src/modules/calendar/contacts.ts` - PAI contact resolution
+- `src/modules/calendar/list.ts` - listCalendars, listEvents
+- `src/modules/calendar/read.ts` - getCalendar, getEvent
+- `src/modules/calendar/create.ts` - createEvent, quickAdd
+- `src/modules/calendar/update.ts` - updateEvent
+- `src/modules/calendar/delete.ts` - deleteEvent
+- `src/modules/calendar/freebusy.ts` - checkFreeBusy
+- `src/modules/calendar/index.ts` - Public exports
+
+### 🧪 Testing
+
+- Added 59 unit tests across 4 test suites
+- Tests cover contacts, list, read, and freebusy operations
+- Full caching and performance monitoring coverage
+
+### 🏗️ Internal
+
+- Added `CalendarContext` type extending `BaseContext`
+- Calendar module follows Gmail module patterns exactly
+- Full Redis caching support (5-minute TTL for reads, 60s for freebusy)
+- Performance monitoring integrated for all operations
+- Cache invalidation on write operations (create, update, delete)
+
+---
+
 ## [3.2.0] - 2025-12-23
 
 ### ✨ New Features
