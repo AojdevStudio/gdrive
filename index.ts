@@ -74,11 +74,24 @@ import type {
   ModifyLabelsOptions,
 } from "./src/modules/gmail/index.js";
 
+import type {
+  ListCalendarsOptions,
+  GetCalendarOptions,
+  ListEventsOptions,
+  GetEventOptions,
+  CreateEventOptions,
+  UpdateEventOptions,
+  DeleteEventOptions,
+  QuickAddOptions,
+  FreeBusyOptions,
+} from "./src/modules/calendar/index.js";
+
 const drive = google.drive("v3");
 const sheets = google.sheets("v4");
 const forms = google.forms("v1");
 const docs = google.docs("v1");
 const gmail = google.gmail("v1");
+const calendar = google.calendar("v3");
 
 // Performance monitoring types
 interface PerformanceStats {
@@ -541,6 +554,25 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           },
           required: ["operation", "params"]
         }
+      },
+      {
+        name: "calendar",
+        description: "Google Calendar operations. Read gdrive://tools resource to see available operations.",
+        inputSchema: {
+          type: "object",
+          properties: {
+            operation: {
+              type: "string",
+              enum: ["listCalendars", "getCalendar", "listEvents", "getEvent", "createEvent", "updateEvent", "deleteEvent", "quickAdd", "checkFreeBusy"],
+              description: "Operation to perform"
+            },
+            params: {
+              type: "object",
+              description: "Operation-specific parameters. See gdrive://tools for details."
+            }
+          },
+          required: ["operation", "params"]
+        }
       }
     ]
   };
@@ -568,6 +600,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       forms,
       docs,
       gmail,
+      calendar,
       cacheManager,
       performanceMonitor,
       startTime,
@@ -740,6 +773,43 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         break;
       }
 
+      case "calendar": {
+        const calendarModule = await import('./src/modules/calendar/index.js');
+
+        switch (operation) {
+          case "listCalendars":
+            result = await calendarModule.listCalendars(params as ListCalendarsOptions, context);
+            break;
+          case "getCalendar":
+            result = await calendarModule.getCalendar(params as GetCalendarOptions, context);
+            break;
+          case "listEvents":
+            result = await calendarModule.listEvents(params as ListEventsOptions, context);
+            break;
+          case "getEvent":
+            result = await calendarModule.getEvent(params as GetEventOptions, context);
+            break;
+          case "createEvent":
+            result = await calendarModule.createEvent(params as CreateEventOptions, context);
+            break;
+          case "updateEvent":
+            result = await calendarModule.updateEvent(params as UpdateEventOptions, context);
+            break;
+          case "deleteEvent":
+            result = await calendarModule.deleteEvent(params as DeleteEventOptions, context);
+            break;
+          case "quickAdd":
+            result = await calendarModule.quickAdd(params as QuickAddOptions, context);
+            break;
+          case "checkFreeBusy":
+            result = await calendarModule.checkFreeBusy(params as FreeBusyOptions, context);
+            break;
+          default:
+            throw new Error(`Unknown calendar operation: ${operation}`);
+        }
+        break;
+      }
+
       default:
         throw new Error(`Unknown tool: ${name}`);
     }
@@ -791,7 +861,10 @@ async function authenticateAndSaveCredentials() {
       "https://www.googleapis.com/auth/gmail.readonly",    // Read operations: listMessages, getMessage, getThread, searchMessages
       "https://www.googleapis.com/auth/gmail.send",        // messages.send only
       "https://www.googleapis.com/auth/gmail.compose",     // Draft operations: drafts.create, drafts.send
-      "https://www.googleapis.com/auth/gmail.modify"       // Label/message modification: modifyLabels, listLabels
+      "https://www.googleapis.com/auth/gmail.modify",      // Label/message modification: modifyLabels, listLabels
+      // Calendar scopes (added in v3.3.0)
+      "https://www.googleapis.com/auth/calendar.readonly", // Read calendars and events
+      "https://www.googleapis.com/auth/calendar.events"    // Full event CRUD (create, update, delete)
     ],
   });
 

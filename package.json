@@ -1,7 +1,7 @@
 {
   "name": "@modelcontextprotocol/server-gdrive",
-  "version": "3.2.0",
-  "description": "MCP server for Google Workspace with operation-based progressive disclosure - direct API access to Drive, Sheets, Forms, Docs, and Gmail",
+  "version": "3.3.0",
+  "description": "MCP server for Google Workspace with operation-based progressive disclosure - direct API access to Drive, Sheets, Forms, Docs, Gmail, and Calendar",
   "license": "MIT",
   "author": "Anthropic, PBC (https://anthropic.com)",
   "homepage": "https://modelcontextprotocol.io",

@@ -2,7 +2,7 @@
  * Shared types for all Google Drive MCP modules
  */
 
-import type { drive_v3, sheets_v4, forms_v1, docs_v1, gmail_v1 } from 'googleapis';
+import type { drive_v3, sheets_v4, forms_v1, docs_v1, gmail_v1, calendar_v3 } from 'googleapis';
 import type { Logger } from 'winston';
 
 /**
@@ -64,6 +64,13 @@ export interface DocsContext extends BaseContext {
  */
 export interface GmailContext extends BaseContext {
   gmail: gmail_v1.Gmail;
+}
+
+/**
+ * Context for Google Calendar operations
+ */
+export interface CalendarContext extends BaseContext {
+  calendar: calendar_v3.Calendar;
 }
 
 /**
