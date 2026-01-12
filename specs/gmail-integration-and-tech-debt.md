@@ -5,6 +5,52 @@ date: 2026-01-12
 grade: B
 ---
 
+## Implementation Review Findings (2026-01-12)
+
+This spec is **partially implemented** in the current repo: Gmail is wired end-to-end (OAuth scopes + `gmail` tool registration/dispatch + `src/modules/gmail/*` operations), but a few items in this doc are not yet shipped.
+
+### What’s Not Fully Complete Yet (Explicit Tasks)
+
+#### Gmail module gaps vs this spec
+
+- [ ] **Implement `updateDraft`** (spec lists it; repo currently only has `createDraft`)
+  - [ ] Add `updateDraft()` in `src/modules/gmail/compose.ts`
+  - [ ] Export it from `src/modules/gmail/index.ts`
+  - [ ] Wire it into `index.ts` tool enum + dispatch
+  - [ ] Add it to tool discovery (`src/tools/listTools.ts` / `gdrive://tools`)
+
+- [ ] **Add attachment support** (spec lists `attachments.ts`; repo currently defers attachments)
+  - [ ] Create `src/modules/gmail/attachments.ts` with operations like `getAttachment()` and `addAttachment()` (or equivalent minimal API)
+  - [ ] Update `sendMessage` and/or `createDraft` to build `multipart/mixed` messages with attachments
+  - [ ] Enforce Gmail’s practical limits (e.g., ~25MB message size) and validate/sanitize filenames + MIME types
+  - [ ] Add attachment operations to `index.ts` tool enum + dispatch and to `gdrive://tools`
+
+- [ ] **Align spec text with shipped behavior**
+  - [ ] Update the “Gmail Module Structure” section to match actual files and explicitly call out deferred features (attachments, `updateDraft`) if keeping scope staged
+
+- [ ] **Testing coverage for Gmail**
+  - [ ] Add unit tests for `updateDraft`
+  - [ ] Add unit tests for attachment MIME building + size-limit behavior
+  - [ ] Add an integration workflow test: `createDraft → updateDraft → sendDraft`
+  - [ ] Add an integration workflow test: `sendMessage` with an attachment, then `getMessage` verifies body/headers
+
+- [ ] **Docs gaps (repo-level)**
+  - [ ] Add `docs/Guides/gmail-setup.md` (currently not present) or an equivalent guide section
+  - [ ] Include practical Gmail query examples and re-auth instructions for added scopes
+
+#### Technical debt remediation still outstanding (per this spec)
+
+- [ ] **Legacy handler cleanup**
+  - [ ] Verify legacy handler dirs are unused (`src/drive/`, `src/sheets/`, `src/forms/`, `src/docs/`)
+  - [ ] Archive/remove them once confirmed unused (and update build/test configs if necessary)
+
+- [ ] **Repo scan / hygiene**
+  - [ ] Scan and address remaining `TODO` / `FIXME` / `describe.skip` occurrences (fix or convert into issues)
+  - [ ] Re-run quality gates after cleanup: `npm run lint`, `npm test`, `npm run build`
+
+- [ ] **Spec metadata consistency**
+  - [ ] Update the spec’s in-body “Status” / “Version Target” fields to match reality (package is `3.3.0`, CHANGELOG has Gmail shipped in `3.2.0`)
+
 # Gmail Integration & Technical Debt Remediation Plan
 
 **Created:** 2025-12-22
