@@ -220,6 +220,12 @@ export async function generateToolStructure(): Promise<ModuleStructure> {
         example: 'gmail.createDraft({ to: ["user@example.com"], subject: "Hello", body: "Hi there!" })',
       },
       {
+        name: 'updateDraft',
+        signature: 'updateDraft({ draftId: string, to?: string[], subject?: string, body?: string, cc?: string[], bcc?: string[], isHtml?: boolean })',
+        description: 'Update an existing draft. Preserves fields not provided.',
+        example: 'gmail.updateDraft({ draftId: "r1234567890", subject: "Updated Subject", body: "New content" })',
+      },
+      {
         name: 'sendMessage',
         signature: 'sendMessage({ to: string[], subject: string, body: string, cc?: string[], bcc?: string[], isHtml?: boolean, from?: string, threadId?: string })',
         description: 'Send a new email message (supports send-as aliases via from parameter)',
@@ -242,6 +248,18 @@ export async function generateToolStructure(): Promise<ModuleStructure> {
         signature: 'modifyLabels({ messageId: string, addLabelIds?: string[], removeLabelIds?: string[] })',
         description: 'Add or remove labels from a message',
         example: 'gmail.modifyLabels({ messageId: "18c123abc", removeLabelIds: ["UNREAD", "INBOX"] })',
+      },
+      {
+        name: 'listAttachments',
+        signature: 'listAttachments({ messageId: string })',
+        description: 'List attachments in a message with metadata (filename, size, mimeType)',
+        example: 'gmail.listAttachments({ messageId: "18c123abc" })',
+      },
+      {
+        name: 'getAttachment',
+        signature: 'getAttachment({ messageId: string, attachmentId: string })',
+        description: 'Download attachment content as base64 encoded data',
+        example: 'gmail.getAttachment({ messageId: "18c123abc", attachmentId: "ANGjdJ..." })',
       },
     ],
     calendar: [
@@ -277,9 +295,9 @@ export async function generateToolStructure(): Promise<ModuleStructure> {
       },
       {
         name: 'updateEvent',
-        signature: 'updateEvent({ eventId: string, updates: Partial<EventOptions> })',
-        description: 'Update an existing event',
-        example: 'calendar.updateEvent({ eventId: "abc123", updates: { summary: "Updated Meeting Title" } })',
+        signature: 'updateEvent({ eventId: string, updates: { summary?, start?, end?, attendees?, ... }, sendUpdates?: "all" | "none" })',
+        description: 'Update an existing event. start/end accept ISO strings ("2026-01-10T14:00:00-06:00") or EventDateTime objects',
+        example: 'calendar.updateEvent({ eventId: "abc123", updates: { summary: "New Title", start: "2026-01-10T14:00:00-06:00", end: "2026-01-10T15:00:00-06:00", attendees: ["user@example.com"] }, sendUpdates: "all" })',
       },
       {
         name: 'deleteEvent',

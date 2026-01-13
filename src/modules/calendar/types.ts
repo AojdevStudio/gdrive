@@ -258,12 +258,61 @@ export interface CreateEventResult {
 }
 
 /**
- * Update event options
+ * Flexible datetime input for update operations
+ * Accepts either ISO 8601 strings or EventDateTime objects
+ *
+ * @example
+ * // ISO string format
+ * start: "2026-01-10T14:00:00-06:00"
+ *
+ * @example
+ * // EventDateTime object format
+ * start: { dateTime: "2026-01-10T14:00:00-06:00", timeZone: "America/Chicago" }
+ *
+ * @example
+ * // Date-only string for all-day events
+ * start: "2026-01-10"
+ */
+export type FlexibleDateTime = string | EventDateTime;
+
+/**
+ * Update event options with flexible datetime input
+ *
+ * The updates object accepts both string and EventDateTime formats for start/end times.
+ * Strings are automatically normalized to EventDateTime objects before API calls.
+ *
+ * @example
+ * // Using string format (convenient)
+ * updateEvent({
+ *   eventId: "abc123",
+ *   updates: {
+ *     summary: "Updated Meeting",
+ *     start: "2026-01-10T14:00:00-06:00",
+ *     end: "2026-01-10T15:00:00-06:00"
+ *   },
+ *   sendUpdates: "all"
+ * })
+ *
+ * @example
+ * // Using EventDateTime format (explicit)
+ * updateEvent({
+ *   eventId: "abc123",
+ *   updates: {
+ *     start: { dateTime: "2026-01-10T14:00:00-06:00", timeZone: "America/Chicago" }
+ *   }
+ * })
  */
 export interface UpdateEventOptions {
   calendarId?: string;
   eventId: string;
-  updates: Partial<CreateEventOptions>;
+  /**
+   * Partial event updates. start/end can be ISO strings or EventDateTime objects.
+   * Strings are auto-normalized before validation and API calls.
+   */
+  updates: Omit<Partial<CreateEventOptions>, 'start' | 'end'> & {
+    start?: FlexibleDateTime;
+    end?: FlexibleDateTime;
+  };
   sendUpdates?: 'all' | 'externalOnly' | 'none';
 }
 
