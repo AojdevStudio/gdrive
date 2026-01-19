@@ -29,6 +29,7 @@ export type {
   CreateEventOptions,
   CreateEventResult,
   UpdateEventOptions,
+  FlexibleDateTime,
   DeleteEventOptions,
   DeleteEventResult,
   QuickAddOptions,
@@ -60,3 +61,6 @@ export { checkFreeBusy } from './freebusy.js';
 
 // Contact resolution (PAI integration)
 export { resolveContacts } from './contacts.js';
+
+// Utilities
+export { normalizeEventDateTime, type DateTimeInput } from './utils.js';

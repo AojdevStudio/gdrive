@@ -25,6 +25,8 @@ export type {
   // Compose types
   CreateDraftOptions,
   CreateDraftResult,
+  UpdateDraftOptions,
+  UpdateDraftResult,
   // Send types
   SendMessageOptions,
   SendMessageResult,
@@ -36,6 +38,12 @@ export type {
   LabelInfo,
   ModifyLabelsOptions,
   ModifyLabelsResult,
+  // Attachment types
+  GetAttachmentOptions,
+  GetAttachmentResult,
+  ListAttachmentsOptions,
+  ListAttachmentsResult,
+  AttachmentInfo,
 } from './types.js';
 
 // List operations
@@ -48,10 +56,13 @@ export { getMessage, getThread } from './read.js';
 export { searchMessages } from './search.js';
 
 // Compose operations
-export { createDraft } from './compose.js';
+export { createDraft, updateDraft } from './compose.js';
 
 // Send operations
 export { sendMessage, sendDraft } from './send.js';
 
 // Label operations
 export { listLabels, modifyLabels } from './labels.js';
+
+// Attachment operations
+export { getAttachment, listAttachments } from './attachments.js';

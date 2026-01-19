@@ -25,6 +25,10 @@ export default {
     '**/__tests__/**/*.test.ts',
     '**/tests/**/*.test.ts',
   ],
+  testPathIgnorePatterns: [
+    '/node_modules/',
+    '/archive/',
+  ],
   collectCoverageFrom: [
     'src/**/*.ts',
     '!src/**/*.d.ts',

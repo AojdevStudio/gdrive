@@ -11,7 +11,7 @@ import type {
   Attendee,
 } from './types.js';
 import { resolveContacts } from './contacts.js';
-import { validateEventTimes } from './utils.js';
+import { validateEventTimes, normalizeEventDateTime } from './utils.js';
 
 /**
  * Parse attendees from Google Calendar API response
@@ -113,9 +113,13 @@ export async function updateEvent(
     sendUpdates = 'none',
   } = options;
 
+  // Normalize start/end times to EventDateTime format (accepts strings or objects)
+  const normalizedStart = normalizeEventDateTime(updates.start, 'start');
+  const normalizedEnd = normalizeEventDateTime(updates.end, 'end');
+
   // Validate event times if both start and end are being updated
-  if (updates.start && updates.end) {
-    validateEventTimes(updates.start, updates.end);
+  if (normalizedStart && normalizedEnd) {
+    validateEventTimes(normalizedStart, normalizedEnd);
   }
 
   // Resolve contact names to emails if attendees are being updated
@@ -158,11 +162,11 @@ export async function updateEvent(
   if (updates.location !== undefined) {
     eventResource.location = updates.location;
   }
-  if (updates.start !== undefined) {
-    eventResource.start = updates.start;
+  if (normalizedStart !== undefined) {
+    eventResource.start = normalizedStart;
   }
-  if (updates.end !== undefined) {
-    eventResource.end = updates.end;
+  if (normalizedEnd !== undefined) {
+    eventResource.end = normalizedEnd;
   }
   if (resolvedAttendees !== undefined) {
     eventResource.attendees = resolvedAttendees;

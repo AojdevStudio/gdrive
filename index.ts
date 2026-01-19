@@ -68,10 +68,13 @@ import type {
   GetThreadOptions,
   SearchMessagesOptions,
   CreateDraftOptions,
+  UpdateDraftOptions,
   SendMessageOptions,
   SendDraftOptions,
   ListLabelsOptions,
   ModifyLabelsOptions,
+  GetAttachmentOptions,
+  ListAttachmentsOptions,
 } from "./src/modules/gmail/index.js";
 
 import type {
@@ -544,7 +547,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           properties: {
             operation: {
               type: "string",
-              enum: ["listMessages", "listThreads", "getMessage", "getThread", "searchMessages", "createDraft", "sendMessage", "sendDraft", "listLabels", "modifyLabels"],
+              enum: ["listMessages", "listThreads", "getMessage", "getThread", "searchMessages", "createDraft", "updateDraft", "sendMessage", "sendDraft", "listLabels", "modifyLabels", "getAttachment", "listAttachments"],
               description: "Operation to perform"
             },
             params: {
@@ -755,6 +758,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           case "createDraft":
             result = await gmailModule.createDraft(params as CreateDraftOptions, context);
             break;
+          case "updateDraft":
+            result = await gmailModule.updateDraft(params as UpdateDraftOptions, context);
+            break;
           case "sendMessage":
             result = await gmailModule.sendMessage(params as SendMessageOptions, context);
             break;
@@ -766,6 +772,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             break;
           case "modifyLabels":
             result = await gmailModule.modifyLabels(params as ModifyLabelsOptions, context);
+            break;
+          case "getAttachment":
+            result = await gmailModule.getAttachment(params as GetAttachmentOptions, context);
+            break;
+          case "listAttachments":
+            result = await gmailModule.listAttachments(params as ListAttachmentsOptions, context);
             break;
           default:
             throw new Error(`Unknown gmail operation: ${operation}`);

@@ -1,7 +1,7 @@
 /**
  * Gmail module types
  *
- * Note: Attachments are deferred to v3.3.0
+ * v3.3.0: Added attachment support
  */
 
 // ============================================================================
@@ -200,6 +200,42 @@ export interface CreateDraftResult {
   message: string;
 }
 
+/**
+ * Options for updating an existing draft
+ */
+export interface UpdateDraftOptions {
+  /** The draft ID to update */
+  draftId: string;
+  /** Updated recipient email addresses */
+  to?: string[];
+  /** Updated CC recipients */
+  cc?: string[];
+  /** Updated BCC recipients */
+  bcc?: string[];
+  /** Updated email subject */
+  subject?: string;
+  /** Updated email body */
+  body?: string;
+  /** Whether body is HTML (default: false) */
+  isHtml?: boolean;
+  /** Send from a different email address (send-as alias) */
+  from?: string;
+  /** Message ID to reply to (for threading) */
+  inReplyTo?: string;
+  /** Thread references (for threading) */
+  references?: string;
+}
+
+/**
+ * Result of updating a draft
+ */
+export interface UpdateDraftResult {
+  draftId: string;
+  messageId: string;
+  threadId: string;
+  message: string;
+}
+
 // ============================================================================
 // Send Operations
 // ============================================================================
@@ -312,4 +348,58 @@ export interface ModifyLabelsResult {
   messageId: string;
   labelIds: string[];
   message: string;
+}
+
+// ============================================================================
+// Attachment Operations
+// ============================================================================
+
+/**
+ * Options for getting an attachment
+ */
+export interface GetAttachmentOptions {
+  /** The message ID containing the attachment */
+  messageId: string;
+  /** The attachment ID */
+  attachmentId: string;
+}
+
+/**
+ * Result of getting an attachment
+ */
+export interface GetAttachmentResult {
+  /** Base64 encoded attachment data */
+  data: string;
+  /** Size in bytes */
+  size: number;
+}
+
+/**
+ * Attachment metadata from a message
+ */
+export interface AttachmentInfo {
+  /** Attachment ID for fetching content */
+  attachmentId: string;
+  /** Original filename */
+  filename: string;
+  /** MIME type */
+  mimeType: string;
+  /** Size in bytes */
+  size: number;
+}
+
+/**
+ * Options for listing attachments in a message
+ */
+export interface ListAttachmentsOptions {
+  /** The message ID to list attachments from */
+  messageId: string;
+}
+
+/**
+ * Result of listing attachments
+ */
+export interface ListAttachmentsResult {
+  messageId: string;
+  attachments: AttachmentInfo[];
 }
