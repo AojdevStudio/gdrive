@@ -26,6 +26,12 @@
 - API-02: Calendar `EventResult` returns `eventId`
 - API-03: Calendar `deleteEvent` returns proper type
 
+**Plans:** 2 plans
+
+Plans:
+- [ ] 01-01-PLAN.md — Gmail modifyLabels id parameter rename (API-01)
+- [ ] 01-02-PLAN.md — Calendar EventResult eventId + deleteEvent type fix (API-02, API-03)
+
 **Key Files:**
 - `src/modules/gmail/types.ts`
 - `src/modules/gmail/labels.ts`
@@ -201,4 +207,4 @@ Phase 5 (Caching) ──┘
 ---
 
 *Roadmap created: 2026-01-25*
-*Last updated: 2026-01-25 after initial creation*
+*Last updated: 2026-01-25 after Phase 1 planning*
