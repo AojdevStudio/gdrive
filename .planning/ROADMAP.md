@@ -99,8 +99,8 @@ Plans:
 **Plans:** 2 plans
 
 Plans:
-- [ ] 03-01-PLAN.md — Create calendar utilities (parseAttendees, buildEventResult) with tests
-- [ ] 03-02-PLAN.md — Update calendar consumers to use shared utilities
+- [x] 03-01-PLAN.md — Create calendar utilities (parseAttendees, buildEventResult) with tests
+- [x] 03-02-PLAN.md — Update calendar consumers to use shared utilities
 
 **Key Files:**
 - `src/modules/calendar/utils.ts` (extended)
@@ -223,4 +223,4 @@ Phase 5 (Caching) ──┘
 ---
 
 *Roadmap created: 2026-01-25*
-*Last updated: 2026-01-25 after Phase 3 planning complete*
+*Last updated: 2026-01-25 after Phase 3 execution complete*

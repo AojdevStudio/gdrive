@@ -20,9 +20,9 @@ Requirements for this cleanup milestone. Each maps to roadmap phases.
 
 ### DRY Violations (MEDIUM)
 
-- [ ] **DRY-01**: Single `parseAttendees` function in `calendar/utils.ts`
-- [ ] **DRY-02**: Single `buildEventResult` function in `calendar/utils.ts`
-- [ ] **DRY-03**: Single `encodeToBase64Url` function in `gmail/utils.ts`
+- [x] **DRY-01**: Single `parseAttendees` function in `calendar/utils.ts`
+- [x] **DRY-02**: Single `buildEventResult` function in `calendar/utils.ts`
+- [x] **DRY-03**: Single `encodeToBase64Url` function in `gmail/utils.ts`
 
 ### Validation (MEDIUM)
 
@@ -78,9 +78,9 @@ Which phases cover which requirements. Updated during roadmap creation.
 | API-03 | Phase 1 | Complete |
 | SEC-01 | Phase 2 | Complete |
 | SEC-02 | Phase 2 | Complete |
-| DRY-01 | Phase 3 | Pending |
-| DRY-02 | Phase 3 | Pending |
-| DRY-03 | Phase 3 | Pending |
+| DRY-01 | Phase 3 | Complete |
+| DRY-02 | Phase 3 | Complete |
+| DRY-03 | Phase 3 | Complete |
 | VAL-01 | Phase 4 | Pending |
 | VAL-02 | Phase 4 | Pending |
 | VAL-03 | Phase 4 | Pending |
@@ -101,4 +101,4 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 ---
 *Requirements defined: 2026-01-25*
-*Last updated: 2026-01-25 after initial definition*
+*Last updated: 2026-01-25 after Phase 3 completion*
