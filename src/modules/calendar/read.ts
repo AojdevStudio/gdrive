@@ -9,8 +9,8 @@ import type {
   CalendarResult,
   GetEventOptions,
   EventResult,
-  Attendee,
 } from './types.js';
+import { buildEventResult } from './utils.js';
 
 /**
  * Get details of a specific calendar
@@ -82,44 +82,6 @@ export async function getCalendar(
   return result;
 }
 
-/**
- * Parse attendees from Google Calendar event
- */
-function parseAttendees(attendees: calendar_v3.Schema$EventAttendee[] | undefined): Attendee[] | undefined {
-  if (!attendees || attendees.length === 0) {
-    return undefined;
-  }
-
-  return attendees.map((attendee) => {
-    const parsed: Attendee = {
-      email: attendee.email || '',
-    };
-
-    if (attendee.displayName) {
-      parsed.displayName = attendee.displayName;
-    }
-    if (
-      attendee.responseStatus &&
-      (attendee.responseStatus === 'needsAction' ||
-        attendee.responseStatus === 'declined' ||
-        attendee.responseStatus === 'tentative' ||
-        attendee.responseStatus === 'accepted')
-    ) {
-      parsed.responseStatus = attendee.responseStatus;
-    }
-    if (attendee.organizer) {
-      parsed.organizer = attendee.organizer;
-    }
-    if (attendee.self) {
-      parsed.self = attendee.self;
-    }
-    if (attendee.optional) {
-      parsed.optional = attendee.optional;
-    }
-
-    return parsed;
-  });
-}
 
 /**
  * Get details of a specific event
@@ -161,119 +123,7 @@ export async function getEvent(
 
   const response = await context.calendar.events.get(params);
 
-  const result: EventResult = {
-    eventId: response.data.id!,
-  };
-
-  // Only add properties if they exist (exactOptionalPropertyTypes compliance)
-  if (response.data.status) {
-    result.status = response.data.status;
-  }
-  if (response.data.htmlLink) {
-    result.htmlLink = response.data.htmlLink;
-  }
-  if (response.data.created) {
-    result.created = response.data.created;
-  }
-  if (response.data.updated) {
-    result.updated = response.data.updated;
-  }
-  if (response.data.summary) {
-    result.summary = response.data.summary;
-  }
-  if (response.data.description) {
-    result.description = response.data.description;
-  }
-  if (response.data.location) {
-    result.location = response.data.location;
-  }
-
-  // Creator
-  if (response.data.creator) {
-    result.creator = {};
-    if (response.data.creator.email) {
-      result.creator.email = response.data.creator.email;
-    }
-    if (response.data.creator.displayName) {
-      result.creator.displayName = response.data.creator.displayName;
-    }
-  }
-
-  // Organizer
-  if (response.data.organizer) {
-    result.organizer = {};
-    if (response.data.organizer.email) {
-      result.organizer.email = response.data.organizer.email;
-    }
-    if (response.data.organizer.displayName) {
-      result.organizer.displayName = response.data.organizer.displayName;
-    }
-  }
-
-  // Start/End times
-  if (response.data.start) {
-    result.start = {};
-    if (response.data.start.dateTime) {
-      result.start.dateTime = response.data.start.dateTime;
-    }
-    if (response.data.start.date) {
-      result.start.date = response.data.start.date;
-    }
-    if (response.data.start.timeZone) {
-      result.start.timeZone = response.data.start.timeZone;
-    }
-  }
-
-  if (response.data.end) {
-    result.end = {};
-    if (response.data.end.dateTime) {
-      result.end.dateTime = response.data.end.dateTime;
-    }
-    if (response.data.end.date) {
-      result.end.date = response.data.end.date;
-    }
-    if (response.data.end.timeZone) {
-      result.end.timeZone = response.data.end.timeZone;
-    }
-  }
-
-  // Recurrence
-  if (response.data.recurrence && response.data.recurrence.length > 0) {
-    result.recurrence = response.data.recurrence;
-  }
-
-  // Attendees
-  const attendees = parseAttendees(response.data.attendees);
-  if (attendees) {
-    result.attendees = attendees;
-  }
-
-  // Conference data
-  if (response.data.conferenceData) {
-    result.conferenceData = response.data.conferenceData;
-  }
-
-  // Attachments
-  if (response.data.attachments && response.data.attachments.length > 0) {
-    result.attachments = response.data.attachments.map((att) => ({
-      fileId: att.fileId || '',
-      fileUrl: att.fileUrl || '',
-      title: att.title || '',
-    }));
-  }
-
-  // Reminders
-  if (response.data.reminders) {
-    result.reminders = {
-      useDefault: response.data.reminders.useDefault || false,
-    };
-    if (response.data.reminders.overrides && response.data.reminders.overrides.length > 0) {
-      result.reminders.overrides = response.data.reminders.overrides.map((override) => ({
-        method: override.method || 'popup',
-        minutes: override.minutes || 0,
-      }));
-    }
-  }
+  const result = buildEventResult(response.data);
 
   // Cache the result (5-minute TTL)
   await context.cacheManager.set(cacheKey, result);
