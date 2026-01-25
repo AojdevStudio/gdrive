@@ -94,21 +94,28 @@ Plans:
 **Requirements:**
 - DRY-01: Single `parseAttendees` function
 - DRY-02: Single `buildEventResult` function
-- DRY-03: Single `encodeToBase64Url` function
+- DRY-03: Single `encodeToBase64Url` function (already complete from Phase 2)
+
+**Plans:** 2 plans
+
+Plans:
+- [ ] 03-01-PLAN.md — Create calendar utilities (parseAttendees, buildEventResult) with tests
+- [ ] 03-02-PLAN.md — Update calendar consumers to use shared utilities
 
 **Key Files:**
-- `src/modules/calendar/utils.ts` (new)
+- `src/modules/calendar/utils.ts` (extended)
+- `src/modules/calendar/__tests__/utils.test.ts` (new)
 - `src/modules/calendar/read.ts`
 - `src/modules/calendar/create.ts`
 - `src/modules/calendar/update.ts`
-- `src/modules/gmail/utils.ts` (from Phase 2)
+- `src/modules/gmail/utils.ts` (from Phase 2 - DRY-03 complete)
 - `src/modules/gmail/compose.ts`
 - `src/modules/gmail/send.ts`
 
 **Success Criteria:**
 - `parseAttendees` exists only in `calendar/utils.ts`
 - `buildEventResult` exists only in `calendar/utils.ts`
-- `encodeToBase64Url` exists only in `gmail/utils.ts`
+- `encodeToBase64Url` exists only in `gmail/utils.ts` (already satisfied)
 - All consumers import from utils
 - No duplicate implementations remain
 - Tests pass for all Calendar and Gmail operations
@@ -216,4 +223,4 @@ Phase 5 (Caching) ──┘
 ---
 
 *Roadmap created: 2026-01-25*
-*Last updated: 2026-01-25 after Phase 2 planning complete*
+*Last updated: 2026-01-25 after Phase 3 planning complete*
