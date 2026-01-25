@@ -1,0 +1,311 @@
+{
+  "spec_id": "gdrive-mcp-bugs",
+  "created": "2026-01-24T07:50:00Z",
+  "project_type": "bug",
+  "tech_stack": {
+    "language": "typescript",
+    "framework": "mcp-sdk",
+    "apis": ["gmail-v1", "calendar-v3", "drive-v3", "forms-v1", "sheets-v4", "docs-v1"]
+  },
+  "tasks": [
+    {
+      "id": "TASK-001",
+      "category": "implementation",
+      "priority": "HIGH",
+      "issue_ref": "#1",
+      "description": "Fix Gmail `messageId` to `id` parameter inconsistency",
+      "files": [
+        "src/modules/gmail/types.ts",
+        "src/modules/gmail/labels.ts",
+        "src/tools/listTools.ts"
+      ],
+      "steps": [
+        "Change `ModifyLabelsOptions.messageId` to `id` in types.ts:301",
+        "Update `ModifyLabelsResult.messageId` to `id` in types.ts",
+        "Update labels.ts implementation to use `id` parameter",
+        "Update listTools.ts modifyLabels signature documentation"
+      ],
+      "verification": "Run `npm run build` - no type errors. Test modifyLabels operation with { id: 'test' }",
+      "passes": false
+    },
+    {
+      "id": "TASK-002",
+      "category": "implementation",
+      "priority": "HIGH",
+      "issue_ref": "#2",
+      "description": "Fix Calendar `EventResult.id` to `eventId` for consistency with options",
+      "files": [
+        "src/modules/calendar/types.ts",
+        "src/modules/calendar/read.ts",
+        "src/modules/calendar/create.ts",
+        "src/modules/calendar/update.ts",
+        "src/tools/listTools.ts"
+      ],
+      "steps": [
+        "Change `EventResult.id` to `eventId` in types.ts:131",
+        "Update all EventResult building code in read.ts to use `eventId`",
+        "Update all EventResult building code in create.ts to use `eventId`",
+        "Update all EventResult building code in update.ts to use `eventId`",
+        "Update listTools.ts Calendar operation signatures"
+      ],
+      "verification": "Run `npm run build` - no type errors. Verify getEvent returns { eventId: '...' }",
+      "passes": false
+    },
+    {
+      "id": "TASK-003",
+      "category": "implementation",
+      "priority": "HIGH",
+      "issue_ref": "#3",
+      "description": "Fix `deleteEvent` to return correct `DeleteEventResult` type",
+      "files": [
+        "src/modules/calendar/delete.ts"
+      ],
+      "steps": [
+        "Locate return statement around line 81-84 in delete.ts",
+        "Change return from { success: true, message } to { eventId: options.eventId, message }",
+        "Ensure function return type annotation matches DeleteEventResult"
+      ],
+      "verification": "Run `npm run build` - no type errors. deleteEvent returns { eventId, message }",
+      "passes": false
+    },
+    {
+      "id": "TASK-004",
+      "category": "implementation",
+      "priority": "HIGH",
+      "issue_ref": "#4",
+      "description": "Fix search query SQL injection vulnerability by escaping single quotes",
+      "files": [
+        "src/modules/drive/search.ts"
+      ],
+      "steps": [
+        "Locate query interpolation at line 63 in search.ts",
+        "Add: const escapedQuery = query.replace(/'/g, \"\\\\'\");",
+        "Update query to use escapedQuery: q: `name contains '${escapedQuery}' and trashed = false`"
+      ],
+      "verification": "Test search with query containing single quotes: \"test's file\" should not break",
+      "passes": false
+    },
+    {
+      "id": "TASK-005",
+      "category": "implementation",
+      "priority": "HIGH",
+      "issue_ref": "#5",
+      "description": "Extract email validation utilities and add to compose.ts",
+      "files": [
+        "src/modules/gmail/utils.ts",
+        "src/modules/gmail/send.ts",
+        "src/modules/gmail/compose.ts",
+        "src/modules/gmail/index.ts"
+      ],
+      "steps": [
+        "Create new file: src/modules/gmail/utils.ts",
+        "Extract from send.ts: isValidEmailAddress(), sanitizeHeaderValue(), encodeSubject(), validateAndSanitizeRecipients()",
+        "Extract encodeToBase64Url() function (duplicate in compose.ts and send.ts)",
+        "Update send.ts to import from utils.ts",
+        "Update compose.ts to use validation functions from utils.ts",
+        "Export utilities from index.ts if needed"
+      ],
+      "verification": "npm run build succeeds. createDraft validates emails same as sendMessage",
+      "passes": false
+    },
+    {
+      "id": "TASK-006",
+      "category": "implementation",
+      "priority": "MEDIUM",
+      "issue_ref": "#6, #7",
+      "description": "Extract shared Calendar utilities (parseAttendees, buildEventResult)",
+      "files": [
+        "src/modules/calendar/utils.ts",
+        "src/modules/calendar/read.ts",
+        "src/modules/calendar/create.ts",
+        "src/modules/calendar/update.ts",
+        "src/modules/calendar/index.ts"
+      ],
+      "steps": [
+        "Create new file: src/modules/calendar/utils.ts",
+        "Create canonical parseAttendees() function combining best of all 3 versions",
+        "Create buildEventResult() function extracting ~130 lines of duplicated code",
+        "Update read.ts to import and use utilities",
+        "Update create.ts to import and use utilities",
+        "Update update.ts to import and use utilities",
+        "Export utilities from index.ts if needed"
+      ],
+      "verification": "npm run build succeeds. All Calendar operations return consistent EventResult",
+      "passes": false
+    },
+    {
+      "id": "TASK-007",
+      "category": "implementation",
+      "priority": "MEDIUM",
+      "issue_ref": "#8",
+      "description": "Add caching to Forms module",
+      "files": [
+        "src/modules/forms/read.ts"
+      ],
+      "steps": [
+        "Add cacheManager.get() check at start of getForm function",
+        "Add performanceMonitor.recordCacheHit() when cache hit",
+        "Add cacheManager.set() after successful API response",
+        "Use consistent cache key pattern: `forms:getForm:${formId}`"
+      ],
+      "verification": "Second call to getForm with same ID should return cached result",
+      "passes": false
+    },
+    {
+      "id": "TASK-008",
+      "category": "implementation",
+      "priority": "MEDIUM",
+      "issue_ref": "#9",
+      "description": "Add defensive validation for non-null assertions in Gmail/Calendar",
+      "files": [
+        "src/modules/gmail/read.ts",
+        "src/modules/gmail/list.ts",
+        "src/modules/calendar/read.ts"
+      ],
+      "steps": [
+        "In gmail/read.ts:114, add check: if (!message.id || !message.threadId) throw new Error(...)",
+        "In gmail/list.ts:70-73, add similar validation for msg.id and msg.threadId",
+        "In calendar/read.ts, add validation for event.id before using"
+      ],
+      "verification": "npm run build succeeds. Runtime throws clear error if API returns null",
+      "passes": false
+    },
+    {
+      "id": "TASK-009",
+      "category": "implementation",
+      "priority": "MEDIUM",
+      "issue_ref": "#10",
+      "description": "Fix cache key to include calendarId for getEvent",
+      "files": [
+        "src/modules/calendar/read.ts"
+      ],
+      "steps": [
+        "Locate cache key at line 149 in read.ts",
+        "Change from `calendar:getEvent:${eventId}` to `calendar:getEvent:${calendarId}:${eventId}`"
+      ],
+      "verification": "Events from different calendars with same ID are cached separately",
+      "passes": false
+    },
+    {
+      "id": "TASK-010",
+      "category": "implementation",
+      "priority": "MEDIUM",
+      "issue_ref": "#11",
+      "description": "Add validation to modifyLabels requiring at least one label operation",
+      "files": [
+        "src/modules/gmail/labels.ts"
+      ],
+      "steps": [
+        "At start of modifyLabels function (around line 131-137)",
+        "Add check: if both addLabelIds and removeLabelIds are empty/undefined, throw error",
+        "Error message: 'At least one of addLabelIds or removeLabelIds must be provided'"
+      ],
+      "verification": "modifyLabels({ id: 'x' }) throws validation error. modifyLabels({ id: 'x', addLabelIds: ['y'] }) works",
+      "passes": false
+    },
+    {
+      "id": "TASK-011",
+      "category": "implementation",
+      "priority": "LOW",
+      "issue_ref": "#13, #14",
+      "description": "Remove dead code: unused DeleteEventResult export and empty timeZone block",
+      "files": [
+        "src/modules/calendar/types.ts",
+        "src/modules/calendar/index.ts",
+        "src/modules/calendar/create.ts"
+      ],
+      "steps": [
+        "In types.ts, mark DeleteEventResult as used (will be used after TASK-003)",
+        "In create.ts:237-240, remove empty if (timeZone) {} block"
+      ],
+      "verification": "npm run build succeeds. No dead code warnings",
+      "passes": false
+    },
+    {
+      "id": "TASK-012",
+      "category": "implementation",
+      "priority": "LOW",
+      "issue_ref": "#15",
+      "description": "Remove redundant || undefined patterns in Forms module",
+      "files": [
+        "src/modules/forms/read.ts"
+      ],
+      "steps": [
+        "In forms/read.ts:65-77, remove `|| undefined` from property assignments",
+        "Change `itemId: item.itemId || undefined` to `itemId: item.itemId`",
+        "Apply to all similar patterns in the file"
+      ],
+      "verification": "npm run build succeeds. Code is cleaner",
+      "passes": false
+    },
+    {
+      "id": "TASK-013",
+      "category": "implementation",
+      "priority": "LOW",
+      "issue_ref": "#16",
+      "description": "Add info logging to search operations",
+      "files": [
+        "src/modules/drive/search.ts"
+      ],
+      "steps": [
+        "Import logger if not already imported",
+        "Add logger.info() calls in search and enhancedSearch functions",
+        "Log query parameters and result count"
+      ],
+      "verification": "Search operations produce info-level log entries",
+      "passes": false
+    },
+    {
+      "id": "TASK-014",
+      "category": "implementation",
+      "priority": "LOW",
+      "issue_ref": "#17",
+      "description": "Standardize error handling pattern in freebusy.ts",
+      "files": [
+        "src/modules/calendar/freebusy.ts"
+      ],
+      "steps": [
+        "Review try/catch pattern at lines 50-114",
+        "Either remove try/catch to match other files, or document why it's needed",
+        "If keeping, ensure consistent error message format"
+      ],
+      "verification": "Error handling is consistent with other Calendar module files",
+      "passes": false
+    },
+    {
+      "id": "TASK-015",
+      "category": "implementation",
+      "priority": "LOW",
+      "issue_ref": "#18",
+      "description": "Add labelIds to CreateDraftResult for consistency",
+      "files": [
+        "src/modules/gmail/types.ts",
+        "src/modules/gmail/compose.ts"
+      ],
+      "steps": [
+        "Add `labelIds: string[];` to CreateDraftResult interface in types.ts:196",
+        "Update compose.ts to include labelIds in return value from API response"
+      ],
+      "verification": "npm run build succeeds. createDraft returns labelIds array",
+      "passes": false
+    },
+    {
+      "id": "TASK-016",
+      "category": "documentation",
+      "priority": "LOW",
+      "issue_ref": "#19",
+      "description": "Document threading parameters in listTools.ts signatures",
+      "files": [
+        "src/tools/listTools.ts"
+      ],
+      "steps": [
+        "Update createDraft signature at line 218 to include inReplyTo?, references?",
+        "Update createDraft description to mention threading support",
+        "Update sendMessage signature at line 224 to include inReplyTo?, references?",
+        "Update sendMessage description to mention threading support"
+      ],
+      "verification": "AI agents can discover thread reply functionality from tool signatures",
+      "passes": false
+    }
+  ]
+}
