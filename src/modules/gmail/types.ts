@@ -298,7 +298,7 @@ export interface ListLabelsResult {
  */
 export interface ModifyLabelsOptions {
   /** The message ID */
-  messageId: string;
+  id: string;
   /** Label IDs to add */
   addLabelIds?: string[];
   /** Label IDs to remove */
@@ -309,7 +309,7 @@ export interface ModifyLabelsOptions {
  * Result of modifying labels
  */
 export interface ModifyLabelsResult {
-  messageId: string;
+  id: string;
   labelIds: string[];
   message: string;
 }

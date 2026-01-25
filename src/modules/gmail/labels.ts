@@ -108,13 +108,13 @@ export async function listLabels(
  * ```typescript
  * // Mark as read and archive
  * const result = await modifyLabels({
- *   messageId: '18c123abc',
+ *   id: '18c123abc',
  *   removeLabelIds: ['UNREAD', 'INBOX'],
  * }, context);
  *
  * // Add a custom label
  * const result2 = await modifyLabels({
- *   messageId: '18c123abc',
+ *   id: '18c123abc',
  *   addLabelIds: ['Label_12345'],
  * }, context);
  * ```
@@ -123,7 +123,7 @@ export async function modifyLabels(
   options: ModifyLabelsOptions,
   context: GmailContext
 ): Promise<ModifyLabelsResult> {
-  const { messageId, addLabelIds, removeLabelIds } = options;
+  const { id, addLabelIds, removeLabelIds } = options;
 
   // Build the request body - only include arrays if they have items
   const requestBody: gmail_v1.Schema$ModifyMessageRequest = {};
@@ -138,25 +138,25 @@ export async function modifyLabels(
 
   const response = await context.gmail.users.messages.modify({
     userId: 'me',
-    id: messageId,
+    id: id,
     requestBody,
   });
 
   const labelIds = response.data.labelIds || [];
 
   // Invalidate cached message data
-  await context.cacheManager.invalidate(`gmail:getMessage:${messageId}`);
+  await context.cacheManager.invalidate(`gmail:getMessage:${id}`);
   await context.cacheManager.invalidate('gmail:list');
 
   context.performanceMonitor.track('gmail:modifyLabels', Date.now() - context.startTime);
   context.logger.info('Modified labels', {
-    messageId,
+    id,
     added: addLabelIds?.length || 0,
     removed: removeLabelIds?.length || 0,
   });
 
   return {
-    messageId,
+    id,
     labelIds,
     message: 'Labels modified successfully',
   };
