@@ -1,6 +1,17 @@
 import type { DriveContext } from '../types.js';
 
 /**
+ * Escape special characters for Google Drive query language
+ * Google Drive API requires backslash escaping for single quotes
+ * @see https://developers.google.com/workspace/drive/api/guides/ref-search-terms
+ * @param value User input to escape
+ * @returns Escaped string safe for query interpolation
+ */
+function escapeQueryValue(value: string): string {
+  return value.replace(/'/g, "\\'");
+}
+
+/**
  * Options for searching Google Drive files
  */
 export interface SearchOptions {
@@ -60,7 +71,7 @@ export async function search(
 
   // Execute search
   const response = await context.drive.files.list({
-    q: `name contains '${query}' and trashed = false`,
+    q: `name contains '${escapeQueryValue(query)}' and trashed = false`,
     pageSize: Math.min(pageSize, 100),
     fields: "files(id, name, mimeType, createdTime, modifiedTime, webViewLink)",
   });
@@ -166,12 +177,12 @@ export async function enhancedSearch(
   const { query, filters, pageSize = 10, orderBy = "modifiedTime desc" } = options;
 
   // Build query string
-  let q = query ? `name contains '${query}'` : "";
+  let q = query ? `name contains '${escapeQueryValue(query)}'` : "";
   const filterConditions: string[] = [];
 
   if (filters) {
     if (filters.mimeType) {
-      filterConditions.push(`mimeType = '${filters.mimeType}'`);
+      filterConditions.push(`mimeType = '${escapeQueryValue(filters.mimeType)}'`);
     }
     if (filters.modifiedAfter) {
       filterConditions.push(`modifiedTime > '${filters.modifiedAfter}'`);
@@ -192,7 +203,7 @@ export async function enhancedSearch(
       filterConditions.push("'me' in owners");
     }
     if (filters.parents) {
-      filterConditions.push(`'${filters.parents}' in parents`);
+      filterConditions.push(`'${escapeQueryValue(filters.parents)}' in parents`);
     }
     if (!filters.trashed) {
       filterConditions.push("trashed = false");
