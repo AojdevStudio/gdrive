@@ -15,8 +15,8 @@ Requirements for this cleanup milestone. Each maps to roadmap phases.
 
 ### Security (HIGH)
 
-- [ ] **SEC-01**: Drive search query escapes single quotes preventing injection
-- [ ] **SEC-02**: Gmail `compose.ts` uses shared validation matching `send.ts` security
+- [x] **SEC-01**: Drive search query escapes single quotes preventing injection
+- [x] **SEC-02**: Gmail `compose.ts` uses shared validation matching `send.ts` security
 
 ### DRY Violations (MEDIUM)
 
@@ -76,8 +76,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | API-01 | Phase 1 | Complete |
 | API-02 | Phase 1 | Complete |
 | API-03 | Phase 1 | Complete |
-| SEC-01 | Phase 2 | Pending |
-| SEC-02 | Phase 2 | Pending |
+| SEC-01 | Phase 2 | Complete |
+| SEC-02 | Phase 2 | Complete |
 | DRY-01 | Phase 3 | Pending |
 | DRY-02 | Phase 3 | Pending |
 | DRY-03 | Phase 3 | Pending |

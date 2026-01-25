@@ -64,8 +64,8 @@ Plans:
 **Plans:** 2 plans
 
 Plans:
-- [ ] 02-01-PLAN.md — Drive search query escaping (SEC-01)
-- [ ] 02-02-PLAN.md — Gmail shared validation utilities (SEC-02)
+- [x] 02-01-PLAN.md — Drive search query escaping (SEC-01)
+- [x] 02-02-PLAN.md — Gmail shared validation utilities (SEC-02)
 
 **Key Files:**
 - `src/modules/drive/search.ts`
