@@ -230,7 +230,7 @@ export async function updateEvent(
 
   // Build result
   const result: EventResult = {
-    id: response.data.id!,
+    eventId: response.data.id!,
   };
 
   // Only add properties if they exist (exactOptionalPropertyTypes compliance)

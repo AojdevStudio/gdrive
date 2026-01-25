@@ -162,7 +162,7 @@ export async function getEvent(
   const response = await context.calendar.events.get(params);
 
   const result: EventResult = {
-    id: response.data.id!,
+    eventId: response.data.id!,
   };
 
   // Only add properties if they exist (exactOptionalPropertyTypes compliance)

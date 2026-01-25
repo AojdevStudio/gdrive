@@ -243,7 +243,7 @@ export async function createEvent(
 
   // Build result
   const result: EventResult = {
-    id: response.data.id!,
+    eventId: response.data.id!,
   };
 
   // Only add properties if they exist (exactOptionalPropertyTypes compliance)
@@ -359,7 +359,7 @@ export async function createEvent(
   // Invalidate list caches for this calendar
   const listCacheKeys = [
     `calendar:listEvents:${calendarId}:*`,
-    `calendar:getEvent:${result.id}`,
+    `calendar:getEvent:${result.eventId}`,
   ];
   for (const pattern of listCacheKeys) {
     await context.cacheManager.invalidate(pattern);
@@ -368,7 +368,7 @@ export async function createEvent(
   context.performanceMonitor.track('calendar:createEvent', Date.now() - context.startTime);
   context.logger.info('Created calendar event', {
     calendarId,
-    eventId: result.id,
+    eventId: result.eventId,
     summary: result.summary,
     attendeeCount: parsedAttendees?.length || 0,
   });
@@ -423,7 +423,7 @@ export async function quickAdd(
 
   // Build result
   const result: EventResult = {
-    id: response.data.id!,
+    eventId: response.data.id!,
   };
 
   // Only add properties if they exist (exactOptionalPropertyTypes compliance)
@@ -539,7 +539,7 @@ export async function quickAdd(
   // Invalidate list caches for this calendar
   const listCacheKeys = [
     `calendar:listEvents:${calendarId}:*`,
-    `calendar:getEvent:${result.id}`,
+    `calendar:getEvent:${result.eventId}`,
   ];
   for (const pattern of listCacheKeys) {
     await context.cacheManager.invalidate(pattern);
@@ -548,7 +548,7 @@ export async function quickAdd(
   context.performanceMonitor.track('calendar:quickAdd', Date.now() - context.startTime);
   context.logger.info('Quick added calendar event', {
     calendarId,
-    eventId: result.id,
+    eventId: result.eventId,
     text,
     summary: result.summary,
   });
