@@ -61,11 +61,20 @@ Plans:
 - SEC-01: Drive search escapes single quotes
 - SEC-02: Gmail `compose.ts` uses shared validation
 
+**Plans:** 2 plans
+
+Plans:
+- [ ] 02-01-PLAN.md — Drive search query escaping (SEC-01)
+- [ ] 02-02-PLAN.md — Gmail shared validation utilities (SEC-02)
+
 **Key Files:**
 - `src/modules/drive/search.ts`
+- `src/modules/drive/__tests__/search.test.ts` (new)
 - `src/modules/gmail/compose.ts`
 - `src/modules/gmail/send.ts`
 - `src/modules/gmail/utils.ts` (new)
+- `src/modules/gmail/__tests__/utils.test.ts` (new)
+- `src/modules/gmail/__tests__/compose.test.ts` (new)
 
 **Success Criteria:**
 - Search queries with single quotes don't break or inject
@@ -207,4 +216,4 @@ Phase 5 (Caching) ──┘
 ---
 
 *Roadmap created: 2026-01-25*
-*Last updated: 2026-01-25 after Phase 1 execution complete*
+*Last updated: 2026-01-25 after Phase 2 planning complete*
