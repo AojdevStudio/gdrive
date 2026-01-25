@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## 🎓 Critical Reference: how2mcp Repository
 
-**Location:** `/Users/ossieirondi/projects/scratch/how2mcp/`
+**Location:** `https://github.com/Rixmerz/HOW2MCP.git`
 
 This is the **definitive 2025 MCP implementation guide** and must be consulted for all architectural decisions. It contains:
 
@@ -61,7 +61,38 @@ This is a Model Context Protocol (MCP) server for Google Drive integration. It p
 - **Performance monitoring and logging** - Structured logging with Winston and comprehensive performance metrics
 - Automatic export of Google Workspace files to readable formats
 - Docker support for containerized deployment with Redis
-- **BMAD Framework Integration** - Agent-driven development methodology for structured brownfield and greenfield projects
+
+## Claude Code Capabilities
+
+**IMPORTANT: Claude can and should run commands directly.** Do NOT ask the user to run commands when Claude can execute them.
+
+### What Claude Can Do Directly
+- **Run builds:** `npm run build` - Execute and verify results
+- **Run tests:** `npm test`, `npm test -- --testPathPattern="..."` - Execute and report results
+- **Run linting:** `npm run lint` - Check and report issues
+- **Search code:** `grep`, `find`, glob patterns - Search directly
+- **Read files:** Read any file in the project
+- **Edit files:** Make code changes directly
+- **Git operations:** `git status`, `git diff`, `git add`, `git commit` - Execute git commands
+- **Verify changes:** Run build/test/lint after making changes
+
+### Anti-Pattern: Don't Ask User to Run Commands
+```
+❌ WRONG: "Please run `npm run build` and let me know if it passes"
+✅ RIGHT: [Claude runs `npm run build` directly and reports the result]
+
+❌ WRONG: "Run `npm test` to verify the changes"
+✅ RIGHT: [Claude runs `npm test` directly and shows pass/fail]
+
+❌ WRONG: "Check if there are TypeScript errors by running the build"
+✅ RIGHT: [Claude runs build, sees errors, fixes them, runs again]
+```
+
+### When to Involve User
+- **Browser testing:** Opening URLs in browser for visual verification
+- **Authentication flows:** OAuth that requires browser interaction
+- **External services:** Starting Docker, Redis, or other services
+- **Destructive operations:** Confirm before deleting files or force-pushing
 
 ## Git Workflow
 
