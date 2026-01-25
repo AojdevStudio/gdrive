@@ -7,33 +7,60 @@ import type {
   CreateDraftOptions,
   CreateDraftResult,
 } from './types.js';
+import {
+  sanitizeHeaderValue,
+  isValidEmailAddress,
+  encodeSubject,
+  validateAndSanitizeRecipients,
+  encodeToBase64Url,
+} from './utils.js';
 
 /**
- * Build an RFC 2822 formatted email message
+ * Build an RFC 2822 formatted email message with security hardening
+ *
+ * Security measures:
+ * - CR/LF stripped from all header fields to prevent header injection
+ * - Email addresses validated against RFC 5322 pattern
+ * - Subject encoded using RFC 2047 for non-ASCII characters
  */
 function buildEmailMessage(options: CreateDraftOptions): string {
   const { to, cc, bcc, subject, body, isHtml = false, from, inReplyTo, references } = options;
 
   const lines: string[] = [];
 
-  // Add headers
+  // Add headers with sanitization and validation
   if (from) {
-    lines.push(`From: ${from}`);
+    const sanitizedFrom = sanitizeHeaderValue(from);
+    if (!isValidEmailAddress(sanitizedFrom)) {
+      throw new Error(`Invalid from email address: ${sanitizedFrom}`);
+    }
+    lines.push(`From: ${sanitizedFrom}`);
   }
-  lines.push(`To: ${to.join(', ')}`);
+
+  // Validate and sanitize recipients
+  const sanitizedTo = validateAndSanitizeRecipients(to, 'to');
+  lines.push(`To: ${sanitizedTo.join(', ')}`);
+
   if (cc && cc.length > 0) {
-    lines.push(`Cc: ${cc.join(', ')}`);
+    const sanitizedCc = validateAndSanitizeRecipients(cc, 'cc');
+    lines.push(`Cc: ${sanitizedCc.join(', ')}`);
   }
+
   if (bcc && bcc.length > 0) {
-    lines.push(`Bcc: ${bcc.join(', ')}`);
+    const sanitizedBcc = validateAndSanitizeRecipients(bcc, 'bcc');
+    lines.push(`Bcc: ${sanitizedBcc.join(', ')}`);
   }
-  lines.push(`Subject: ${subject}`);
+
+  // Encode subject with RFC 2047 for non-ASCII support
+  lines.push(`Subject: ${encodeSubject(subject)}`);
+
   if (inReplyTo) {
-    lines.push(`In-Reply-To: ${inReplyTo}`);
+    lines.push(`In-Reply-To: ${sanitizeHeaderValue(inReplyTo)}`);
   }
   if (references) {
-    lines.push(`References: ${references}`);
+    lines.push(`References: ${sanitizeHeaderValue(references)}`);
   }
+
   lines.push('MIME-Version: 1.0');
   lines.push(`Content-Type: ${isHtml ? 'text/html' : 'text/plain'}; charset="UTF-8"`);
   lines.push(''); // Empty line between headers and body
@@ -67,11 +94,7 @@ export async function createDraft(
   const emailMessage = buildEmailMessage(options);
 
   // Convert to base64url encoding (Gmail's format)
-  const encodedMessage = Buffer.from(emailMessage)
-    .toString('base64')
-    .replace(/\+/g, '-')
-    .replace(/\//g, '_')
-    .replace(/=+$/, '');
+  const encodedMessage = encodeToBase64Url(emailMessage);
 
   const response = await context.gmail.users.drafts.create({
     userId: 'me',
