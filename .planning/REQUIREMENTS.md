@@ -9,9 +9,9 @@ Requirements for this cleanup milestone. Each maps to roadmap phases.
 
 ### API Consistency (HIGH)
 
-- [ ] **API-01**: Gmail `modifyLabels` uses `id` parameter matching `getMessage`/`getThread`
-- [ ] **API-02**: Calendar `EventResult` returns `eventId` matching input options
-- [ ] **API-03**: Calendar `deleteEvent` returns `DeleteEventResult` type with `eventId`
+- [x] **API-01**: Gmail `modifyLabels` uses `id` parameter matching `getMessage`/`getThread`
+- [x] **API-02**: Calendar `EventResult` returns `eventId` matching input options
+- [x] **API-03**: Calendar `deleteEvent` returns `DeleteEventResult` type with `eventId`
 
 ### Security (HIGH)
 
@@ -73,9 +73,9 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| API-01 | Phase 1 | Pending |
-| API-02 | Phase 1 | Pending |
-| API-03 | Phase 1 | Pending |
+| API-01 | Phase 1 | Complete |
+| API-02 | Phase 1 | Complete |
+| API-03 | Phase 1 | Complete |
 | SEC-01 | Phase 2 | Pending |
 | SEC-02 | Phase 2 | Pending |
 | DRY-01 | Phase 3 | Pending |
