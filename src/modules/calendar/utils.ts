@@ -3,7 +3,7 @@
  */
 
 import type { calendar_v3 } from 'googleapis';
-import type { Attendee } from './types.js';
+import type { Attendee, EventResult } from './types.js';
 
 /**
  * Validate event time parameters
@@ -97,4 +97,131 @@ export function parseAttendees(
 
     return parsed;
   });
+}
+
+/**
+ * Build EventResult from Google Calendar API response
+ * Transforms Google API event schema into type-safe EventResult
+ *
+ * @param responseData Google Calendar API event object
+ * @returns Type-safe EventResult object
+ */
+export function buildEventResult(
+  responseData: calendar_v3.Schema$Event
+): EventResult {
+  const result: EventResult = {
+    eventId: responseData.id!,
+  };
+
+  // Only add properties if they exist (exactOptionalPropertyTypes compliance)
+  if (responseData.status) {
+    result.status = responseData.status;
+  }
+  if (responseData.htmlLink) {
+    result.htmlLink = responseData.htmlLink;
+  }
+  if (responseData.created) {
+    result.created = responseData.created;
+  }
+  if (responseData.updated) {
+    result.updated = responseData.updated;
+  }
+  if (responseData.summary) {
+    result.summary = responseData.summary;
+  }
+  if (responseData.description) {
+    result.description = responseData.description;
+  }
+  if (responseData.location) {
+    result.location = responseData.location;
+  }
+
+  // Creator
+  if (responseData.creator) {
+    result.creator = {};
+    if (responseData.creator.email) {
+      result.creator.email = responseData.creator.email;
+    }
+    if (responseData.creator.displayName) {
+      result.creator.displayName = responseData.creator.displayName;
+    }
+  }
+
+  // Organizer
+  if (responseData.organizer) {
+    result.organizer = {};
+    if (responseData.organizer.email) {
+      result.organizer.email = responseData.organizer.email;
+    }
+    if (responseData.organizer.displayName) {
+      result.organizer.displayName = responseData.organizer.displayName;
+    }
+  }
+
+  // Start/End times
+  if (responseData.start) {
+    result.start = {};
+    if (responseData.start.dateTime) {
+      result.start.dateTime = responseData.start.dateTime;
+    }
+    if (responseData.start.date) {
+      result.start.date = responseData.start.date;
+    }
+    if (responseData.start.timeZone) {
+      result.start.timeZone = responseData.start.timeZone;
+    }
+  }
+
+  if (responseData.end) {
+    result.end = {};
+    if (responseData.end.dateTime) {
+      result.end.dateTime = responseData.end.dateTime;
+    }
+    if (responseData.end.date) {
+      result.end.date = responseData.end.date;
+    }
+    if (responseData.end.timeZone) {
+      result.end.timeZone = responseData.end.timeZone;
+    }
+  }
+
+  // Recurrence
+  if (responseData.recurrence && responseData.recurrence.length > 0) {
+    result.recurrence = responseData.recurrence;
+  }
+
+  // Attendees (uses parseAttendees utility)
+  const parsedAttendees = parseAttendees(responseData.attendees);
+  if (parsedAttendees) {
+    result.attendees = parsedAttendees;
+  }
+
+  // Conference data
+  if (responseData.conferenceData) {
+    result.conferenceData = responseData.conferenceData;
+  }
+
+  // Attachments
+  if (responseData.attachments && responseData.attachments.length > 0) {
+    result.attachments = responseData.attachments.map((att) => ({
+      fileId: att.fileId || '',
+      fileUrl: att.fileUrl || '',
+      title: att.title || '',
+    }));
+  }
+
+  // Reminders
+  if (responseData.reminders) {
+    result.reminders = {
+      useDefault: responseData.reminders.useDefault || false,
+    };
+    if (responseData.reminders.overrides && responseData.reminders.overrides.length > 0) {
+      result.reminders.overrides = responseData.reminders.overrides.map((override) => ({
+        method: override.method || 'popup',
+        minutes: override.minutes || 0,
+      }));
+    }
+  }
+
+  return result;
 }
