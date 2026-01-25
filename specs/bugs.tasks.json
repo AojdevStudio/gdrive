@@ -143,10 +143,10 @@
         "src/modules/forms/read.ts"
       ],
       "steps": [
-        "Add cacheManager.get() check at start of getForm function",
+        "Add cacheManager.get() check at start of readForm function",
         "Add performanceMonitor.recordCacheHit() when cache hit",
         "Add cacheManager.set() after successful API response",
-        "Use consistent cache key pattern: `forms:getForm:${formId}`"
+        "Use consistent cache key pattern: `forms:readForm:${formId}`"
       ],
       "verification": "Second call to getForm with same ID should return cached result",
       "passes": false
