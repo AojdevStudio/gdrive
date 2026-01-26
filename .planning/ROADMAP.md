@@ -133,11 +133,23 @@ Plans:
 - VAL-02: Calendar non-null assertions validated
 - VAL-03: `modifyLabels` validates operations
 
+**Plans:** 2 plans
+
+Plans:
+- [ ] 04-01-PLAN.md — Gmail validation utilities and assertion replacement (VAL-01, VAL-03)
+- [ ] 04-02-PLAN.md — Calendar validation utilities and assertion replacement (VAL-02)
+
 **Key Files:**
+- `src/modules/gmail/validation.ts` (new)
 - `src/modules/gmail/read.ts`
 - `src/modules/gmail/list.ts`
+- `src/modules/gmail/search.ts`
 - `src/modules/gmail/labels.ts`
+- `src/modules/calendar/validation.ts` (new)
 - `src/modules/calendar/read.ts`
+- `src/modules/calendar/list.ts`
+- `src/modules/calendar/freebusy.ts`
+- `src/modules/calendar/utils.ts`
 
 **Success Criteria:**
 - No `!` assertions without preceding validation
@@ -223,4 +235,4 @@ Phase 5 (Caching) ──┘
 ---
 
 *Roadmap created: 2026-01-25*
-*Last updated: 2026-01-25 after Phase 3 execution complete*
+*Last updated: 2026-01-26 after Phase 4 planning complete*
