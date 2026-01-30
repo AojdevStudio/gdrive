@@ -27,10 +27,25 @@ reviews:
     - path: "**/*.rst"
       instructions: |
         Skip reviewing this reStructuredText documentation file.
-        
+
     - path: "**/*.adoc"
       instructions: |
         Skip reviewing this AsciiDoc documentation file.
+
+    # Exclude RBP (Requirements-Based Planning) infrastructure scripts
+    - path: "scripts/rbp/**/*"
+      instructions: |
+        Skip reviewing RBP infrastructure scripts. These are project tooling/workflow automation, not product code.
+
+    # Exclude Beads project tracking files
+    - path: ".beads/**/*"
+      instructions: |
+        Skip reviewing Beads project tracking files. These are project management metadata, not product code.
+
+    # Exclude Claude commands
+    - path: ".claude/commands/**/*"
+      instructions: |
+        Skip reviewing Claude command definitions. These are development workflow tools, not product code.
         
     # Focus on actual code files with detailed review
     - path: "**/*.js"
