@@ -179,7 +179,9 @@ export async function updateDraft(
 
   // Helper to get existing emails as array or undefined
   const parseExistingEmails = (header: string | undefined): string[] | undefined => {
-    if (!header) return undefined;
+    if (!header) {
+      return undefined;
+    }
     const emails = header.split(',').map(s => s.trim()).filter(Boolean);
     return emails.length > 0 ? emails : undefined;
   };

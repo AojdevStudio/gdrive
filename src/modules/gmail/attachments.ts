@@ -109,7 +109,9 @@ export async function listAttachments(
 
   // Recursively find attachments in message parts
   function findAttachments(parts: MessagePart[] | undefined): void {
-    if (!parts) return;
+    if (!parts) {
+      return;
+    }
 
     for (const part of parts) {
       // Check if this part is an attachment
