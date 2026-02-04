@@ -1,211 +1,114 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
-
-## 🎓 Critical Reference: how2mcp Repository
-
-**Location:** `https://github.com/Rixmerz/HOW2MCP.git`
-
-This is the **definitive 2025 MCP implementation guide** and must be consulted for all architectural decisions. It contains:
-
-### Key Resources
-- **📚 MCP-DOCS/**: 10+ comprehensive guides covering 2025 best practices
-  - `MCP_IMPLEMENTATION_GUIDE.md` - Complete technical reference
-  - `MCP_ARCHITECTURE_2025.md` - Modern component layers and patterns
-  - `MCP_ADVANCED_PATTERNS_2025.md` - Production patterns (caching, streaming, versioning)
-  - `MCP_QUICK_REFERENCE.md` - Essential patterns and error codes
-
-- **💻 MCP_EXAMPLE_PROJECT/**: Production-ready reference implementation
-  - `src/tools/index.ts` - Shows proper operation-based tool architecture
-  - Example: `calculator` tool with operations: `add`, `subtract`, `multiply`, `divide`
-  - Example: `data-processor` tool with operations: `count`, `sort`, `unique`, `reverse`
-
-### Architecture Pattern to Follow
-The example project demonstrates **operation-based tools** (NOT individual tools per operation):
-```typescript
-// ✅ CORRECT: One tool with operations parameter
-{
-  name: "calculator",
-  inputSchema: {
-    properties: {
-      operation: { enum: ["add", "subtract", "multiply", "divide"] },
-      a: { type: "number" },
-      b: { type: "number" }
-    }
-  }
-}
-
-// ❌ WRONG: Separate tool for each operation
-{ name: "add", ... }
-{ name: "subtract", ... }
-{ name: "multiply", ... }
-```
-
-**CRITICAL:** Always reference how2mcp patterns when implementing new tools or refactoring existing ones. This ensures we follow 2025 best practices for MCP architecture.
-
 ## Project Overview
 
-This is a Model Context Protocol (MCP) server for Google Drive integration. It provides:
-- Full read/write access to Google Drive files and folders
-- Resource access to Google Drive files via `gdrive:///<file_id>` URIs
-- Tools for searching, reading, creating, and updating files
-- Comprehensive Google Sheets operations (read, update, append)
-- Google Forms creation and management with question types
-- **Google Docs API integration** - Create documents, insert text, replace text, apply formatting, insert tables
-- **Gmail API integration** - Read, search, compose, send emails, manage labels (v3.2.0+)
-- **Google Calendar API integration** - List calendars, manage events, check availability, quick add with natural language (v3.3.0+)
-- **Batch file operations** - Process multiple files in a single operation (create, update, delete, move)
-- Enhanced search with natural language parsing
-- Forms response handling and analysis
-- **Redis caching infrastructure** - High-performance caching for improved response times
-- **Performance monitoring and logging** - Structured logging with Winston and comprehensive performance metrics
-- Automatic export of Google Workspace files to readable formats
-- Docker support for containerized deployment with Redis
+MCP server for Google Workspace integration (Drive, Sheets, Forms, Docs, Gmail, Calendar). Version 3.3.0.
 
-## Claude Code Capabilities
+- 6 operation-based tools with 47 total operations
+- Redis caching (optional, graceful fallback)
+- Token encryption with key rotation
+- Docker support with docker-compose
 
-**IMPORTANT: Claude can and should run commands directly.** Do NOT ask the user to run commands when Claude can execute them.
+**Reference:** [how2mcp](https://github.com/Rixmerz/HOW2MCP.git) — definitive MCP implementation guide. Follow its **operation-based tool pattern** (one tool with `operation` parameter, NOT separate tools per action). See `MCP-DOCS/` for architecture guides and `MCP_EXAMPLE_PROJECT/` for reference implementation.
 
-### What Claude Can Do Directly
-- **Run builds:** `npm run build` - Execute and verify results
-- **Run tests:** `npm test`, `npm test -- --testPathPattern="..."` - Execute and report results
-- **Run linting:** `npm run lint` - Check and report issues
-- **Search code:** `grep`, `find`, glob patterns - Search directly
-- **Read files:** Read any file in the project
-- **Edit files:** Make code changes directly
-- **Git operations:** `git status`, `git diff`, `git add`, `git commit` - Execute git commands
-- **Verify changes:** Run build/test/lint after making changes
-
-### Anti-Pattern: Don't Ask User to Run Commands
-```
-❌ WRONG: "Please run `npm run build` and let me know if it passes"
-✅ RIGHT: [Claude runs `npm run build` directly and reports the result]
-
-❌ WRONG: "Run `npm test` to verify the changes"
-✅ RIGHT: [Claude runs `npm test` directly and shows pass/fail]
-
-❌ WRONG: "Check if there are TypeScript errors by running the build"
-✅ RIGHT: [Claude runs build, sees errors, fixes them, runs again]
-```
-
-### When to Involve User
-- **Browser testing:** Opening URLs in browser for visual verification
-- **Authentication flows:** OAuth that requires browser interaction
-- **External services:** Starting Docker, Redis, or other services
-- **Destructive operations:** Confirm before deleting files or force-pushing
-
-## Git Workflow
-
-**IMPORTANT: Main branch is protected.** All changes must go through pull requests.
+## Commands
 
 ```bash
-# Create feature branch
-git checkout -b feature/your-feature-name
+# Build & Dev
+npm run build          # Compile TypeScript to dist/
+npm run watch          # Watch mode (auto-rebuild)
 
-# Push and create PR
-git push -u origin feature/your-feature-name
-gh pr create --title "feat: Your feature" --body "Description"
+# Testing
+npm test               # Run all unit tests
+npm run test:coverage  # Tests with coverage report
+npm run test:integration  # Integration tests
+npm run test:e2e       # End-to-end tests
+npm run type-check     # TypeScript type checking (no emit)
+npm run lint           # ESLint
+
+# Auth & Server
+node ./dist/index.js auth   # OAuth flow (requires gcp-oauth.keys.json)
+node ./dist/index.js        # Start MCP server (stdio transport)
+
+# Changelog
+./scripts/changelog/update-changelog.py --auto
 ```
-
-- Direct pushes to `main` will be rejected
-- PRs require review before merging
-- Use conventional commit messages (feat:, fix:, docs:, etc.)
-
-## Key Commands
-
-### Build & Development
-- `npm run build` - Compile TypeScript to JavaScript in dist/ folder
-- `npm run watch` - Watch mode for development (auto-rebuild on changes)
-- `npm run prepare` - Runs build automatically (used by npm install)
-
-### Authentication
-- `node ./dist/index.js auth` - Run authentication flow to get Google Drive credentials
-- Requires `gcp-oauth.keys.json` file in project root
-- Saves credentials to `.gdrive-server-credentials.json`
-
-### Server Usage
-- `node ./dist/index.js` - Start the MCP server (requires authentication first)
-- Server runs on stdio transport for MCP communication
-
-### Changelog
-- `./scripts/changelog/update-changelog.py --auto` - update change log by running script to analyze git commits. 
 
 ## Architecture
 
-### Core Components
-- **index.ts** - Main server implementation with MCP SDK
-- **Authentication** - Uses Google Cloud local auth with OAuth2
-- **Drive API Integration** - Google Drive v3 API for file operations
-- **Sheets API Integration** - Google Sheets v4 API for spreadsheet operations
-- **Forms API Integration** - Google Forms v1 API for form creation and management
-- **Docs API Integration** - Google Docs v1 API for document manipulation
-- **Gmail API Integration** - Gmail v1 API for email operations (v3.2.0+)
-- **Calendar API Integration** - Google Calendar v3 API for calendar and event management (v3.3.0+)
-- **Redis Cache Manager** - High-performance caching with automatic invalidation
-- **Performance Monitor** - Real-time performance tracking and statistics
-- **Winston Logger** - Structured logging with file rotation and console output
+### MCP Tools (Operation-Based)
 
-### MCP Implementation
-- **Resources**: Lists and reads Google Drive files
-- **Tools**: 
-  - **Read Operations**: search, read, listSheets, readSheet
-  - **Write Operations**: createFile, updateFile, createFolder
-  - **Sheets Operations**: createSheet, renameSheet, deleteSheet, updateCells, updateCellsWithFormula, formatCells, addConditionalFormatting, freezeRowsColumns, setColumnWidth, appendRows
-  - **Forms Operations**: createForm, getForm, addQuestion, listResponses
-  - **Docs Operations**: createDocument, insertText, replaceText, applyTextStyle, insertTable
-  - **Gmail Operations**: listMessages, listThreads, getMessage, getThread, searchMessages, createDraft, sendMessage, sendDraft, listLabels, modifyLabels
-  - **Calendar Operations**: listCalendars, getCalendar, listEvents, getEvent, createEvent, updateEvent, deleteEvent, quickAdd, checkFreeBusy
-  - **Batch Operations**: batchFileOperations (create, update, delete, move multiple files)
-  - **Enhanced Search**: enhancedSearch with natural language parsing
-- **Transport**: StdioServerTransport for MCP communication
+All tools use an `operation` parameter — NOT separate tools per action:
 
-### File Type Handling
-- Google Docs → Exported as Markdown
-- Google Sheets → Exported as CSV
-- Google Presentations → Exported as Plain text
-- Google Drawings → Exported as PNG
-- Text files → Direct text content
-- Binary files → Base64 encoded blob
+| Tool | Ops | Operations |
+|------|-----|------------|
+| `drive` | 7 | search, enhancedSearch, read, createFile, createFolder, updateFile, batchOperations |
+| `sheets` | 11 | listSheets, readSheet, createSheet, renameSheet, deleteSheet, updateCells, updateFormula, formatCells, addConditionalFormat, freezeRowsColumns, setColumnWidth, appendRows |
+| `forms` | 4 | createForm, readForm, addQuestion, listResponses |
+| `docs` | 5 | createDocument, insertText, replaceText, applyTextStyle, insertTable |
+| `gmail` | 10 | listMessages, listThreads, getMessage, getThread, searchMessages, createDraft, sendMessage, sendDraft, listLabels, modifyLabels |
+| `calendar` | 9 | listCalendars, getCalendar, listEvents, getEvent, createEvent, updateEvent, deleteEvent, quickAdd, checkFreeBusy |
 
-## Environment Variables
-- `GDRIVE_CREDENTIALS_PATH` - Path to credentials file (default: `../../../.gdrive-server-credentials.json`)
-- `GDRIVE_OAUTH_PATH` - Path to OAuth keys file (default: `../../../gcp-oauth.keys.json`)
-- `REDIS_URL` - Redis connection URL for caching (default: `redis://localhost:6379`)
-- `LOG_LEVEL` - Winston logging level (default: `info`)
-- `NODE_ENV` - Environment mode (default: `development`)
+Resources: Lists and reads Google Drive files via `gdrive:///<file_id>` URIs.
 
-## Docker Usage
+### Module Structure
 
-### Build Optimizations (Updated 2025-09-23)
-Recent improvements to Docker builds:
-- Test files excluded from Docker images via `.dockerignore` for cleaner, smaller builds
-- TypeScript compilation excludes test files from production builds
-- Optimized build process removes development dependencies from container images
-
-### Authentication Setup (Required First)
-Authentication must be performed on the host machine before running Docker:
-
-```bash
-# 1. Ensure OAuth keys are in place
-cp /path/to/gcp-oauth.keys.json credentials/
-
-# 2. Run authentication on host (opens browser)
-./scripts/auth.sh
-
-# 3. Verify credentials were created
-ls -la credentials/
-# Should see: .gdrive-server-credentials.json and .gdrive-mcp-tokens.json
+```
+src/
+  modules/
+    calendar/  (13 files) - Google Calendar v3 API (v3.3.0)
+    docs/      (2 files)  - Google Docs v1 API
+    drive/     (9 files)  - Google Drive v3 API
+    forms/     (7 files)  - Google Forms v1 API
+    gmail/     (12 files) - Gmail v1 API (v3.2.0)
+    sheets/    (9 files)  - Google Sheets v4 API
+    index.ts              - Module exports
+    types.ts              - Shared types
+  __tests__/              - 24+ test files (unit, integration, performance)
+index.ts                  - Main server (37KB, tool registration, cache, auth)
 ```
 
-### Building and Running with Docker
-```bash
-# Build the Docker image
-docker build -t gdrive-mcp-server .
+### File Type Handling
 
-# Run with Docker Compose (includes Redis) - RECOMMENDED
+| Google Type | Export Format |
+|-------------|-------------|
+| Docs | Markdown |
+| Sheets | CSV |
+| Presentations | Plain text |
+| Drawings | PNG |
+| Text files | Direct content |
+| Binary | Base64 blob |
+
+## Environment Variables
+
+See `.env.example` for full reference. Key variables:
+
+| Variable | Required | Purpose |
+|----------|----------|---------|
+| `GDRIVE_TOKEN_ENCRYPTION_KEY` | **Yes** | 32-byte base64 key for token storage. Generate: `openssl rand -base64 32` |
+| `GDRIVE_TOKEN_ENCRYPTION_KEY_V2/V3/V4` | No | Additional keys for key rotation |
+| `GDRIVE_TOKEN_CURRENT_KEY_VERSION` | No | Active key version (default: v1) |
+| `GDRIVE_TOKEN_REFRESH_INTERVAL` | No | Token refresh interval in ms (default: 1800000) |
+| `GDRIVE_TOKEN_PREEMPTIVE_REFRESH` | No | Pre-expiry refresh window in ms (default: 600000) |
+| `GDRIVE_TOKEN_MAX_RETRIES` | No | Max retry attempts (default: 3) |
+| `GDRIVE_TOKEN_RETRY_DELAY` | No | Initial retry delay in ms (default: 1000) |
+| `GDRIVE_CREDENTIALS_PATH` | No | Path to credentials file |
+| `GDRIVE_OAUTH_PATH` | No | Path to OAuth keys file |
+| `PAI_CONTACTS_PATH` | No | Contact resolution for Calendar (name → email) |
+| `LOG_LEVEL` | No | Winston log level (default: info) |
+| `REDIS_URL` | No | Redis connection (default: redis://localhost:6379) |
+| `GDRIVE_TOKEN_HEALTH_CHECK` | No | Enable token health checks (default: true) |
+
+## Docker
+
+```bash
+# Authenticate first (on host, opens browser)
+./scripts/auth.sh
+
+# Run with Redis (recommended)
 docker-compose up -d
 
-# Run standalone with Docker (without Redis caching)
+# Run standalone (no Redis)
 docker run -i --rm \
   -v ${PWD}/credentials:/credentials:ro \
   -v ${PWD}/data:/data \
@@ -214,81 +117,40 @@ docker run -i --rm \
   gdrive-mcp-server
 ```
 
-### Claude Desktop Docker Integration
-Add to your Claude Desktop configuration:
-```json
-{
-  "mcpServers": {
-    "gdrive": {
-      "command": "docker",
-      "args": [
-        "run", "-i", "--rm", "--init",
-        "-v", "/path/to/gdrive-mcp/credentials:/credentials:ro",
-        "-v", "/path/to/gdrive-mcp/data:/data",
-        "-v", "/path/to/gdrive-mcp/logs:/app/logs",
-        "--env-file", "/path/to/gdrive-mcp/.env",
-        "gdrive-mcp-server"
-      ]
-    }
-  }
-}
-```
+For Claude Desktop integration, see `docker-compose.yml` for the full service config.
 
-For full functionality with Redis caching, use Docker Compose instead:
+## Git Workflow
+
+Main branch is protected. All changes go through PRs.
+
 ```bash
-docker-compose up -d
+git checkout -b feature/your-feature-name
+git push -u origin feature/your-feature-name
+gh pr create --title "feat: description" --body "Details"
 ```
 
-## Performance & Monitoring Features
+Use conventional commits: `feat:`, `fix:`, `docs:`, `test:`, `chore:`.
 
-### Redis Caching
-- Automatic caching of search results and file reads
-- 5-minute TTL for cached data
-- Cache invalidation on write operations
-- Graceful fallback when Redis is unavailable
+## Gotchas
 
-### Performance Monitoring
-- Real-time operation timing and statistics
-- Memory usage tracking
-- Cache hit/miss ratios
-- Performance metrics logged every 30 seconds
+- **Token encryption required** — `GDRIVE_TOKEN_ENCRYPTION_KEY` must be set or token storage fails. Generate with `openssl rand -base64 32`
+- **Key rotation** — Supports V1-V4 keys via env vars. Set `GDRIVE_TOKEN_CURRENT_KEY_VERSION` when rotating
+- **`isolated-vm` build deps** — Requires `python3`, `make`, `g++` at npm install time (handled in Dockerfile)
+- **Server version stale** — `index.ts:388` hardcodes version string; must be manually updated alongside `package.json`
+- **Redis optional** — Server degrades gracefully without Redis. No errors, just no caching
+- **Calendar contacts** — Set `PAI_CONTACTS_PATH` to resolve names like "Mary" to email addresses; without it, all attendees must be email addresses
+- **ES modules** — Project uses ES2022 modules. Imports need `.js` extensions in TypeScript for Node resolution
+- **Test files excluded from Docker** — `.dockerignore` and `tsconfig.json` both exclude `__tests__/` from production builds
 
-### Structured Logging
-- Winston-based logging with configurable levels
-- File rotation for log management
-- Separate error and combined log files
-- Console output for development
+## Claude Code Behavior
 
-### Batch Operations
-- Process multiple files in a single operation
-- Supports create, update, delete, and move operations
-- Optimized for efficiency and reduced API calls
-- Comprehensive error handling per operation
+**Run commands directly.** Do not ask the user to run builds, tests, or verification commands.
+
+When issues are completed, mark them DONE using the Linear MCP.
 
 ## Development Notes
-- Uses TypeScript with ES modules (ES2022 target)
-- Standalone tsconfig.json with modern JavaScript features
-- Output compiled to `dist/` directory
-- Executable shebang added to compiled files via shx
-- Build requirements: Node.js 18+ for ES2022 support
-- Redis optional but recommended for optimal performance
 
-## Recent Updates (September 2025)
-
-### Google Forms API Improvements
-- **Fixed addQuestion JSON payload error** - Resolved "Invalid JSON payload" issue when programmatically adding questions to forms
-- **Enhanced type safety** - Improved QuestionItem interface structure to match Google Forms API expectations
-- **Comprehensive test coverage** - Added 21 tests covering all question types for robust validation
-- **Better error handling** - Enhanced debugging and error reporting for form operations
-
-### Security Enhancements
-- **Enhanced TokenManager validation** - Improved base key validation for better authentication security
-- **Authentication hardening** - Additional security measures for credential management
-
-### CI/CD Pipeline Improvements
-- **ESLint compliance** - Resolved all ESLint violations blocking CI pipeline
-- **GitHub Actions optimization** - Fixed ESM/CommonJS compatibility issues
-- **Test infrastructure** - Improved Jest coverage thresholds and testing workflows
-
-## Project Management
-- When issues are completed, IMPORTANT you MUST mark them DONE! Using the linear MCP
+- TypeScript ES2022, compiled to `dist/` with shx chmod for shebang
+- Node.js 18+ required
+- 10+ GitHub Actions workflows (CI, security scanning, performance, deployment)
+- Jest for testing with coverage thresholds

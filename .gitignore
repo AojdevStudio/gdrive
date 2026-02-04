@@ -44,6 +44,3 @@ claude-config-*.json
 # BMad framework installations - external tools
 .claude/commands/BMad/
 # BMAD (local only)
-
-# Beads local state
-.beads/
