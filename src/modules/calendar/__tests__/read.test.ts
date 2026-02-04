@@ -230,7 +230,7 @@ describe('getEvent', () => {
         eventId: 'event123',
       })
     );
-    expect(result.id).toBe('event123');
+    expect(result.eventId).toBe('event123');
     expect(result.summary).toBe('Team Meeting');
     expect(result.attendees).toHaveLength(2);
   });
@@ -354,7 +354,7 @@ describe('getEvent', () => {
 
   test('uses cache when available', async () => {
     const cachedResult = {
-      id: 'cached-event',
+      eventId: 'cached-event',
       summary: 'Cached Event',
       start: { dateTime: '2026-01-09T14:00:00Z' },
       end: { dateTime: '2026-01-09T15:00:00Z' },
@@ -383,7 +383,7 @@ describe('getEvent', () => {
     expect(mockContext.cacheManager.set).toHaveBeenCalledWith(
       expect.stringContaining('calendar:getEvent:event1'),
       expect.objectContaining({
-        id: 'event1',
+        eventId: 'event1',
         summary: 'Event 1',
       })
     );

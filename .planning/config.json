@@ -1,0 +1,9 @@
+{
+  "model_profile": "balanced",
+  "commit_docs": true,
+  "settings": {
+    "auto_commit": true,
+    "require_tests": true,
+    "require_manual_verification": true
+  }
+}
