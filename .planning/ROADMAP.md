@@ -136,8 +136,8 @@ Plans:
 **Plans:** 2 plans
 
 Plans:
-- [ ] 04-01-PLAN.md — Gmail validation utilities and assertion replacement (VAL-01, VAL-03)
-- [ ] 04-02-PLAN.md — Calendar validation utilities and assertion replacement (VAL-02)
+- [x] 04-01-PLAN.md — Gmail validation utilities and assertion replacement (VAL-01, VAL-03)
+- [x] 04-02-PLAN.md — Calendar validation utilities and assertion replacement (VAL-02)
 
 **Key Files:**
 - `src/modules/gmail/validation.ts` (new)
@@ -235,4 +235,4 @@ Phase 5 (Caching) ──┘
 ---
 
 *Roadmap created: 2026-01-25*
-*Last updated: 2026-01-26 after Phase 4 planning complete*
+*Last updated: 2026-02-13 after Phase 4 execution complete*
