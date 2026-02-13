@@ -10,6 +10,7 @@ import type {
   ListThreadsOptions,
   ListThreadsResult,
 } from './types.js';
+import { assertRequiredString } from './validation.js';
 
 /**
  * List messages in the user's mailbox
@@ -67,10 +68,14 @@ export async function listMessages(
   const response = await context.gmail.users.messages.list(params);
 
   const result: ListMessagesResult = {
-    messages: (response.data.messages || []).map((msg: gmail_v1.Schema$Message) => ({
-      id: msg.id!,
-      threadId: msg.threadId!,
-    })),
+    messages: (response.data.messages || []).map((msg: gmail_v1.Schema$Message, index: number) => {
+      assertRequiredString(msg.id, 'msg.id', 'listMessages', `index=${index}`);
+      assertRequiredString(msg.threadId, 'msg.threadId', 'listMessages', `index=${index}`);
+      return {
+        id: msg.id,
+        threadId: msg.threadId,
+      };
+    }),
     resultSizeEstimate: response.data.resultSizeEstimate || 0,
   };
 
@@ -146,11 +151,14 @@ export async function listThreads(
   const response = await context.gmail.users.threads.list(params);
 
   const result: ListThreadsResult = {
-    threads: (response.data.threads || []).map((thread: gmail_v1.Schema$Thread) => ({
-      id: thread.id!,
-      snippet: thread.snippet || '',
-      historyId: thread.historyId || '',
-    })),
+    threads: (response.data.threads || []).map((thread: gmail_v1.Schema$Thread, index: number) => {
+      assertRequiredString(thread.id, 'thread.id', 'listThreads', `index=${index}`);
+      return {
+        id: thread.id,
+        snippet: thread.snippet || '',
+        historyId: thread.historyId || '',
+      };
+    }),
     resultSizeEstimate: response.data.resultSizeEstimate || 0,
   };
 

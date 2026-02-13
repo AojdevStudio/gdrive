@@ -6,6 +6,7 @@
 import type { calendar_v3 } from 'googleapis';
 import type { CalendarContext } from '../types.js';
 import type { FreeBusyOptions, FreeBusyResult } from './types.js';
+import { assertRequiredString } from './validation.js';
 
 /**
  * Check free/busy status for calendars or attendees
@@ -64,9 +65,12 @@ export async function checkFreeBusy(
       requestBody,
     });
 
+    assertRequiredString(response.data.timeMin, 'response.timeMin', 'checkFreeBusy', `timeMin='${timeMin}'`);
+    assertRequiredString(response.data.timeMax, 'response.timeMax', 'checkFreeBusy', `timeMax='${timeMax}'`);
+
     const result: FreeBusyResult = {
-      timeMin: response.data.timeMin!,
-      timeMax: response.data.timeMax!,
+      timeMin: response.data.timeMin,
+      timeMax: response.data.timeMax,
       calendars: {},
     };
 
@@ -76,19 +80,27 @@ export async function checkFreeBusy(
         response.data.calendars
       )) {
         result.calendars[calendarId] = {
-          busy: (calendarData.busy || []).map((period) => ({
-            start: period.start!,
-            end: period.end!,
-          })),
+          busy: (calendarData.busy || []).map((period, index) => {
+            assertRequiredString(period.start, 'period.start', 'checkFreeBusy', `calendarId='${calendarId}'`, `index=${index}`);
+            assertRequiredString(period.end, 'period.end', 'checkFreeBusy', `calendarId='${calendarId}'`, `index=${index}`);
+            return {
+              start: period.start,
+              end: period.end,
+            };
+          }),
         };
 
         // Include errors if present (e.g., calendar not found or access denied)
         if (calendarData.errors && calendarData.errors.length > 0) {
           result.calendars[calendarId].errors = calendarData.errors.map(
-            (err) => ({
-              domain: err.domain!,
-              reason: err.reason!,
-            })
+            (err, errIndex) => {
+              assertRequiredString(err.domain, 'error.domain', 'checkFreeBusy', `calendarId='${calendarId}'`, `errorIndex=${errIndex}`);
+              assertRequiredString(err.reason, 'error.reason', 'checkFreeBusy', `calendarId='${calendarId}'`, `errorIndex=${errIndex}`);
+              return {
+                domain: err.domain,
+                reason: err.reason,
+              };
+            }
           );
         }
       }

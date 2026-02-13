@@ -11,6 +11,7 @@ import type {
   ModifyLabelsOptions,
   ModifyLabelsResult,
 } from './types.js';
+import { assertRequiredString, assertModifyLabelsOperation } from './validation.js';
 
 /**
  * List all labels in the user's mailbox
@@ -45,10 +46,13 @@ export async function listLabels(
     userId: 'me',
   });
 
-  const labels: LabelInfo[] = (response.data.labels || []).map((label: gmail_v1.Schema$Label) => {
+  const labels: LabelInfo[] = (response.data.labels || []).map((label: gmail_v1.Schema$Label, index: number) => {
+    assertRequiredString(label.id, 'label.id', 'listLabels', `index=${index}`);
+    assertRequiredString(label.name, 'label.name', 'listLabels', `index=${index}`, `id='${label.id}'`);
+
     const info: LabelInfo = {
-      id: label.id!,
-      name: label.name!,
+      id: label.id,
+      name: label.name,
       type: label.type === 'system' ? 'system' : 'user',
     };
 
@@ -124,6 +128,9 @@ export async function modifyLabels(
   context: GmailContext
 ): Promise<ModifyLabelsResult> {
   const { id, addLabelIds, removeLabelIds } = options;
+
+  // Validate that at least one label operation is provided (VAL-03)
+  assertModifyLabelsOperation(addLabelIds, removeLabelIds);
 
   // Build the request body - only include arrays if they have items
   const requestBody: gmail_v1.Schema$ModifyMessageRequest = {};

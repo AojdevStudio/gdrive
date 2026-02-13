@@ -10,6 +10,7 @@ import type {
   ListEventsOptions,
   ListEventsResult,
 } from './types.js';
+import { assertRequiredString } from './validation.js';
 
 /**
  * List calendars accessible by the user
@@ -62,7 +63,9 @@ export async function listCalendars(
   const response = await context.calendar.calendarList.list(params);
 
   const result: ListCalendarsResult = {
-    calendars: (response.data.items || []).map((cal: calendar_v3.Schema$CalendarListEntry) => {
+    calendars: (response.data.items || []).map((cal: calendar_v3.Schema$CalendarListEntry, index: number) => {
+      assertRequiredString(cal.id, 'cal.id', 'listCalendars', `index=${index}`);
+
       const calendar: {
         id: string;
         summary: string;
@@ -71,7 +74,7 @@ export async function listCalendars(
         primary?: boolean;
         accessRole?: string;
       } = {
-        id: cal.id!,
+        id: cal.id,
         summary: cal.summary || '',
       };
 
@@ -181,7 +184,9 @@ export async function listEvents(
   const response = await context.calendar.events.list(params);
 
   const result: ListEventsResult = {
-    events: (response.data.items || []).map((event: calendar_v3.Schema$Event) => {
+    events: (response.data.items || []).map((event: calendar_v3.Schema$Event, index: number) => {
+      assertRequiredString(event.id, 'event.id', 'listEvents', `calendarId='${calendarId}'`, `index=${index}`);
+
       const eventSummary: {
         id: string;
         summary?: string;
@@ -192,7 +197,7 @@ export async function listEvents(
         attendeeCount?: number;
         location?: string;
       } = {
-        id: event.id!,
+        id: event.id,
       };
 
       // Only add optional properties if they exist (exactOptionalPropertyTypes compliance)

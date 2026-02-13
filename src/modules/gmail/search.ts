@@ -8,6 +8,7 @@ import type {
   SearchMessagesOptions,
   SearchMessagesResult,
 } from './types.js';
+import { assertRequiredString } from './validation.js';
 
 /**
  * Search messages using Gmail query syntax
@@ -72,10 +73,14 @@ export async function searchMessages(
   const response = await context.gmail.users.messages.list(params);
 
   const result: SearchMessagesResult = {
-    messages: (response.data.messages || []).map((msg: gmail_v1.Schema$Message) => ({
-      id: msg.id!,
-      threadId: msg.threadId!,
-    })),
+    messages: (response.data.messages || []).map((msg: gmail_v1.Schema$Message, index: number) => {
+      assertRequiredString(msg.id, 'msg.id', 'searchMessages', `index=${index}`, `query='${query}'`);
+      assertRequiredString(msg.threadId, 'msg.threadId', 'searchMessages', `index=${index}`, `query='${query}'`);
+      return {
+        id: msg.id,
+        threadId: msg.threadId,
+      };
+    }),
     resultSizeEstimate: response.data.resultSizeEstimate || 0,
   };
 

@@ -11,6 +11,7 @@ import type {
   EventResult,
 } from './types.js';
 import { buildEventResult } from './utils.js';
+import { assertRequiredString } from './validation.js';
 
 /**
  * Get details of a specific calendar
@@ -50,8 +51,10 @@ export async function getCalendar(
 
   const response = await context.calendar.calendars.get(params);
 
+  assertRequiredString(response.data.id, 'response.id', 'getCalendar', `calendarId='${calendarId}'`);
+
   const result: CalendarResult = {
-    id: response.data.id!,
+    id: response.data.id,
     summary: response.data.summary || '',
     timeZone: response.data.timeZone || 'UTC',
   };

@@ -10,6 +10,7 @@ import type {
   GetThreadOptions,
   ThreadResult,
 } from './types.js';
+import { assertRequiredString } from './validation.js';
 
 /**
  * Parse headers from a Gmail message
@@ -110,9 +111,12 @@ function extractBody(payload: gmail_v1.Schema$MessagePart | undefined): { plain?
 function parseMessage(message: gmail_v1.Schema$Message): MessageResult {
   const body = extractBody(message.payload);
 
+  assertRequiredString(message.id, 'message.id', 'parseMessage');
+  assertRequiredString(message.threadId, 'message.threadId', 'parseMessage', `id='${message.id}'`);
+
   const result: MessageResult = {
-    id: message.id!,
-    threadId: message.threadId!,
+    id: message.id,
+    threadId: message.threadId,
     labelIds: message.labelIds || [],
     snippet: message.snippet || '',
     historyId: message.historyId || '',
@@ -228,8 +232,10 @@ export async function getThread(
 
   const response = await context.gmail.users.threads.get(params);
 
+  assertRequiredString(response.data.id, 'response.data.id', 'getThread', `threadId='${id}'`);
+
   const result: ThreadResult = {
-    id: response.data.id!,
+    id: response.data.id,
     historyId: response.data.historyId || '',
     messages: (response.data.messages || []).map(parseMessage),
   };

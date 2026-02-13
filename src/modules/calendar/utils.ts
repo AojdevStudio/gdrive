@@ -4,6 +4,7 @@
 
 import type { calendar_v3 } from 'googleapis';
 import type { Attendee, EventResult } from './types.js';
+import { assertRequiredString } from './validation.js';
 
 /**
  * Validate event time parameters
@@ -109,8 +110,10 @@ export function parseAttendees(
 export function buildEventResult(
   responseData: calendar_v3.Schema$Event
 ): EventResult {
+  assertRequiredString(responseData.id, 'responseData.id', 'buildEventResult');
+
   const result: EventResult = {
-    eventId: responseData.id!,
+    eventId: responseData.id,
   };
 
   // Only add properties if they exist (exactOptionalPropertyTypes compliance)
