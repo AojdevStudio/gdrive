@@ -292,4 +292,89 @@ describe('checkFreeBusy', () => {
       })
     );
   });
+
+  test('throws descriptive error when timeMin is undefined in response', async () => {
+    const mockResponse = {
+      data: {
+        timeMin: undefined,
+        timeMax: '2026-01-09T23:59:59Z',
+        calendars: {
+          'primary': {
+            busy: [],
+          },
+        },
+      },
+    };
+
+    // @ts-expect-error - Mock typing with exactOptionalPropertyTypes
+    (mockCalendarApi.freebusy.query as jest.Mock).mockResolvedValue(mockResponse);
+
+    await expect(
+      checkFreeBusy(
+        {
+          timeMin: '2026-01-09T00:00:00Z',
+          timeMax: '2026-01-09T23:59:59Z',
+          items: [{ id: 'primary' }],
+        },
+        mockContext
+      )
+    ).rejects.toThrow(/checkFreeBusy.*timeMin/);
+  });
+
+  test('throws descriptive error when timeMax is undefined in response', async () => {
+    const mockResponse = {
+      data: {
+        timeMin: '2026-01-09T00:00:00Z',
+        timeMax: undefined,
+        calendars: {
+          'primary': {
+            busy: [],
+          },
+        },
+      },
+    };
+
+    // @ts-expect-error - Mock typing with exactOptionalPropertyTypes
+    (mockCalendarApi.freebusy.query as jest.Mock).mockResolvedValue(mockResponse);
+
+    await expect(
+      checkFreeBusy(
+        {
+          timeMin: '2026-01-09T00:00:00Z',
+          timeMax: '2026-01-09T23:59:59Z',
+          items: [{ id: 'primary' }],
+        },
+        mockContext
+      )
+    ).rejects.toThrow(/checkFreeBusy.*timeMax/);
+  });
+
+  test('handles missing busy periods gracefully', async () => {
+    const mockResponse = {
+      data: {
+        timeMin: '2026-01-09T00:00:00Z',
+        timeMax: '2026-01-09T23:59:59Z',
+        calendars: {
+          'primary': {
+            busy: undefined,
+          },
+        },
+      },
+    };
+
+    // @ts-expect-error - Mock typing with exactOptionalPropertyTypes
+    (mockCalendarApi.freebusy.query as jest.Mock).mockResolvedValue(mockResponse);
+
+    const result = await checkFreeBusy(
+      {
+        timeMin: '2026-01-09T00:00:00Z',
+        timeMax: '2026-01-09T23:59:59Z',
+        items: [{ id: 'primary' }],
+      },
+      mockContext
+    );
+
+    // Should return empty array, not throw
+    expect(result.calendars['primary']!.busy).toHaveLength(0);
+  });
 });
