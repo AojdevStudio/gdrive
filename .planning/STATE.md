@@ -72,6 +72,9 @@ Plan Phase 5: `/gsd:discuss-phase 5` or `/gsd:plan-phase 5`
 | cal-utils-exactoptional | Maintain exactOptionalPropertyTypes compliance in utilities | 03-01 | Type safety - strict mode compatible |
 | cal-import-utilities | All calendar operations import from utils.ts | 03-02 | DRY - zero duplicate implementations |
 | cal-remove-unused-attendee | Remove unused Attendee imports after refactor | 03-02 | Code cleanup - imports only what's needed |
+| gmail-asserts-keyword | TypeScript asserts keyword for Gmail validation type narrowing | 04-01 | Type safety - narrowing after validation |
+| gmail-contextual-errors | Gmail error messages include operation name, field, and context | 04-01 | Debuggability - AI agent error diagnosis |
+| gmail-validate-before-use | Validate API responses before using values, not at boundary | 04-01 | Correctness - fail fast with clear errors |
 | cal-validation-separate-module | Separate validation.ts per module (Calendar/Gmail independent) | 04-02 | Clean dependencies - no cross-module coupling |
 | cal-validation-asserts-keyword | TypeScript asserts keyword for compile-time type narrowing | 04-02 | Type safety - narrowing after validation |
 | cal-validation-contextual-errors | Error messages include operation name, field, and identifiers | 04-02 | Debuggability - AI agent error diagnosis |
