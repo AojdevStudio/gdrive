@@ -249,4 +249,34 @@ describe('modifyLabels', () => {
       })
     );
   });
+
+  test('throws error when both addLabelIds and removeLabelIds are empty', async () => {
+    await expect(
+      modifyLabels(
+        {
+          id: '18c123abc',
+          addLabelIds: [],
+          removeLabelIds: [],
+        },
+        mockContext
+      )
+    ).rejects.toThrow('modifyLabels: at least one of addLabelIds or removeLabelIds must be provided');
+
+    // Verify API was never called
+    expect(mockGmailApi.users.messages.modify).not.toHaveBeenCalled();
+  });
+
+  test('throws error when both addLabelIds and removeLabelIds are undefined', async () => {
+    await expect(
+      modifyLabels(
+        {
+          id: '18c123abc',
+        },
+        mockContext
+      )
+    ).rejects.toThrow('modifyLabels: at least one of addLabelIds or removeLabelIds must be provided');
+
+    // Verify API was never called
+    expect(mockGmailApi.users.messages.modify).not.toHaveBeenCalled();
+  });
 });
