@@ -169,9 +169,20 @@ Plans:
 - CACHE-01: Forms module caching
 - CACHE-02: Calendar cache key fix
 
+**Plans:** 2 plans
+
+Plans:
+- [ ] 05-01-PLAN.md — Forms readForm caching + addQuestion invalidation (CACHE-01)
+- [ ] 05-02-PLAN.md — Calendar getEvent cache key fix with calendarId (CACHE-02)
+
 **Key Files:**
 - `src/modules/forms/read.ts`
+- `src/modules/forms/questions.ts`
 - `src/modules/calendar/read.ts`
+- `src/modules/calendar/update.ts`
+- `src/modules/calendar/delete.ts`
+- `src/__tests__/forms/read.test.ts` (new)
+- `src/modules/calendar/__tests__/read.test.ts`
 
 **Success Criteria:**
 - Forms read operations use cache manager
