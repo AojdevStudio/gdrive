@@ -8,7 +8,8 @@
   "bugs": "https://github.com/modelcontextprotocol/servers/issues",
   "type": "module",
   "bin": {
-    "mcp-server-gdrive": "dist/index.js"
+    "mcp-server-gdrive": "dist/index.js",
+    "mcp-server-gdrive-codemode": "dist/index-codemode.js"
   },
   "files": [
     "dist"
@@ -29,10 +30,12 @@
     "bmad:validate": "bmad-method validate"
   },
   "dependencies": {
+    "@apidevtools/json-schema-ref-parser": "^13.0.0",
     "@google-cloud/local-auth": "^3.0.1",
     "@modelcontextprotocol/sdk": "^1.25.1",
     "googleapis": "^144.0.0",
     "isolated-vm": "^6.0.2",
+    "js-yaml": "^4.1.0",
     "redis": "^5.6.1",
     "winston": "^3.17.0"
   },
@@ -43,6 +46,7 @@
     "@eslint/js": "^9.21.0",
     "@jest/globals": "^29.7.0",
     "@types/jest": "^29.5.12",
+    "@types/js-yaml": "^4.0.9",
     "@types/node": "^22",
     "@typescript-eslint/eslint-plugin": "^8.20.0",
     "@typescript-eslint/parser": "^8.20.0",
