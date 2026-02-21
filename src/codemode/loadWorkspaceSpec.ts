@@ -62,6 +62,7 @@ export async function loadWorkspaceSpec(): Promise<AnyObj> {
   }
 
   // Merge into a single spec surface.
+  const mergedPaths: Record<string, unknown> = {};
   const merged: AnyObj = {
     openapi: "3.0.0",
     info: {
@@ -69,12 +70,13 @@ export async function loadWorkspaceSpec(): Promise<AnyObj> {
       version: "codemode-1",
     },
     servers: [{ url: "https://www.googleapis.com" }],
-    paths: {},
+    paths: mergedPaths,
   };
 
   for (const s of derefSpecs) {
-    if (s?.paths && typeof s.paths === "object") {
-      Object.assign(merged.paths, s.paths);
+    const paths = s.paths;
+    if (paths && typeof paths === "object") {
+      Object.assign(mergedPaths, paths as Record<string, unknown>);
     }
   }
 

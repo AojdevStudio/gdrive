@@ -9,7 +9,7 @@ import {
 import winston from "winston";
 
 import { TokenManager } from "./src/auth/TokenManager.js";
-import { AuthManager } from "./src/auth/AuthManager.js";
+import { AuthManager, AuthState } from "./src/auth/AuthManager.js";
 import { loadWorkspaceSpec } from "./src/codemode/loadWorkspaceSpec.js";
 import { runExecuteCode, runSearchCode } from "./src/codemode/sandbox.js";
 import { makeGoogleApiRequest } from "./src/codemode/apiHost.js";
@@ -66,24 +66,49 @@ async function main() {
     };
   });
 
-  // Auth bootstrap (reuse existing TokenManager/AuthManager).
-  // Initialize TokenManager singleton (used indirectly by AuthManager).
-  TokenManager.getInstance(logger);
+  // Auth bootstrap: follow the SAME pathing + key expectations as index.ts (main tree).
+  // This intentionally avoids inventing new env var names.
 
-  // Load OAuth keys from the same place index.ts uses (TokenManager + env). We piggyback on TokenManager's config.
-  // The existing server uses GOOGLE_APPLICATION_CREDENTIALS / credentials files; keep that behavior.
-  const oauthKeysPath = process.env.GDRIVE_OAUTH_KEYS_PATH || process.env.GOOGLE_OAUTH_KEYS_PATH;
-  if (!oauthKeysPath) {
+  // Ensure encryption key is present (TokenManager requires it).
+  if (!process.env.GDRIVE_TOKEN_ENCRYPTION_KEY) {
     logger.warn(
-      "Missing GDRIVE_OAUTH_KEYS_PATH/GOOGLE_OAUTH_KEYS_PATH; codemode execute will fail until OAuth keys are configured.",
+      "Missing GDRIVE_TOKEN_ENCRYPTION_KEY; codemode execute will be unavailable until it is set.",
     );
   }
 
+  // Default oauth key path matches README (./credentials/gcp-oauth.keys.json)
+  const oauthPath =
+    process.env.GDRIVE_OAUTH_PATH ??
+    new URL("../credentials/gcp-oauth.keys.json", import.meta.url).pathname;
+
+  // Initialize TokenManager singleton (loads encryption key, token store paths, etc.)
   let auth: AuthManager | null = null;
-  if (oauthKeysPath) {
-    const keys = JSON.parse(await (await import("node:fs/promises")).readFile(oauthKeysPath, "utf8"));
-    auth = AuthManager.getInstance(keys, logger);
-    await auth.initialize();
+  try {
+    TokenManager.getInstance(logger);
+
+    const fs = await import("node:fs");
+    if (!fs.existsSync(oauthPath)) {
+      logger.warn(`OAuth keys not found at: ${oauthPath}`);
+    } else {
+      const keysContent = (await import("node:fs/promises")).readFile(oauthPath, "utf8");
+      const keys = JSON.parse(await keysContent) as { web?: unknown; installed?: unknown };
+      const oauthKeys = (keys as { web?: unknown; installed?: unknown }).web ??
+        (keys as { web?: unknown; installed?: unknown }).installed;
+
+      if (!oauthKeys || typeof oauthKeys !== "object") {
+        logger.warn("Invalid OAuth keys format. Expected 'web' or 'installed'.");
+      } else {
+        auth = AuthManager.getInstance(oauthKeys as never, logger);
+        await auth.initialize();
+        if (auth.getState() === AuthState.UNAUTHENTICATED) {
+          auth = null;
+          logger.warn("Not authenticated yet. Run: node ./dist/index.js auth");
+        }
+      }
+    }
+  } catch (err) {
+    logger.warn("Auth bootstrap failed; codemode execute will be unavailable until fixed.", { err });
+    auth = null;
   }
 
   const spec = await loadWorkspaceSpec();
@@ -108,7 +133,7 @@ async function main() {
     if (name === "execute") {
       if (!auth) {
         throw new Error(
-          "Auth not configured. Set GDRIVE_OAUTH_KEYS_PATH (or GOOGLE_OAUTH_KEYS_PATH) to enable execute().",
+          "Auth not ready. Follow README: set GDRIVE_TOKEN_ENCRYPTION_KEY and place credentials/gcp-oauth.keys.json, then run: node ./dist/index.js auth",
         );
       }
       const apiRequest = makeGoogleApiRequest({ auth });
