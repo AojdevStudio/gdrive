@@ -3,7 +3,7 @@ import path from "node:path";
 import YAML from "js-yaml";
 import $RefParser from "@apidevtools/json-schema-ref-parser";
 
-type AnyObj = Record<string, any>;
+type AnyObj = Record<string, unknown>;
 
 const SPEC_DIR = path.join(process.cwd(), "specs", "openapi", "googleapis.com");
 
@@ -28,22 +28,28 @@ function mtimeOf(files: string[]) {
   let max = 0;
   for (const f of files) {
     const st = fs.statSync(f);
-    if (st.mtimeMs > max) max = st.mtimeMs;
+    if (st.mtimeMs > max) {
+      max = st.mtimeMs;
+    }
   }
   return max;
 }
 
 function readYaml(filePath: string): AnyObj {
   const raw = fs.readFileSync(filePath, "utf8");
-  const doc = YAML.load(raw);
-  if (!doc || typeof doc !== "object") throw new Error(`Invalid YAML spec: ${filePath}`);
+  const doc: unknown = YAML.load(raw);
+  if (!doc || typeof doc !== "object") {
+    throw new Error(`Invalid YAML spec: ${filePath}`);
+  }
   return doc as AnyObj;
 }
 
 export async function loadWorkspaceSpec(): Promise<AnyObj> {
   const files = SPEC_FILES.map((f) => path.join(SPEC_DIR, f));
   const mtimeMs = mtimeOf(files);
-  if (_cache && _cache.mtimeMs === mtimeMs) return _cache.spec;
+  if (_cache && _cache.mtimeMs === mtimeMs) {
+    return _cache.spec;
+  }
 
   // Dereference each spec independently to avoid component name collisions.
   const derefSpecs: AnyObj[] = [];
@@ -56,6 +62,7 @@ export async function loadWorkspaceSpec(): Promise<AnyObj> {
   }
 
   // Merge into a single spec surface.
+  const mergedPaths: Record<string, unknown> = {};
   const merged: AnyObj = {
     openapi: "3.0.0",
     info: {
@@ -63,12 +70,13 @@ export async function loadWorkspaceSpec(): Promise<AnyObj> {
       version: "codemode-1",
     },
     servers: [{ url: "https://www.googleapis.com" }],
-    paths: {},
+    paths: mergedPaths,
   };
 
   for (const s of derefSpecs) {
-    if (s?.paths && typeof s.paths === "object") {
-      Object.assign(merged.paths, s.paths);
+    const paths = s.paths;
+    if (paths && typeof paths === "object") {
+      Object.assign(mergedPaths, paths as Record<string, unknown>);
     }
   }
 

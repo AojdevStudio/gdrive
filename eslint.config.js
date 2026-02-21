@@ -5,6 +5,26 @@ import tsParser from '@typescript-eslint/parser';
 export default [
   js.configs.recommended,
   {
+    // Claude Code hook scripts are CommonJS and run in Node.
+    files: ['.claude/hooks/**/*.js'],
+    languageOptions: {
+      ecmaVersion: 2022,
+      sourceType: 'commonjs',
+      globals: {
+        require: 'readonly',
+        process: 'readonly',
+        console: 'readonly',
+        Buffer: 'readonly',
+        setTimeout: 'readonly',
+        setInterval: 'readonly',
+        clearTimeout: 'readonly',
+        clearInterval: 'readonly',
+        __dirname: 'readonly',
+        __filename: 'readonly',
+      },
+    },
+  },
+  {
     files: ['**/*.ts'],
     languageOptions: {
       parser: tsParser,
@@ -24,8 +44,15 @@ export default [
         clearInterval: 'readonly',
         NodeJS: 'readonly',
         global: 'readonly',
+        fetch: 'readonly',
+        Headers: 'readonly',
+        Request: 'readonly',
+        Response: 'readonly',
         __dirname: 'readonly',
         __filename: 'readonly',
+        // Web/Node globals
+        TextDecoder: 'readonly',
+        URLSearchParams: 'readonly',
         // Jest testing globals
         jest: 'readonly',
         describe: 'readonly',
@@ -77,9 +104,11 @@ export default [
       'node_modules/',
       'dist/',
       'coverage/',
-      '*.js',
+      '.claude/**',
+      '**/*.js',
       '!jest.config.js',
       '!eslint.config.js',
+      '!.claude/hooks/**/*.js',
       'tests/e2e/auth-persistence.test.ts'
     ]
   }
