@@ -95,7 +95,7 @@ async function main() {
 
   server.setRequestHandler(CallToolRequestSchema, async (req) => {
     const { name, arguments: args } = req.params;
-    const code = (args as any)?.code;
+    const code = (args as { code?: unknown } | undefined)?.code;
     if (typeof code !== "string" || !code.trim()) {
       throw new Error("Missing required argument: code (string)");
     }

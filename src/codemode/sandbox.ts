@@ -1,6 +1,6 @@
 import ivm from "isolated-vm";
 
-type AnyObj = Record<string, any>;
+type AnyObj = Record<string, unknown>;
 
 export type SandboxLimits = {
   timeoutMs: number;
@@ -26,7 +26,7 @@ export async function runSearchCode({
   code: string;
   spec: AnyObj;
   limits: SandboxLimits;
-}): Promise<any> {
+}): Promise<unknown> {
   const isolate = new ivm.Isolate({ memoryLimit: limits.memoryMb });
   const context = await isolate.createContext();
   const jail = context.global;
@@ -39,11 +39,11 @@ export async function runSearchCode({
   await script.run(context, { timeout: limits.timeoutMs });
 
   const fnRef = await jail.get("__run", { reference: true });
-  const result = await fnRef.apply(
-    undefined,
-    [{ spec }],
-    { timeout: limits.timeoutMs, arguments: { copy: true }, result: { copy: true } },
-  );
+  const result = await fnRef.apply(undefined, [{ spec }], {
+    timeout: limits.timeoutMs,
+    arguments: { copy: true },
+    result: { copy: true },
+  });
   return result;
 }
 
@@ -53,9 +53,9 @@ export async function runExecuteCode({
   limits,
 }: {
   code: string;
-  apiRequest: (req: AnyObj) => Promise<any>;
+  apiRequest: (req: AnyObj) => Promise<unknown>;
   limits: SandboxLimits;
-}): Promise<any> {
+}): Promise<unknown> {
   const isolate = new ivm.Isolate({ memoryLimit: limits.memoryMb });
   const context = await isolate.createContext();
   const jail = context.global;
@@ -82,10 +82,10 @@ export async function runExecuteCode({
   await (await isolate.compileScript(compilePrelude(code))).run(context, { timeout: limits.timeoutMs });
 
   const fnRef = await jail.get("__run", { reference: true });
-  const result = await fnRef.apply(
-    undefined,
-    [{ api: { request: true } }],
-    { timeout: limits.timeoutMs, arguments: { copy: true }, result: { copy: true } },
-  );
+  const result = await fnRef.apply(undefined, [{ api: { request: true } }], {
+    timeout: limits.timeoutMs,
+    arguments: { copy: true },
+    result: { copy: true },
+  });
   return result;
 }
