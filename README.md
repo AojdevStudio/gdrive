@@ -179,26 +179,73 @@ A production-ready MCP server that gives AI agents complete, secure access to Go
 
 ### Option 1: Remote (Cloudflare Workers) — Recommended
 
-**The zero-install path.** Deploy once, connect anywhere. No local Node.js, no credential files on disk, no path configuration.
+Deploy once to Cloudflare's edge — connect from anywhere via a permanent URL. After the initial setup, no local process to manage.
 
-#### 1. Deploy your worker
+**Prerequisites:**
+- [Cloudflare account](https://dash.cloudflare.com/sign-up) (free tier works)
+- Node.js 18+ (needed for the one-time local auth step)
+- Wrangler CLI: `npm install -g wrangler` or use `npx wrangler`
+- A Google Cloud project with OAuth credentials
+
+> **Guided setup:** Run `just install` to have Claude walk you through every step interactively — GCP project creation, API enablement, OAuth credentials, KV setup, and deploy. Or follow the steps below manually.
+
+#### 1. Clone and install
 
 ```bash
 git clone https://github.com/AojdevStudio/gdrive.git
 cd gdrive
-npm install
-npx wrangler deploy
+npm install && npm run build
 ```
 
-#### 2. Authenticate
+#### 2. Authenticate with Cloudflare
 
 ```bash
-# One-time OAuth flow — opens browser, stores tokens in Cloudflare KV
-npx wrangler dev  # local preview
-# Then visit http://localhost:8787/auth
+npx wrangler login
 ```
 
-#### 3. Connect to Claude
+#### 3. Create KV namespace for token storage
+
+```bash
+npx wrangler kv:namespace create GDRIVE_KV --preview false
+# Copy the `id` from the output, update [[kv_namespaces]] id in wrangler.toml
+```
+
+#### 4. Complete Google OAuth locally
+
+```bash
+# Generate encryption key
+echo "GDRIVE_TOKEN_ENCRYPTION_KEY=$(openssl rand -base64 32)" > .env
+
+# Place your gcp-oauth.keys.json in credentials/
+mkdir -p credentials
+cp /path/to/gcp-oauth.keys.json credentials/
+
+# Run auth — opens browser, saves tokens to .tokens.json
+node ./dist/index.js auth
+```
+
+> **Don't have Google Cloud credentials?** Follow the [Google Cloud setup guide](./docs/Guides/01-initial-setup.md) — or run `just install` for a fully guided walkthrough.
+
+#### 5. Upload tokens and secrets to Cloudflare
+
+```bash
+# Upload OAuth tokens to KV
+npx wrangler kv:key put --namespace-id=<KV_NAMESPACE_ID> \
+  "gdrive:oauth:tokens" "$(cat .tokens.json)"
+
+# Set OAuth client credentials as Wrangler secrets
+npx wrangler secret put GDRIVE_CLIENT_ID
+npx wrangler secret put GDRIVE_CLIENT_SECRET
+```
+
+#### 6. Deploy
+
+```bash
+npx wrangler deploy
+# Note the URL printed: https://your-worker.workers.dev
+```
+
+#### 7. Connect to Claude
 
 **Claude Code CLI — User scope** (available in every project, stored in `~/.claude/settings.json`):
 

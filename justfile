@@ -135,6 +135,10 @@ push:
 
 # --- Setup ---
 
+# Interactive guided Cloudflare Workers setup (reads INSTALL.md, walks you through every step)
+install:
+  {{cc}} "Read INSTALL.md carefully, then follow every step in sequence to deploy the gdrive MCP server to Cloudflare Workers. Use the AskUserQuestion tool whenever you need input from me. Run all bash commands yourself — don't ask me to run them."
+
 # Full dev setup: install deps, build, check encryption key
 setup:
   npm install
