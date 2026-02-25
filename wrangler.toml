@@ -1,0 +1,24 @@
+name = "gdrive-mcp"
+main = "worker.ts"
+compatibility_date = "2026-02-01"
+compatibility_flags = ["nodejs_compat"]
+
+# KV namespace for OAuth token storage and response caching.
+# Create with: wrangler kv:namespace create GDRIVE_KV --preview false
+# Then replace TO_BE_FILLED with the returned id.
+[[kv_namespaces]]
+binding = "GDRIVE_KV"
+id = "a9f903f9b96e4e49917dac53fbeb4007"
+
+# Workers Secrets (set via wrangler secret put):
+#   GDRIVE_CLIENT_ID      — OAuth client ID from gcp-oauth.keys.json
+#   GDRIVE_CLIENT_SECRET  — OAuth client secret from gcp-oauth.keys.json
+#
+# Upload tokens after running the Node auth flow:
+#   wrangler kv:key put --namespace-id=<id> "gdrive:oauth:tokens" "$(cat .tokens.json)"
+
+[build]
+command = "npx tsc -p tsconfig.worker.json"
+
+[dev]
+port = 8787
