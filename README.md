@@ -183,9 +183,10 @@ Deploy once to Cloudflare's edge — connect from anywhere via a permanent URL. 
 
 **Prerequisites:**
 - [Cloudflare account](https://dash.cloudflare.com/sign-up) (free tier works)
-- Node.js 18+ (needed for the one-time local auth step)
-- Wrangler CLI: `npm install -g wrangler` or use `npx wrangler`
-- A Google Cloud project with OAuth credentials
+- [Node.js 18+](https://nodejs.org/en/download) (needed for the one-time local auth step)
+- [Wrangler CLI](https://developers.cloudflare.com/workers/wrangler/install-and-update/): `npm install -g wrangler` or use `npx wrangler`
+- [Google Cloud project](./docs/Guides/01-initial-setup.md) with OAuth credentials
+- [`just`](https://just.systems/man/en/packages.html) — `brew install just` (macOS) · `winget install just` (Windows) · `cargo install just` (cross-platform)
 
 > **Guided setup:** Run `just install` to have Claude walk you through every step interactively — GCP project creation, API enablement, OAuth credentials, KV setup, and deploy. Or follow the steps below manually.
 
@@ -281,8 +282,8 @@ For local development or when you prefer to keep everything on-machine.
 
 #### Prerequisites
 
-- Node.js 18+
-- A Google Cloud project with OAuth credentials
+- [Node.js 18+](https://nodejs.org/en/download)
+- [Google Cloud project](./docs/Guides/01-initial-setup.md) with OAuth credentials
 
 > **New to Google Cloud?** Follow the [detailed setup guide](./docs/Guides/01-initial-setup.md).
 
