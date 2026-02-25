@@ -1,6 +1,6 @@
 <div align="center">
 
-# Google Drive MCP Server
+![Google Drive MCP Server](docs/images/hero-banner.png)
 
 ### **Your AI can reason. But can it check your calendar?**
 
@@ -274,26 +274,11 @@ docker compose ps
 
 ## How It Works
 
-```mermaid
-graph TB
-    Agent["🤖 AI Agent<br/>(Claude, GPT, etc.)"] -->|MCP Protocol| Server["📡 MCP Server"]
+<div align="center">
 
-    Server --> Auth["🔐 Auth Manager<br/>OAuth 2.0 + Auto Refresh"]
-    Server --> Cache["⚡ Cache Manager<br/>Redis"]
-    Server --> Token["🔑 Token Manager<br/>AES-256-GCM Encryption"]
+![Architecture](docs/images/architecture.png)
 
-    Server --> Drive["📁 Drive<br/>7 operations"]
-    Server --> Sheets["📊 Sheets<br/>12 operations"]
-    Server --> Gmail["📧 Gmail<br/>10 operations"]
-    Server --> Calendar["📅 Calendar<br/>9 operations"]
-    Server --> Docs["📝 Docs<br/>5 operations"]
-    Server --> Forms["📋 Forms<br/>4 operations"]
-
-    style Server fill:#4285f4,color:#fff
-    style Auth fill:#ea4335,color:#fff
-    style Cache fill:#34a853,color:#fff
-    style Token fill:#fbbc04,color:#000
-```
+</div>
 
 ### Operation-Based Tool Pattern
 
