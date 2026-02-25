@@ -1,6 +1,42 @@
 import type { DriveContext } from '../types.js';
 
 /**
+ * Escape special characters for Google Drive query language
+ * Google Drive API requires backslash escaping for single quotes
+ * @see https://developers.google.com/workspace/drive/api/guides/ref-search-terms
+ * @param value User input to escape
+ * @returns Escaped string safe for query interpolation
+ */
+function escapeQueryValue(value: string): string {
+  return value.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+}
+
+/** Validate ISO 8601 date string format to prevent query injection */
+function isValidISODate(dateStr: string): boolean {
+  return /^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})?)?$/.test(dateStr) && !isNaN(Date.parse(dateStr));
+}
+
+/** Valid orderBy fields for Google Drive API */
+const VALID_ORDER_BY_FIELDS = [
+  'createdTime', 'folder', 'modifiedByMeTime', 'modifiedTime',
+  'name', 'name_natural', 'quotaBytesUsed', 'recency',
+  'sharedWithMeTime', 'starred', 'viewedByMeTime'
+];
+
+/** Validate orderBy parameter against allowed fields */
+function validateOrderBy(orderBy: string): string {
+  const parts = orderBy.split(',').map(p => p.trim());
+  for (const part of parts) {
+    const tokens = part.split(/\s+/);
+    const field = tokens[0] ?? '';
+    if (!VALID_ORDER_BY_FIELDS.includes(field)) {
+      throw new Error(`Invalid orderBy field: ${field}. Valid fields: ${VALID_ORDER_BY_FIELDS.join(', ')}`);
+    }
+  }
+  return orderBy;
+}
+
+/**
  * Options for searching Google Drive files
  */
 export interface SearchOptions {
@@ -60,7 +96,7 @@ export async function search(
 
   // Execute search
   const response = await context.drive.files.list({
-    q: `name contains '${query}' and trashed = false`,
+    q: `name contains '${escapeQueryValue(query)}' and trashed = false`,
     pageSize: Math.min(pageSize, 100),
     fields: "files(id, name, mimeType, createdTime, modifiedTime, webViewLink)",
   });
@@ -165,24 +201,39 @@ export async function enhancedSearch(
 ): Promise<EnhancedSearchResult> {
   const { query, filters, pageSize = 10, orderBy = "modifiedTime desc" } = options;
 
+  // Validate orderBy against allowlist before use
+  validateOrderBy(orderBy);
+
   // Build query string
-  let q = query ? `name contains '${query}'` : "";
+  let q = query ? `name contains '${escapeQueryValue(query)}'` : "";
   const filterConditions: string[] = [];
 
   if (filters) {
     if (filters.mimeType) {
-      filterConditions.push(`mimeType = '${filters.mimeType}'`);
+      filterConditions.push(`mimeType = '${escapeQueryValue(filters.mimeType)}'`);
     }
     if (filters.modifiedAfter) {
+      if (!isValidISODate(filters.modifiedAfter)) {
+        throw new Error(`Invalid date format for modifiedAfter: ${filters.modifiedAfter}`);
+      }
       filterConditions.push(`modifiedTime > '${filters.modifiedAfter}'`);
     }
     if (filters.modifiedBefore) {
+      if (!isValidISODate(filters.modifiedBefore)) {
+        throw new Error(`Invalid date format for modifiedBefore: ${filters.modifiedBefore}`);
+      }
       filterConditions.push(`modifiedTime < '${filters.modifiedBefore}'`);
     }
     if (filters.createdAfter) {
+      if (!isValidISODate(filters.createdAfter)) {
+        throw new Error(`Invalid date format for createdAfter: ${filters.createdAfter}`);
+      }
       filterConditions.push(`createdTime > '${filters.createdAfter}'`);
     }
     if (filters.createdBefore) {
+      if (!isValidISODate(filters.createdBefore)) {
+        throw new Error(`Invalid date format for createdBefore: ${filters.createdBefore}`);
+      }
       filterConditions.push(`createdTime < '${filters.createdBefore}'`);
     }
     if (filters.sharedWithMe) {
@@ -192,7 +243,7 @@ export async function enhancedSearch(
       filterConditions.push("'me' in owners");
     }
     if (filters.parents) {
-      filterConditions.push(`'${filters.parents}' in parents`);
+      filterConditions.push(`'${escapeQueryValue(filters.parents)}' in parents`);
     }
     if (!filters.trashed) {
       filterConditions.push("trashed = false");

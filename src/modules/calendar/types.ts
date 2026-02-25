@@ -128,7 +128,7 @@ export interface EventDateTime {
  * Detailed event result
  */
 export interface EventResult {
-  id: string;
+  eventId: string;
   status?: string;
   htmlLink?: string;
   created?: string;

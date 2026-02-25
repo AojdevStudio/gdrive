@@ -7,40 +7,7 @@ import type {
   CreateDraftOptions,
   CreateDraftResult,
 } from './types.js';
-
-/**
- * Build an RFC 2822 formatted email message
- */
-function buildEmailMessage(options: CreateDraftOptions): string {
-  const { to, cc, bcc, subject, body, isHtml = false, from, inReplyTo, references } = options;
-
-  const lines: string[] = [];
-
-  // Add headers
-  if (from) {
-    lines.push(`From: ${from}`);
-  }
-  lines.push(`To: ${to.join(', ')}`);
-  if (cc && cc.length > 0) {
-    lines.push(`Cc: ${cc.join(', ')}`);
-  }
-  if (bcc && bcc.length > 0) {
-    lines.push(`Bcc: ${bcc.join(', ')}`);
-  }
-  lines.push(`Subject: ${subject}`);
-  if (inReplyTo) {
-    lines.push(`In-Reply-To: ${inReplyTo}`);
-  }
-  if (references) {
-    lines.push(`References: ${references}`);
-  }
-  lines.push('MIME-Version: 1.0');
-  lines.push(`Content-Type: ${isHtml ? 'text/html' : 'text/plain'}; charset="UTF-8"`);
-  lines.push(''); // Empty line between headers and body
-  lines.push(body);
-
-  return lines.join('\r\n');
-}
+import { buildEmailMessage, encodeToBase64Url } from './utils.js';
 
 /**
  * Create a draft email
@@ -67,11 +34,7 @@ export async function createDraft(
   const emailMessage = buildEmailMessage(options);
 
   // Convert to base64url encoding (Gmail's format)
-  const encodedMessage = Buffer.from(emailMessage)
-    .toString('base64')
-    .replace(/\+/g, '-')
-    .replace(/\//g, '_')
-    .replace(/=+$/, '');
+  const encodedMessage = encodeToBase64Url(emailMessage);
 
   const response = await context.gmail.users.drafts.create({
     userId: 'me',

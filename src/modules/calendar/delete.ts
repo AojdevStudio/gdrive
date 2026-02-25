@@ -4,7 +4,7 @@
 
 import type { calendar_v3 } from 'googleapis';
 import type { CalendarContext } from '../types.js';
-import type { DeleteEventOptions } from './types.js';
+import type { DeleteEventOptions, DeleteEventResult } from './types.js';
 
 /**
  * Delete a calendar event
@@ -45,7 +45,7 @@ import type { DeleteEventOptions } from './types.js';
 export async function deleteEvent(
   options: DeleteEventOptions,
   context: CalendarContext
-): Promise<{ success: boolean; message: string }> {
+): Promise<DeleteEventResult> {
   const {
     calendarId = 'primary',
     eventId,
@@ -79,7 +79,7 @@ export async function deleteEvent(
   });
 
   return {
-    success: true,
+    eventId,
     message: 'Event deleted successfully',
   };
 }

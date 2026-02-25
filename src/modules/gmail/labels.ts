@@ -45,47 +45,54 @@ export async function listLabels(
     userId: 'me',
   });
 
-  const labels: LabelInfo[] = (response.data.labels || []).map((label: gmail_v1.Schema$Label) => {
-    const info: LabelInfo = {
-      id: label.id!,
-      name: label.name!,
-      type: label.type === 'system' ? 'system' : 'user',
-    };
+  const labels: LabelInfo[] = (response.data.labels || [])
+    .map((label: gmail_v1.Schema$Label) => {
+      if (!label.id || !label.name) {
+        // Skip labels without required fields
+        return null;
+      }
 
-    // Add optional properties only if they exist (exactOptionalPropertyTypes compliance)
-    if (label.messageListVisibility) {
-      info.messageListVisibility = label.messageListVisibility as 'show' | 'hide';
-    }
-    if (label.labelListVisibility) {
-      info.labelListVisibility = label.labelListVisibility as 'labelShow' | 'labelShowIfUnread' | 'labelHide';
-    }
-    if (label.messagesTotal !== undefined && label.messagesTotal !== null) {
-      info.messagesTotal = label.messagesTotal;
-    }
-    if (label.messagesUnread !== undefined && label.messagesUnread !== null) {
-      info.messagesUnread = label.messagesUnread;
-    }
-    if (label.threadsTotal !== undefined && label.threadsTotal !== null) {
-      info.threadsTotal = label.threadsTotal;
-    }
-    if (label.threadsUnread !== undefined && label.threadsUnread !== null) {
-      info.threadsUnread = label.threadsUnread;
-    }
-    if (label.color) {
-      const colorInfo: { textColor?: string; backgroundColor?: string } = {};
-      if (label.color.textColor) {
-        colorInfo.textColor = label.color.textColor;
-      }
-      if (label.color.backgroundColor) {
-        colorInfo.backgroundColor = label.color.backgroundColor;
-      }
-      if (Object.keys(colorInfo).length > 0) {
-        info.color = colorInfo;
-      }
-    }
+      const info: LabelInfo = {
+        id: label.id,
+        name: label.name,
+        type: label.type === 'system' ? 'system' : 'user',
+      };
 
-    return info;
-  });
+      // Add optional properties only if they exist (exactOptionalPropertyTypes compliance)
+      if (label.messageListVisibility) {
+        info.messageListVisibility = label.messageListVisibility as 'show' | 'hide';
+      }
+      if (label.labelListVisibility) {
+        info.labelListVisibility = label.labelListVisibility as 'labelShow' | 'labelShowIfUnread' | 'labelHide';
+      }
+      if (label.messagesTotal !== undefined && label.messagesTotal !== null) {
+        info.messagesTotal = label.messagesTotal;
+      }
+      if (label.messagesUnread !== undefined && label.messagesUnread !== null) {
+        info.messagesUnread = label.messagesUnread;
+      }
+      if (label.threadsTotal !== undefined && label.threadsTotal !== null) {
+        info.threadsTotal = label.threadsTotal;
+      }
+      if (label.threadsUnread !== undefined && label.threadsUnread !== null) {
+        info.threadsUnread = label.threadsUnread;
+      }
+      if (label.color) {
+        const colorInfo: { textColor?: string; backgroundColor?: string } = {};
+        if (label.color.textColor) {
+          colorInfo.textColor = label.color.textColor;
+        }
+        if (label.color.backgroundColor) {
+          colorInfo.backgroundColor = label.color.backgroundColor;
+        }
+        if (Object.keys(colorInfo).length > 0) {
+          info.color = colorInfo;
+        }
+      }
+
+      return info;
+    })
+    .filter((info): info is LabelInfo => info !== null);
 
   const result: ListLabelsResult = { labels };
 
@@ -108,13 +115,13 @@ export async function listLabels(
  * ```typescript
  * // Mark as read and archive
  * const result = await modifyLabels({
- *   messageId: '18c123abc',
+ *   id: '18c123abc',
  *   removeLabelIds: ['UNREAD', 'INBOX'],
  * }, context);
  *
  * // Add a custom label
  * const result2 = await modifyLabels({
- *   messageId: '18c123abc',
+ *   id: '18c123abc',
  *   addLabelIds: ['Label_12345'],
  * }, context);
  * ```
@@ -123,7 +130,7 @@ export async function modifyLabels(
   options: ModifyLabelsOptions,
   context: GmailContext
 ): Promise<ModifyLabelsResult> {
-  const { messageId, addLabelIds, removeLabelIds } = options;
+  const { id, addLabelIds, removeLabelIds } = options;
 
   // Build the request body - only include arrays if they have items
   const requestBody: gmail_v1.Schema$ModifyMessageRequest = {};
@@ -138,25 +145,25 @@ export async function modifyLabels(
 
   const response = await context.gmail.users.messages.modify({
     userId: 'me',
-    id: messageId,
+    id: id,
     requestBody,
   });
 
   const labelIds = response.data.labelIds || [];
 
   // Invalidate cached message data
-  await context.cacheManager.invalidate(`gmail:getMessage:${messageId}`);
+  await context.cacheManager.invalidate(`gmail:getMessage:${id}`);
   await context.cacheManager.invalidate('gmail:list');
 
   context.performanceMonitor.track('gmail:modifyLabels', Date.now() - context.startTime);
   context.logger.info('Modified labels', {
-    messageId,
+    id,
     added: addLabelIds?.length || 0,
     removed: removeLabelIds?.length || 0,
   });
 
   return {
-    messageId,
+    id,
     labelIds,
     message: 'Labels modified successfully',
   };

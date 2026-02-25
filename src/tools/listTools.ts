@@ -239,9 +239,9 @@ export async function generateToolStructure(): Promise<ModuleStructure> {
       },
       {
         name: 'modifyLabels',
-        signature: 'modifyLabels({ messageId: string, addLabelIds?: string[], removeLabelIds?: string[] })',
+        signature: 'modifyLabels({ id: string, addLabelIds?: string[], removeLabelIds?: string[] })',
         description: 'Add or remove labels from a message',
-        example: 'gmail.modifyLabels({ messageId: "18c123abc", removeLabelIds: ["UNREAD", "INBOX"] })',
+        example: 'gmail.modifyLabels({ id: "18c123abc", removeLabelIds: ["UNREAD", "INBOX"] })',
       },
     ],
     calendar: [
