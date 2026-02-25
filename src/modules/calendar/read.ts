@@ -50,8 +50,12 @@ export async function getCalendar(
 
   const response = await context.calendar.calendars.get(params);
 
+  if (!response.data.id) {
+    throw new Error('Calendar API returned calendar without ID');
+  }
+
   const result: CalendarResult = {
-    id: response.data.id!,
+    id: response.data.id,
     summary: response.data.summary || '',
     timeZone: response.data.timeZone || 'UTC',
   };

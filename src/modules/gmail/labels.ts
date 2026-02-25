@@ -45,47 +45,54 @@ export async function listLabels(
     userId: 'me',
   });
 
-  const labels: LabelInfo[] = (response.data.labels || []).map((label: gmail_v1.Schema$Label) => {
-    const info: LabelInfo = {
-      id: label.id!,
-      name: label.name!,
-      type: label.type === 'system' ? 'system' : 'user',
-    };
+  const labels: LabelInfo[] = (response.data.labels || [])
+    .map((label: gmail_v1.Schema$Label) => {
+      if (!label.id || !label.name) {
+        // Skip labels without required fields
+        return null;
+      }
 
-    // Add optional properties only if they exist (exactOptionalPropertyTypes compliance)
-    if (label.messageListVisibility) {
-      info.messageListVisibility = label.messageListVisibility as 'show' | 'hide';
-    }
-    if (label.labelListVisibility) {
-      info.labelListVisibility = label.labelListVisibility as 'labelShow' | 'labelShowIfUnread' | 'labelHide';
-    }
-    if (label.messagesTotal !== undefined && label.messagesTotal !== null) {
-      info.messagesTotal = label.messagesTotal;
-    }
-    if (label.messagesUnread !== undefined && label.messagesUnread !== null) {
-      info.messagesUnread = label.messagesUnread;
-    }
-    if (label.threadsTotal !== undefined && label.threadsTotal !== null) {
-      info.threadsTotal = label.threadsTotal;
-    }
-    if (label.threadsUnread !== undefined && label.threadsUnread !== null) {
-      info.threadsUnread = label.threadsUnread;
-    }
-    if (label.color) {
-      const colorInfo: { textColor?: string; backgroundColor?: string } = {};
-      if (label.color.textColor) {
-        colorInfo.textColor = label.color.textColor;
-      }
-      if (label.color.backgroundColor) {
-        colorInfo.backgroundColor = label.color.backgroundColor;
-      }
-      if (Object.keys(colorInfo).length > 0) {
-        info.color = colorInfo;
-      }
-    }
+      const info: LabelInfo = {
+        id: label.id,
+        name: label.name,
+        type: label.type === 'system' ? 'system' : 'user',
+      };
 
-    return info;
-  });
+      // Add optional properties only if they exist (exactOptionalPropertyTypes compliance)
+      if (label.messageListVisibility) {
+        info.messageListVisibility = label.messageListVisibility as 'show' | 'hide';
+      }
+      if (label.labelListVisibility) {
+        info.labelListVisibility = label.labelListVisibility as 'labelShow' | 'labelShowIfUnread' | 'labelHide';
+      }
+      if (label.messagesTotal !== undefined && label.messagesTotal !== null) {
+        info.messagesTotal = label.messagesTotal;
+      }
+      if (label.messagesUnread !== undefined && label.messagesUnread !== null) {
+        info.messagesUnread = label.messagesUnread;
+      }
+      if (label.threadsTotal !== undefined && label.threadsTotal !== null) {
+        info.threadsTotal = label.threadsTotal;
+      }
+      if (label.threadsUnread !== undefined && label.threadsUnread !== null) {
+        info.threadsUnread = label.threadsUnread;
+      }
+      if (label.color) {
+        const colorInfo: { textColor?: string; backgroundColor?: string } = {};
+        if (label.color.textColor) {
+          colorInfo.textColor = label.color.textColor;
+        }
+        if (label.color.backgroundColor) {
+          colorInfo.backgroundColor = label.color.backgroundColor;
+        }
+        if (Object.keys(colorInfo).length > 0) {
+          info.color = colorInfo;
+        }
+      }
+
+      return info;
+    })
+    .filter((info): info is LabelInfo => info !== null);
 
   const result: ListLabelsResult = { labels };
 

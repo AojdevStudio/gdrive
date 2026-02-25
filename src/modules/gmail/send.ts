@@ -10,71 +10,7 @@ import type {
   SendDraftOptions,
   SendDraftResult,
 } from './types.js';
-import {
-  sanitizeHeaderValue,
-  isValidEmailAddress,
-  encodeSubject,
-  validateAndSanitizeRecipients,
-  encodeToBase64Url,
-} from './utils.js';
-
-/**
- * Build an RFC 2822 formatted email message with security hardening
- *
- * Security measures:
- * - CR/LF stripped from all header fields to prevent header injection
- * - Email addresses validated against RFC 5322 pattern
- * - Subject encoded using RFC 2047 for non-ASCII characters
- * - Bcc removed from headers (handled by Gmail in SMTP envelope)
- * - Proper CRLF CRLF separator before body
- */
-function buildEmailMessage(options: SendMessageOptions): string {
-  const { to, cc, subject, body, isHtml = false, from, inReplyTo, references } = options;
-  // Note: bcc is intentionally not destructured - it's handled by Gmail's envelope, not message headers
-
-  const lines: string[] = [];
-
-  // Add headers with sanitization and validation
-  if (from) {
-    const sanitizedFrom = sanitizeHeaderValue(from);
-    if (!isValidEmailAddress(sanitizedFrom)) {
-      throw new Error(`Invalid from email address: ${sanitizedFrom}`);
-    }
-    lines.push(`From: ${sanitizedFrom}`);
-  }
-
-  // Validate and sanitize recipients
-  const sanitizedTo = validateAndSanitizeRecipients(to, 'to');
-  lines.push(`To: ${sanitizedTo.join(', ')}`);
-
-  if (cc && cc.length > 0) {
-    const sanitizedCc = validateAndSanitizeRecipients(cc, 'cc');
-    lines.push(`Cc: ${sanitizedCc.join(', ')}`);
-  }
-
-  // Note: Bcc header is NOT included in the message body
-  // Gmail handles Bcc recipients in the SMTP envelope automatically
-  // Including Bcc in headers would expose recipients to each other
-
-  // Encode subject with RFC 2047 for non-ASCII support
-  lines.push(`Subject: ${encodeSubject(subject)}`);
-
-  if (inReplyTo) {
-    lines.push(`In-Reply-To: ${sanitizeHeaderValue(inReplyTo)}`);
-  }
-  if (references) {
-    lines.push(`References: ${sanitizeHeaderValue(references)}`);
-  }
-
-  lines.push('MIME-Version: 1.0');
-  lines.push(`Content-Type: ${isHtml ? 'text/html' : 'text/plain'}; charset="UTF-8"`);
-
-  // RFC 2822 requires CRLF CRLF (empty line) to separate headers from body
-  lines.push('');
-  lines.push(body);
-
-  return lines.join('\r\n');
-}
+import { buildEmailMessage, encodeToBase64Url } from './utils.js';
 
 /**
  * Send a new email message

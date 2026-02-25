@@ -109,8 +109,12 @@ export function parseAttendees(
 export function buildEventResult(
   responseData: calendar_v3.Schema$Event
 ): EventResult {
+  if (!responseData.id) {
+    throw new Error('Calendar API returned event without ID');
+  }
+
   const result: EventResult = {
-    eventId: responseData.id!,
+    eventId: responseData.id,
   };
 
   // Only add properties if they exist (exactOptionalPropertyTypes compliance)

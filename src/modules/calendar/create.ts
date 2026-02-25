@@ -76,7 +76,6 @@ export async function createEvent(
     visibility,
     transparency,
     colorId,
-    timeZone,
   } = options;
 
   // Validate event times
@@ -185,12 +184,6 @@ export async function createEvent(
   // Only set conferenceDataVersion if conference data exists
   if (processedConferenceData) {
     params.conferenceDataVersion = 1;
-  }
-
-  // Add timeZone to params if provided (for timezone-aware event creation)
-  if (timeZone) {
-    // TimeZone is set in the start/end EventDateTime objects, not at the params level
-    // So we just ensure it's passed through correctly in the eventResource
   }
 
   const response = await context.calendar.events.insert(params);

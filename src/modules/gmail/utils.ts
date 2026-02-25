@@ -39,16 +39,24 @@ export function isValidEmailAddress(email: string): boolean {
  * @returns Encoded subject (unchanged if ASCII-only)
  */
 export function encodeSubject(subject: string): string {
-  // Check if subject contains non-ASCII characters (char codes > 127)
-  const hasNonAscii = [...subject].some(char => char.charCodeAt(0) > 127);
+  // Always sanitize first to prevent header injection (even for non-ASCII paths)
+  const sanitized = sanitizeHeaderValue(subject);
+
+  // Check for non-ASCII using a loop (avoids array spread allocation)
+  let hasNonAscii = false;
+  for (let i = 0; i < sanitized.length; i++) {
+    if (sanitized.charCodeAt(i) > 127) {
+      hasNonAscii = true;
+      break;
+    }
+  }
 
   if (!hasNonAscii) {
-    // ASCII only - just sanitize and return
-    return sanitizeHeaderValue(subject);
+    return sanitized;
   }
 
   // Encode as RFC 2047 MIME encoded-word using UTF-8 base64
-  const encoded = Buffer.from(subject, 'utf-8').toString('base64');
+  const encoded = Buffer.from(sanitized, 'utf-8').toString('base64');
   return `=?UTF-8?B?${encoded}?=`;
 }
 
@@ -67,6 +75,74 @@ export function validateAndSanitizeRecipients(emails: string[], fieldName: strin
     }
     return sanitized;
   });
+}
+
+/**
+ * Build an RFC 2822 formatted email message with security hardening
+ *
+ * Security measures:
+ * - CR/LF stripped from all header fields to prevent header injection
+ * - Email addresses validated against RFC 5322 pattern
+ * - Subject encoded using RFC 2047 for non-ASCII characters
+ * - Bcc included in raw message (Gmail API reads Bcc from raw, delivers to those recipients, and strips the header from delivered copies)
+ *
+ * @param options Message content and recipients
+ * @returns RFC 2822 formatted email string
+ */
+export function buildEmailMessage(options: {
+  to: string[];
+  cc?: string[];
+  bcc?: string[];
+  subject: string;
+  body: string;
+  isHtml?: boolean;
+  from?: string;
+  inReplyTo?: string;
+  references?: string;
+}): string {
+  const { to, cc, bcc, subject, body, isHtml = false, from, inReplyTo, references } = options;
+
+  const lines: string[] = [];
+
+  // Add headers with sanitization and validation
+  if (from) {
+    const sanitizedFrom = sanitizeHeaderValue(from);
+    if (!isValidEmailAddress(sanitizedFrom)) {
+      throw new Error(`Invalid from email address: ${sanitizedFrom}`);
+    }
+    lines.push(`From: ${sanitizedFrom}`);
+  }
+
+  // Validate and sanitize recipients
+  const sanitizedTo = validateAndSanitizeRecipients(to, 'to');
+  lines.push(`To: ${sanitizedTo.join(', ')}`);
+
+  if (cc && cc.length > 0) {
+    const sanitizedCc = validateAndSanitizeRecipients(cc, 'cc');
+    lines.push(`Cc: ${sanitizedCc.join(', ')}`);
+  }
+
+  if (bcc && bcc.length > 0) {
+    const sanitizedBcc = validateAndSanitizeRecipients(bcc, 'bcc');
+    lines.push(`Bcc: ${sanitizedBcc.join(', ')}`);
+  }
+
+  // Encode subject with RFC 2047 for non-ASCII support
+  lines.push(`Subject: ${encodeSubject(subject)}`);
+
+  if (inReplyTo) {
+    lines.push(`In-Reply-To: ${sanitizeHeaderValue(inReplyTo)}`);
+  }
+  if (references) {
+    lines.push(`References: ${sanitizeHeaderValue(references)}`);
+  }
+
+  lines.push('MIME-Version: 1.0');
+  lines.push(`Content-Type: ${isHtml ? 'text/html' : 'text/plain'}; charset="UTF-8"`);
+  lines.push(''); // Empty line between headers and body
+  lines.push(body);
+
+  return lines.join('\r\n');
 }
 
 /**
