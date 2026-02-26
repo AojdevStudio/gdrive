@@ -595,6 +595,8 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           path: ./security-reports
+          pattern: "*-scan-results-${{ github.run_id }}"
+          merge-multiple: true
 
       - name: Generate comprehensive security report
         run: |
