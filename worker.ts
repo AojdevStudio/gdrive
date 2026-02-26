@@ -22,14 +22,61 @@ import { WorkersKVCache, NullCache } from './src/storage/kv-store.js';
 import { getValidAccessToken, type KVNamespace } from './src/auth/workers-auth.js';
 import { createConfiguredServer } from './src/server/factory.js';
 
-// Workers runtime globals — declared locally to avoid requiring @cloudflare/workers-types
-declare const ExecutionContext: unknown;
-
 export interface Env {
   GDRIVE_KV: KVNamespace;
   GDRIVE_CLIENT_ID: string;
   GDRIVE_CLIENT_SECRET: string;
+  GDRIVE_TOKEN_ENCRYPTION_KEY: string;
+  MCP_BEARER_TOKEN?: string;
+  MCP_ALLOWED_ORIGINS?: string;
   LOG_LEVEL?: string;
+}
+
+function jsonError(status: number, error: string, detail?: string): Response {
+  return new Response(
+    JSON.stringify({
+      error,
+      ...(detail ? { detail } : {}),
+    }),
+    {
+      status,
+      headers: { 'Content-Type': 'application/json' },
+    }
+  );
+}
+
+function parseAllowedOrigins(raw?: string): Set<string> {
+  if (!raw) {
+    return new Set();
+  }
+  return new Set(
+    raw
+      .split(',')
+      .map((origin) => origin.trim())
+      .filter((origin) => origin.length > 0)
+  );
+}
+
+export function validateWorkerRequestAuth(request: Request, env: Env): Response | null {
+  if (!env.MCP_BEARER_TOKEN) {
+    return jsonError(500, 'Worker misconfiguration', 'MCP_BEARER_TOKEN is not configured');
+  }
+
+  const authHeader = request.headers.get('authorization');
+  const expected = `Bearer ${env.MCP_BEARER_TOKEN}`;
+  if (!authHeader || authHeader !== expected) {
+    return jsonError(401, 'Unauthorized', 'Missing or invalid bearer token');
+  }
+
+  const allowedOrigins = parseAllowedOrigins(env.MCP_ALLOWED_ORIGINS);
+  if (allowedOrigins.size > 0) {
+    const origin = request.headers.get('origin');
+    if (origin && !allowedOrigins.has(origin)) {
+      return jsonError(403, 'Forbidden', 'Origin not allowed');
+    }
+  }
+
+  return null;
 }
 
 // Minimal auth object that satisfies googleapis' getAccessToken() contract
@@ -61,6 +108,11 @@ export default {
       });
     }
 
+    const authError = validateWorkerRequestAuth(request, env);
+    if (authError) {
+      return authError;
+    }
+
     const logger = makeLogger();
 
     // Resolve auth
@@ -69,14 +121,12 @@ export default {
       accessToken = await getValidAccessToken(
         env.GDRIVE_KV,
         env.GDRIVE_CLIENT_ID,
-        env.GDRIVE_CLIENT_SECRET
+        env.GDRIVE_CLIENT_SECRET,
+        env.GDRIVE_TOKEN_ENCRYPTION_KEY
       );
     } catch (err) {
       logger.error('Auth failed', err);
-      return new Response(JSON.stringify({ error: 'Authentication failed', detail: String(err) }), {
-        status: 401,
-        headers: { 'Content-Type': 'application/json' },
-      });
+      return jsonError(401, 'Authentication failed', String(err));
     }
 
     const auth = makeAuth(accessToken);
@@ -95,10 +145,8 @@ export default {
       auth: auth as any,
     });
 
-    // Stateless mode: omit sessionIdGenerator entirely so the transport doesn't
-    // maintain per-session state (required for Workers' ephemeral environment).
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const transport = new WebStandardStreamableHTTPServerTransport({} as any);
+    // No sessionIdGenerator means stateless mode in MCP SDK transport.
+    const transport = new WebStandardStreamableHTTPServerTransport();
 
     await server.connect(transport);
 

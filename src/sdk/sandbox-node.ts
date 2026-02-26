@@ -66,9 +66,12 @@ export class NodeSandbox implements Executor {
         filename: 'agent-code.js',
       });
 
-      const result = await script.runInContext(sandboxContext, {
-        timeout: this.timeout,
-      });
+      const execution = Promise.resolve(
+        script.runInContext(sandboxContext, {
+          timeout: this.timeout,
+        })
+      );
+      const result = await this.withExecutionTimeout(execution);
 
       return { result, logs };
     } catch (error) {
@@ -83,11 +86,33 @@ export class NodeSandbox implements Executor {
       };
     }
   }
+
+  private async withExecutionTimeout<T>(execution: Promise<T>): Promise<T> {
+    let timer: NodeJS.Timeout | undefined;
+    try {
+      return await Promise.race([
+        execution,
+        new Promise<T>((_, reject) => {
+          timer = setTimeout(() => {
+            reject(new Error(`Sandbox execution timed out after ${this.timeout}ms`));
+          }, this.timeout);
+        }),
+      ]);
+    } finally {
+      if (timer) {
+        clearTimeout(timer);
+      }
+    }
+  }
 }
 
 function safeStringify(value: unknown): string {
-  if (typeof value === 'string') return value;
-  if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+  if (typeof value === 'string') {
+    return value;
+  }
+  if (typeof value === 'number' || typeof value === 'boolean') {
+    return String(value);
+  }
   try {
     return JSON.stringify(value);
   } catch {

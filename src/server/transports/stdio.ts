@@ -28,11 +28,31 @@ const SCOPES = [
   'https://www.googleapis.com/auth/calendar.events',
 ];
 
-function resolveOAuthPath(): string {
-  return (
-    process.env.GDRIVE_OAUTH_PATH ??
-    path.join(path.dirname(new URL(import.meta.url).pathname), '../../../../credentials/gcp-oauth.keys.json')
-  );
+export function getOAuthPathCandidates(): string[] {
+  const fromEnv = process.env.GDRIVE_OAUTH_PATH?.trim();
+  if (fromEnv) {
+    return [fromEnv];
+  }
+  return [path.join(process.cwd(), 'credentials/gcp-oauth.keys.json')];
+}
+
+export function resolveOAuthPath(
+  pathExists: (candidate: string) => boolean = (candidate) => fs.existsSync(candidate)
+): string {
+  const candidates = getOAuthPathCandidates();
+  for (const candidate of candidates) {
+    if (pathExists(candidate)) {
+      return candidate;
+    }
+  }
+  return candidates[0] ?? path.join(process.cwd(), 'credentials/gcp-oauth.keys.json');
+}
+
+function exitWithMissingOAuthPath(logger: ReturnType<typeof createLogger>): never {
+  const candidates = getOAuthPathCandidates();
+  logger.error('OAuth keys file not found. Set GDRIVE_OAUTH_PATH or place keys in credentials/.');
+  logger.error('Checked paths:', { candidates });
+  process.exit(1);
 }
 
 export async function authenticateAndSave(): Promise<void> {
@@ -44,7 +64,12 @@ export async function authenticateAndSave(): Promise<void> {
     process.exit(1);
   }
 
-  const auth = await authenticate({ keyfilePath: resolveOAuthPath(), scopes: SCOPES });
+  const oauthPath = resolveOAuthPath();
+  if (!fs.existsSync(oauthPath)) {
+    exitWithMissingOAuthPath(logger);
+  }
+
+  const auth = await authenticate({ keyfilePath: oauthPath, scopes: SCOPES });
 
   const { credentials } = auth;
   if (
@@ -82,9 +107,7 @@ export async function runStdioServer(): Promise<void> {
 
   const oauthPath = resolveOAuthPath();
   if (!fs.existsSync(oauthPath)) {
-    logger.error(`OAuth keys not found at: ${oauthPath}`);
-    logger.error('Please ensure gcp-oauth.keys.json is present.');
-    process.exit(1);
+    exitWithMissingOAuthPath(logger);
   }
 
   const keysContent = fs.readFileSync(oauthPath, 'utf-8');

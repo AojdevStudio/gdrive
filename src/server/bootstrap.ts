@@ -11,34 +11,71 @@ import type { CacheManagerLike, PerformanceMonitorLike } from '../modules/types.
 
 // ─── Logger ──────────────────────────────────────────────────────────────────
 
+export function serializeLogMetadata(
+  value: unknown,
+  seen: WeakSet<object> = new WeakSet()
+): unknown {
+  if (value instanceof Error) {
+    if (seen.has(value)) {
+      return '[Circular]';
+    }
+    seen.add(value);
+
+    const plain: Record<string, unknown> = {
+      name: value.name,
+      message: value.message,
+      stack: value.stack,
+    };
+
+    try {
+      for (const key of Object.getOwnPropertyNames(value)) {
+        plain[key] = serializeLogMetadata(
+          (value as unknown as Record<string, unknown>)[key],
+          seen
+        );
+      }
+    } catch {
+      // ignore property traversal failures
+    }
+
+    const nodeErr = value as unknown as { code?: unknown; cause?: unknown };
+    if (nodeErr.code !== undefined) {
+      plain.code = serializeLogMetadata(nodeErr.code, seen);
+    }
+    if (nodeErr.cause !== undefined) {
+      plain.cause = serializeLogMetadata(nodeErr.cause, seen);
+    }
+    return plain;
+  }
+
+  if (Array.isArray(value)) {
+    if (seen.has(value)) {
+      return '[Circular]';
+    }
+    seen.add(value);
+    return value.map((item) => serializeLogMetadata(item, seen));
+  }
+
+  if (value && typeof value === 'object') {
+    const obj = value as Record<string, unknown>;
+    if (seen.has(obj)) {
+      return '[Circular]';
+    }
+    seen.add(obj);
+
+    const serialized: Record<string, unknown> = {};
+    for (const key of Object.keys(obj)) {
+      serialized[key] = serializeLogMetadata(obj[key], seen);
+    }
+    return serialized;
+  }
+
+  return value;
+}
+
 const errorSerializer = winston.format((info) => {
-  const serialize = (value: unknown): unknown => {
-    if (value instanceof Error) {
-      const plain: Record<string, unknown> = {
-        name: value.name,
-        message: value.message,
-        stack: value.stack,
-      };
-      try {
-        for (const key of Object.getOwnPropertyNames(value)) {
-          plain[key] = (value as unknown as Record<string, unknown>)[key];
-        }
-      } catch { /* ignore */ }
-      const nodeErr = value as unknown as { code?: unknown; cause?: unknown };
-      if (nodeErr.code !== undefined) plain.code = nodeErr.code;
-      if (nodeErr.cause !== undefined) plain.cause = serialize(nodeErr.cause);
-      return plain;
-    }
-    if (Array.isArray(value)) return value.map(serialize);
-    if (value && typeof value === 'object') {
-      const obj = value as Record<string, unknown>;
-      for (const key of Object.keys(obj)) obj[key] = serialize(obj[key]);
-      return obj;
-    }
-    return value;
-  };
   for (const key of Object.keys(info)) {
-    (info as unknown as Record<string, unknown>)[key] = serialize(
+    (info as unknown as Record<string, unknown>)[key] = serializeLogMetadata(
       (info as unknown as Record<string, unknown>)[key]
     );
   }
@@ -94,7 +131,9 @@ class PerformanceMonitor implements PerformanceMonitorLike {
     const current = this.metrics.get(operation) ?? { count: 0, totalTime: 0, errors: 0 };
     current.count++;
     current.totalTime += duration;
-    if (error) current.errors++;
+    if (error) {
+      current.errors++;
+    }
     this.metrics.set(operation, current);
   }
 
@@ -170,7 +209,9 @@ class CacheManager implements CacheManagerLike {
   }
 
   async get(key: string): Promise<unknown | null> {
-    if (!this.connected || !this.client) return null;
+    if (!this.connected || !this.client) {
+      return null;
+    }
     try {
       const data = await this.client.get(key);
       return data ? JSON.parse(data) : null;
@@ -181,7 +222,9 @@ class CacheManager implements CacheManagerLike {
   }
 
   async set(key: string, value: unknown): Promise<void> {
-    if (!this.connected || !this.client) return;
+    if (!this.connected || !this.client) {
+      return;
+    }
     try {
       await this.client.setEx(key, this.ttl, JSON.stringify(value));
     } catch (error) {
@@ -190,12 +233,38 @@ class CacheManager implements CacheManagerLike {
   }
 
   async invalidate(pattern: string): Promise<void> {
-    if (!this.connected || !this.client) return;
+    if (!this.connected || !this.client) {
+      return;
+    }
     try {
-      const keys = await this.client.keys(pattern);
-      if (keys.length > 0) {
-        await this.client.del(keys);
-        this.logger.debug(`Invalidated ${keys.length} cache entries`);
+      const batchSize = 100;
+      const batch: string[] = [];
+      let deletedCount = 0;
+
+      for await (const keyOrKeys of this.client.scanIterator({
+        MATCH: pattern,
+        COUNT: batchSize,
+      })) {
+        if (typeof keyOrKeys === 'string') {
+          batch.push(keyOrKeys);
+        } else if (Array.isArray(keyOrKeys)) {
+          batch.push(...keyOrKeys.filter((key): key is string => typeof key === 'string'));
+        }
+
+        if (batch.length >= batchSize) {
+          await this.client.del(batch);
+          deletedCount += batch.length;
+          batch.length = 0;
+        }
+      }
+
+      if (batch.length > 0) {
+        await this.client.del(batch);
+        deletedCount += batch.length;
+      }
+
+      if (deletedCount > 0) {
+        this.logger.debug(`Invalidated ${deletedCount} cache entries`);
       }
     } catch (error) {
       this.logger.error('Cache invalidation error', { error, pattern });
