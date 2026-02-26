@@ -1,0 +1,30 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "outDir": "./dist-worker",
+    "lib": ["ES2022", "WebWorker"],
+    "types": [],
+    "noEmit": false,
+    "declaration": false,
+    "declarationMap": false,
+    "sourceMap": false
+  },
+  "include": [
+    "worker.ts",
+    "src/server/factory.ts",
+    "src/server/bootstrap.ts",
+    "src/auth/workers-auth.ts",
+    "src/storage/kv-store.ts",
+    "src/sdk/**/*.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist",
+    "dist-worker",
+    "src/server/transports/stdio.ts",
+    "index.ts",
+    "**/__tests__/**/*",
+    "**/*.test.ts",
+    "**/*.spec.ts"
+  ]
+}

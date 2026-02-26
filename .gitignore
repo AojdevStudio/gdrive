@@ -44,3 +44,9 @@ claude-config-*.json
 # BMad framework installations - external tools
 .claude/commands/BMad/
 # BMAD (local only)
+
+# Wrangler build cache and state
+.wrangler/
+
+# Claude Code skills (symlinks to external tooling)
+.claude/skills/

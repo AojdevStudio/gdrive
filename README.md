@@ -7,11 +7,11 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![TypeScript](https://img.shields.io/badge/TypeScript-007ACC?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![MCP](https://img.shields.io/badge/MCP-Protocol-blueviolet)](https://modelcontextprotocol.io)
-[![Docker](https://img.shields.io/badge/Docker-2496ED?logo=docker&logoColor=white)](https://www.docker.com/)
-[![v3.3.0](https://img.shields.io/badge/version-3.3.0-green)](https://github.com/AojdevStudio/gdrive/releases)
+[![Cloudflare Workers](https://img.shields.io/badge/Cloudflare-Workers-F38020?logo=cloudflare&logoColor=white)](https://workers.cloudflare.com/)
+[![v4.0.0](https://img.shields.io/badge/version-4.0.0-green)](https://github.com/AojdevStudio/gdrive/releases)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/AojdevStudio/gdrive/pulls)
 
-*The complete Google Workspace bridge for AI agents — 6 tools, 47 operations, one MCP server.*
+*The complete Google Workspace bridge for AI agents — 47 operations, one URL.*
 
 [**See It In Action**](#see-it-in-action) · [**Quick Start**](#quick-start) · [**Documentation**](./docs/README.md)
 
@@ -43,15 +43,44 @@ AI agents can write code, analyze documents, and plan complex projects. But ask 
 
 </div>
 
-The [Model Context Protocol](https://modelcontextprotocol.io) gives AI agents a standardized way to interact with external tools. But most MCP servers offer narrow integrations — a single API, a single service.
+The [Model Context Protocol](https://modelcontextprotocol.io) gives AI agents a standardized way to interact with external tools. But most MCP servers require local installation, credential management, and manual path configuration before a single API call can be made.
 
-Google Workspace isn't a single service. It's six deeply interconnected products that 3 billion people use to do real work. An AI agent needs access to *all of them* — with proper auth, caching, and the kind of operation depth that goes beyond basic CRUD.
+**v4 changes this entirely.** Deploy once to Cloudflare Workers, get a URL. That URL is your MCP server — available everywhere, always-on, zero local setup required.
 
 <div align="center">
 
-## **One server. Six services. Full autonomy.**
+## **One URL. Six services. Full autonomy.**
 
 </div>
+
+---
+
+## What's New in v4.0.0
+
+> **This is a breaking change release.** v4 introduces a 2-tool SDK architecture and Cloudflare Workers deployment. The legacy 6-tool stdio server is preserved for local use.
+
+### Zero-Install Remote Deployment
+
+Deploy the server to Cloudflare Workers and connect any MCP client with a single URL — no Node.js, no Docker, no path configuration. Just:
+
+```
+https://your-worker.workers.dev/mcp
+```
+
+Inspired by [Cloudflare's approach to remote MCP servers](https://blog.cloudflare.com/code-mode-mcp/) — thanks to [@mattzcarey](https://x.com/mattzcarey) for surfacing this.
+
+### 2-Tool SDK Architecture
+
+| Tool | Purpose |
+|:-----|:--------|
+| `search` | Query Google Workspace via natural language SDK spec |
+| `execute` | Run sandboxed JavaScript with full googleapis SDK access |
+
+**88% fewer tools** in your agent's context window. The SDK handles the rest dynamically.
+
+### KV-Backed Token Storage
+
+OAuth tokens stored in Cloudflare KV — encrypted, persistent, no local credential files needed.
 
 ---
 
@@ -68,8 +97,6 @@ A production-ready MCP server that gives AI agents complete, secure access to Go
 | **Docs** | 5 | Create, insert text, replace, **rich text styling**, insert tables |
 | **Forms** | 4 | Create forms, add questions, read responses |
 | | **47 total** | |
-
-Every tool uses an **operation-based pattern** — one tool per service with an `operation` parameter, not 47 separate tools cluttering your agent's context window.
 
 ---
 
@@ -148,59 +175,22 @@ Every tool uses an **operation-based pattern** — one tool per service with an 
 
 ---
 
-## What's New in v3.3.0
-
-The latest release brings major upgrades across every service:
-
-### Sheets — Full Spreadsheet Control
-| Operation | What It Does |
-|:----------|:-------------|
-| `updateFormula` | Write formulas to cells with automatic relative reference adjustment |
-| `formatCells` | Cell formatting — colors, fonts, borders, number formats |
-| `addConditionalFormat` | Conditional formatting rules (highlight trends, flag outliers) |
-| `freezeRowsColumns` | Freeze header rows and columns |
-| `setColumnWidth` | Adjust column widths for readability |
-| `appendRows` | Native row appending (cleaner than manual range calculation) |
-
-### Gmail — Actually Send Email
-| Operation | What It Does |
-|:----------|:-------------|
-| `sendMessage` | Send emails directly — supports send-as aliases via `from` param |
-| `sendDraft` | Send an existing draft |
-| `modifyLabels` | Add/remove labels (archive, mark read, organize) |
-
-### Calendar — Full CRUD + Smart Scheduling
-| Operation | What It Does |
-|:----------|:-------------|
-| `quickAdd` | Natural language event creation — "Lunch with Mary tomorrow at noon" |
-| `updateEvent` | Modify existing events |
-| `deleteEvent` | Delete events with attendee notification options |
-| `checkFreeBusy` | Check calendar availability for scheduling |
-
-### Docs — Rich Document Editing
-| Operation | What It Does |
-|:----------|:-------------|
-| `applyTextStyle` | Bold, italic, underline, colors, font sizes on text ranges |
-| `insertTable` | Insert tables with custom dimensions |
-
-### Drive — Smarter Search & Bulk Operations
-| Operation | What It Does |
-|:----------|:-------------|
-| `enhancedSearch` | Natural language file search with intelligent filtering |
-| `batchOperations` | Bulk create, update, delete, move operations |
-
----
-
 ## Quick Start
 
-### Prerequisites
+### Option 1: Remote (Cloudflare Workers) — Recommended
 
-- Node.js 18+
-- A Google Cloud project with OAuth credentials
+Deploy once to Cloudflare's edge — connect from anywhere via a permanent URL. After the initial setup, no local process to manage.
 
-> **New to Google Cloud?** Follow the [detailed setup guide](./docs/Guides/01-initial-setup.md).
+**Prerequisites:**
+- [Cloudflare account](https://dash.cloudflare.com/sign-up) (free tier works)
+- [Node.js 18+](https://nodejs.org/en/download) (needed for the one-time local auth step)
+- [Wrangler CLI](https://developers.cloudflare.com/workers/wrangler/install-and-update/): `npm install -g wrangler` or use `npx wrangler`
+- [Google Cloud project](./docs/Guides/01-initial-setup.md) with OAuth credentials
+- [`just`](https://just.systems/man/en/packages.html) — `brew install just` (macOS) · `winget install just` (Windows) · `cargo install just` (cross-platform)
 
-### Install
+> **Guided setup:** Run `just install` to have Claude walk you through every step interactively — GCP project creation, API enablement, OAuth credentials, KV setup, and deploy. Or follow the steps below manually.
+
+#### 1. Clone and install
 
 ```bash
 git clone https://github.com/AojdevStudio/gdrive.git
@@ -208,9 +198,102 @@ cd gdrive
 npm install && npm run build
 ```
 
-### Authenticate
+#### 2. Authenticate with Cloudflare
 
 ```bash
+npx wrangler login
+```
+
+#### 3. Create KV namespace for token storage
+
+```bash
+npx wrangler kv:namespace create GDRIVE_KV --preview false
+# Copy the `id` from the output, update [[kv_namespaces]] id in wrangler.toml
+```
+
+#### 4. Complete Google OAuth locally
+
+```bash
+# Generate encryption key
+echo "GDRIVE_TOKEN_ENCRYPTION_KEY=$(openssl rand -base64 32)" > .env
+
+# Place your gcp-oauth.keys.json in credentials/
+mkdir -p credentials
+cp /path/to/gcp-oauth.keys.json credentials/
+
+# Run auth — opens browser, saves tokens to .tokens.json
+node ./dist/index.js auth
+```
+
+> **Don't have Google Cloud credentials?** Follow the [Google Cloud setup guide](./docs/Guides/01-initial-setup.md) — or run `just install` for a fully guided walkthrough.
+
+#### 5. Upload tokens and secrets to Cloudflare
+
+```bash
+# Upload OAuth tokens to KV
+npx wrangler kv:key put --namespace-id=<KV_NAMESPACE_ID> \
+  "gdrive:oauth:tokens" "$(cat .tokens.json)"
+
+# Set OAuth client credentials as Wrangler secrets
+npx wrangler secret put GDRIVE_CLIENT_ID
+npx wrangler secret put GDRIVE_CLIENT_SECRET
+```
+
+#### 6. Deploy
+
+```bash
+npx wrangler deploy
+# Note the URL printed: https://your-worker.workers.dev
+```
+
+#### 7. Connect to Claude
+
+**Claude Code CLI — User scope** (available in every project, stored in `~/.claude/settings.json`):
+
+```bash
+claude mcp add --scope user --transport http gdrive https://your-worker.workers.dev/mcp
+```
+
+**Claude Code CLI — Project scope** (this project only, can be committed to the repo):
+
+```bash
+claude mcp add --scope project --transport http gdrive https://your-worker.workers.dev/mcp
+```
+
+> **Why user scope?** An MCP server that connects to *your* Google account belongs at the user level — not locked to one project. Use `--scope project` only when the server is project-specific (different Google account, different permissions).
+
+**Claude Desktop** — add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "gdrive": {
+      "url": "https://your-worker.workers.dev/mcp"
+    }
+  }
+}
+```
+
+---
+
+### Option 2: Local (Node.js stdio)
+
+For local development or when you prefer to keep everything on-machine.
+
+#### Prerequisites
+
+- [Node.js 18+](https://nodejs.org/en/download)
+- [Google Cloud project](./docs/Guides/01-initial-setup.md) with OAuth credentials
+
+> **New to Google Cloud?** Follow the [detailed setup guide](./docs/Guides/01-initial-setup.md).
+
+#### Install & Authenticate
+
+```bash
+git clone https://github.com/AojdevStudio/gdrive.git
+cd gdrive
+npm install && npm run build
+
 # Copy your OAuth credentials
 mkdir -p credentials
 cp /path/to/gcp-oauth.keys.json credentials/
@@ -220,9 +303,21 @@ export GDRIVE_TOKEN_ENCRYPTION_KEY=$(openssl rand -base64 32)
 node ./dist/index.js auth
 ```
 
-### Connect to Claude
+#### Connect to Claude
 
-**Claude Desktop** — add to your MCP config:
+**Claude Code CLI — User scope** (recommended — works across all your projects):
+
+```bash
+claude mcp add --scope user gdrive -- node /absolute/path/to/gdrive/dist/index.js
+```
+
+**Claude Code CLI — Project scope:**
+
+```bash
+claude mcp add --scope project gdrive -- node /absolute/path/to/gdrive/dist/index.js
+```
+
+**Claude Desktop:**
 
 ```json
 {
@@ -238,13 +333,11 @@ node ./dist/index.js auth
 }
 ```
 
-**Claude Code CLI:**
+---
 
-```bash
-claude mcp add --transport stdio gdrive -- node /path/to/gdrive/dist/index.js
-```
+### Option 3: Docker (Self-Hosted Production)
 
-### Docker (Recommended for Production)
+For teams that need a persistent, shared instance with Redis caching.
 
 ```bash
 # Authenticate on host first (opens browser)
@@ -320,6 +413,8 @@ Every time we wanted an agent to update a spreadsheet, check a calendar, or send
 MCP changed the game by giving agents a standard way to use tools. But the existing Google integrations were shallow — basic file read/write, no formatting, no email sending, no calendar management. We needed something that matched the depth of what people actually do in Google Workspace every day.
 
 So we built it. Starting with Drive and Sheets, then Forms and Docs, then Gmail (with actual sending, not just drafts), and finally Calendar with full CRUD and natural language scheduling. Each release driven by the same question: *"What does an agent need to actually finish this job without human intervention?"*
+
+v4 answers the next question: *"What does a developer need to connect their agent in under 60 seconds?"* One URL. That's the answer.
 
 <div align="center">
 
@@ -438,6 +533,7 @@ So we built it. Starting with Drive and Sheets, then Forms and Docs, then Gmail 
 - [x] Google Docs — document creation and rich text editing
 - [x] Gmail — complete email management including send
 - [x] Calendar — full CRUD with natural language scheduling
+- [x] Cloudflare Workers — zero-install remote deployment
 - [ ] Google Slides — presentation creation and editing
 - [ ] Google Chat — workspace messaging integration
 - [ ] Contacts — contact management and lookup
