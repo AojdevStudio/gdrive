@@ -47,12 +47,17 @@ export class RateLimiter {
 
   private release(service: string): void {
     const count = this.counters.get(service) ?? 0;
-    this.counters.set(service, Math.max(0, count - 1));
     const queue = this.queues.get(service) ?? [];
     const next = queue.shift();
     if (next) {
       this.queues.set(service, queue);
+      // Hand off the released slot directly to the next queued request.
+      // In-flight count stays unchanged because one request ended and one starts.
+      this.counters.set(service, Math.max(1, count));
       next();
+      return;
     }
+
+    this.counters.set(service, Math.max(0, count - 1));
   }
 }

@@ -47,6 +47,8 @@ export async function rotateKey(): Promise<void> {
       process.exit(1);
     }
 
+    // Switch active in-memory version before re-saving so saveTokens() encrypts with new key.
+    keyRotationManager.setCurrentVersion(newVersion);
     await tokenManager.saveTokens(tokens);
 
     logger.info(`📊 Summary:`);

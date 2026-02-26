@@ -10,9 +10,10 @@
 import type { FullContext, SDKRuntime } from './types.js';
 import { RateLimiter } from './rate-limiter.js';
 
-export function createSDKRuntime(context: FullContext): SDKRuntime {
-  const limiter = new RateLimiter();
-
+export function createSDKRuntime(
+  context: FullContext,
+  limiter: RateLimiter = new RateLimiter()
+): SDKRuntime {
   return {
     drive: {
       search: limiter.wrap('drive', async (opts: unknown) => {

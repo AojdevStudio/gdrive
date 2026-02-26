@@ -15,8 +15,7 @@
     "src/server/bootstrap.ts",
     "src/auth/workers-auth.ts",
     "src/storage/kv-store.ts",
-    "src/sdk/**/*.ts",
-    "src/modules/**/*.ts"
+    "src/sdk/**/*.ts"
   ],
   "exclude": [
     "node_modules",

@@ -20,6 +20,7 @@ import type { CacheManagerLike, PerformanceMonitorLike } from '../modules/types.
 import { NodeSandbox } from '../sdk/sandbox-node.js';
 import { SDK_SPEC } from '../sdk/spec.js';
 import { createSDKRuntime } from '../sdk/runtime.js';
+import { RateLimiter } from '../sdk/rate-limiter.js';
 import type { FullContext } from '../sdk/types.js';
 
 // Auth object accepted by googleapis — OAuth2Client or similar credential
@@ -42,6 +43,7 @@ export function createConfiguredServer(deps: ServerConfig): Server {
   );
 
   const sandbox = new NodeSandbox();
+  const sharedRateLimiter = new RateLimiter();
 
   function buildContext(): FullContext {
     const { auth, logger, cacheManager, performanceMonitor } = deps;
@@ -170,7 +172,7 @@ export function createConfiguredServer(deps: ServerConfig): Server {
       }
 
       const context = buildContext();
-      const sdk = createSDKRuntime(context);
+      const sdk = createSDKRuntime(context, sharedRateLimiter);
 
       const result = await sandbox.execute(code, { sdk });
 
