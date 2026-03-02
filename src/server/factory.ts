@@ -213,12 +213,17 @@ export function createConfiguredServer(deps: ServerConfig): Server {
         }
 
         const serviceObj = sdk[service as ServiceName];
-        const fn = serviceObj[operation as keyof typeof serviceObj] as
-          | ((opts: unknown) => Promise<unknown>)
-          | undefined;
+        const candidate = Object.prototype.hasOwnProperty.call(serviceObj, operation)
+          ? serviceObj[operation as keyof typeof serviceObj]
+          : undefined;
+        const fn = typeof candidate === 'function'
+          ? (candidate as (opts: unknown) => Promise<unknown>)
+          : undefined;
 
         if (!fn) {
-          const available = Object.keys(serviceObj);
+          const available = Object.keys(serviceObj).filter(
+            k => Object.prototype.hasOwnProperty.call(serviceObj, k) && typeof (serviceObj as Record<string, unknown>)[k] === 'function'
+          );
           return {
             content: [{
               type: 'text' as const,
@@ -266,27 +271,38 @@ export function createConfiguredServer(deps: ServerConfig): Server {
           };
         }
 
-        const result = await sandbox.execute(code, { sdk });
+        try {
+          const result = await sandbox.execute(code, { sdk });
 
-        if (result.error) {
+          if (result.error) {
+            return {
+              content: [{
+                type: 'text' as const,
+                text: JSON.stringify({
+                  error: result.error.message,
+                  logs: result.logs,
+                }),
+              }],
+              isError: true,
+            };
+          }
+
           return {
             content: [{
               type: 'text' as const,
-              text: JSON.stringify({
-                error: result.error.message,
-                logs: result.logs,
-              }),
+              text: JSON.stringify({ result: result.result, logs: result.logs }),
+            }],
+          };
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
+          return {
+            content: [{
+              type: 'text' as const,
+              text: JSON.stringify({ error: message }),
             }],
             isError: true,
           };
         }
-
-        return {
-          content: [{
-            type: 'text' as const,
-            text: JSON.stringify({ result: result.result, logs: result.logs }),
-          }],
-        };
       }
 
       return {

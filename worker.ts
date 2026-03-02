@@ -1,4 +1,3 @@
-/* global fetch */
 /**
  * Cloudflare Workers entry point for the gdrive MCP server.
  *
@@ -123,7 +122,11 @@ function makeAuth(accessToken: string): any {
         }
       }
 
-      const response = await fetch(fetchUrl.toString(), fetchOpts);
+      const workerFetch = globalThis.fetch;
+      if (typeof workerFetch !== 'function') {
+        throw new Error('Fetch API is not available in this runtime');
+      }
+      const response = await workerFetch(fetchUrl.toString(), fetchOpts);
       if (!response.ok) {
         const errorBody = await response.text().catch(() => '');
         throw new Error(
