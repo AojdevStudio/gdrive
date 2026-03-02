@@ -37,7 +37,7 @@ Runtime → Token Validation → Auto-Refresh → API Access → Continuous Oper
 
 ```bash
 # Verify all prerequisites are met
-cd /path/to/gdrive-mcp-server
+cd /path/to/gdrive
 
 # Check OAuth keys exist
 ls -la credentials/gcp-oauth.keys.json
@@ -472,7 +472,7 @@ node ./dist/index.js auth
 ```bash
 # Re-enable APIs with explicit project
 gcloud config set project YOUR_PROJECT_ID
-gcloud services enable drive.googleapis.com sheets.googleapis.com docs.googleapis.com forms.googleapis.com script.googleapis.com
+gcloud services enable drive.googleapis.com sheets.googleapis.com docs.googleapis.com forms.googleapis.com script.googleapis.com gmail.googleapis.com calendar-json.googleapis.com
 
 # Wait 5-10 minutes for propagation
 # Test with simple API call
@@ -500,6 +500,12 @@ https://www.googleapis.com/auth/spreadsheets
 https://www.googleapis.com/auth/documents
 https://www.googleapis.com/auth/forms
 https://www.googleapis.com/auth/script.projects.readonly
+https://www.googleapis.com/auth/gmail.readonly
+https://www.googleapis.com/auth/gmail.send
+https://www.googleapis.com/auth/gmail.compose
+https://www.googleapis.com/auth/gmail.modify
+https://www.googleapis.com/auth/calendar.readonly
+https://www.googleapis.com/auth/calendar.events
 
 # Clear tokens and re-authenticate with updated scopes
 rm -f credentials/.gdrive-mcp-tokens.json

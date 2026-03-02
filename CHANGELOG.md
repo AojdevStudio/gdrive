@@ -388,6 +388,19 @@ If you're using individual tools like `listSheets`, `readSheet`, etc., you must 
 
 ## [Unreleased]
 
+
+## [4.0.0-alpha] - 2026-02-26
+
+### Added
+
+- complete bug fix milestone with API, security, and DRY improvements (#35) [#35]
+- Add Claude Code GitHub Workflow (#32) [#32]
+- 📅 feat(calendar): Add Google Calendar API integration (v3.3.0)
+
+### Fixed
+
+- 📝 docs: Add comprehensive codebase bug analysis and task specifications (#34) [#34]
+
 ### Added
 
 - **Google Sheets Formula Support** - `updateCellsWithFormula` tool for applying formulas to cells
@@ -635,7 +648,8 @@ If you're using individual tools like `listSheets`, `readSheet`, etc., you must 
 [0.1.0]: https://github.com/AojdevStudio/gdrive/releases/tag/v0.1.0
 
 ## Links
-[Unreleased]: https://github.com/AojdevStudio/gdrive/compare/v2.0.0...HEAD
+[Unreleased]: https://github.com/AojdevStudio/gdrive/compare/v4.0.0-alpha...HEAD
+[4.0.0-alpha]: https://github.com/AojdevStudio/gdrive/releases/tag/v4.0.0-alpha
 [2.0.0]: https://github.com/AojdevStudio/gdrive/releases/tag/v2.0.0
 [0.8.0]: https://github.com/AojdevStudio/gdrive/releases/tag/v0.8.0
 [0.7.0]: https://github.com/AojdevStudio/gdrive/releases/tag/v0.7.0

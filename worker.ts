@@ -79,12 +79,69 @@ export function validateWorkerRequestAuth(request: Request, env: Env): Response 
   return null;
 }
 
-// Minimal auth object that satisfies googleapis' getAccessToken() contract
-function makeAuth(accessToken: string) {
-  return {
+// Auth adapter that satisfies googleapis' OAuth2Client contract on Workers.
+// googleapis internally calls authClient.request() for API calls.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function makeAuth(accessToken: string): any {
+  const authObj = {
     getAccessToken: async () => ({ token: accessToken, res: null }),
-    getClient: async () => ({ getAccessToken: async () => ({ token: accessToken }) }),
+    getClient: async () => authObj,
+    // googleapis' gaxios calls request() to make authenticated HTTP calls
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    request: async (opts: any) => {
+      const url = opts.url || opts.uri;
+      const method = (opts.method || 'GET').toUpperCase();
+      const headers: Record<string, string> = {
+        ...(opts.headers || {}),
+        'Authorization': `Bearer ${accessToken}`,
+      };
+
+      // Build fetch options
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const fetchOpts: any = { method, headers };
+      if (opts.body) {
+        fetchOpts.body = typeof opts.body === 'string' ? opts.body : JSON.stringify(opts.body);
+        if (!headers['Content-Type']) {
+          headers['Content-Type'] = 'application/json';
+        }
+      }
+      if (opts.data) {
+        fetchOpts.body = typeof opts.data === 'string' ? opts.data : JSON.stringify(opts.data);
+        if (!headers['Content-Type']) {
+          headers['Content-Type'] = 'application/json';
+        }
+      }
+
+      // Handle query params
+      const fetchUrl = new URL(url);
+      if (opts.params) {
+        for (const [key, val] of Object.entries(opts.params)) {
+          if (val !== undefined && val !== null) {
+            fetchUrl.searchParams.set(key, String(val));
+          }
+        }
+      }
+
+      const workerFetch = globalThis.fetch;
+      if (typeof workerFetch !== 'function') {
+        throw new Error('Fetch API is not available in this runtime');
+      }
+      const response = await workerFetch(fetchUrl.toString(), fetchOpts);
+      if (!response.ok) {
+        const errorBody = await response.text().catch(() => '');
+        throw new Error(
+          `Google API request failed: ${response.status} ${response.statusText}${errorBody ? ` — ${errorBody}` : ''}`
+        );
+      }
+      const contentType = response.headers.get('content-type') ?? '';
+      const data = contentType.includes('application/json')
+        ? await response.json()
+        : await response.text();
+
+      return { data, status: response.status, statusText: response.statusText, headers: response.headers };
+    },
   };
+  return authObj;
 }
 
 // Minimal logger for Workers (no winston — uses console which routes to CF logs)
