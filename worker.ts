@@ -124,7 +124,13 @@ function makeAuth(accessToken: string): any {
       }
 
       const response = await fetch(fetchUrl.toString(), fetchOpts);
-      const contentType = response.headers.get('content-type') || '';
+      if (!response.ok) {
+        const errorBody = await response.text().catch(() => '');
+        throw new Error(
+          `Google API request failed: ${response.status} ${response.statusText}${errorBody ? ` — ${errorBody}` : ''}`
+        );
+      }
+      const contentType = response.headers.get('content-type') ?? '';
       const data = contentType.includes('application/json')
         ? await response.json()
         : await response.text();
