@@ -13,6 +13,7 @@ import { AuthManager, AuthState } from '../../auth/AuthManager.js';
 import { TokenManager } from '../../auth/TokenManager.js';
 import { createLogger, createCacheManager, createPerformanceMonitor } from '../bootstrap.js';
 import { createConfiguredServer } from '../factory.js';
+import { NodeSandbox } from '../../sdk/sandbox-node.js';
 
 const SCOPES = [
   'https://www.googleapis.com/auth/drive',
@@ -140,6 +141,7 @@ export async function runStdioServer(): Promise<void> {
     cacheManager,
     performanceMonitor,
     auth: oauth2Client,
+    sandbox: new NodeSandbox(),
   });
 
   setInterval(() => {

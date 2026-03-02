@@ -1,34 +1,24 @@
 # Google Drive MCP Server - Code Examples
 
-This directory contains comprehensive code examples demonstrating how to use the Google Drive MCP Server's capabilities. Each example includes detailed explanations, practical use cases, and complete code snippets.
+This directory contains code examples for the **v4 architecture**, which exposes exactly two MCP tools: `search` and `execute`. You discover operations via `search`, then run code via `execute` using the `sdk` object.
+
+## v4 Architecture
+
+| Tool | Purpose |
+|------|---------|
+| **search** | Discover available operations. Call with `service` and optionally `operation` to get signatures, params, and examples. |
+| **execute** | Run JavaScript code in a sandbox. The `sdk` object is available globally. Use `sdk.drive.search()`, `sdk.sheets.addConditionalFormat()`, etc. |
+
+**Workflow:** 1) Call `search` to find the operation you need. 2) Call `execute` with code that uses `sdk.*` to perform the operation.
 
 ## 📁 Available Examples
 
 ### 🔍 **Search Operations**
-- **[Natural Language Search](./search-natural-language.md)** - Search files using natural language queries
-- **[Advanced Search](./search-enhanced.md)** - Complex filtering and sorting capabilities
-
-### 📄 **Document Management**
-- **[Reading Documents](./documents-reading.md)** - Read various file formats with automatic conversion
-- **[Creating Documents](./documents-creating.md)** - Create and format Google Docs
-- **[Document Operations](./documents-operations.md)** - Insert, replace, and style text
+- **[Natural Language Search](./search-natural-language.md)** - Basic Drive search via `sdk.drive.search()`
+- **[Enhanced Search](./search-enhanced.md)** - Advanced filtering via `sdk.drive.enhancedSearch()`
 
 ### 📊 **Spreadsheet Management**
-- **[Reading Sheets](./sheets-reading.md)** - Read spreadsheet data and metadata
-- **[Writing to Sheets](./sheets-writing.md)** - Update cells and append rows
-- **[Sheet Management](./sheets-management.md)** - Create and manage multiple sheets
-
-### 📋 **Forms Management**
-- **[Creating Forms](./forms-creating.md)** - Build forms with various question types
-- **[Managing Forms](./forms-management.md)** - Add questions and retrieve responses
-
-### 🔧 **Batch Operations**
-- **[Batch File Operations](./batch-operations.md)** - Process multiple files efficiently
-- **[Bulk Data Processing](./bulk-processing.md)** - Handle large-scale operations
-
-### ⚡ **Performance & Caching**
-- **[Redis Caching](./redis-caching.md)** - Optimize performance with intelligent caching
-- **[Performance Monitoring](./performance-monitoring.md)** - Track and optimize operations
+- **[Conditional Formatting](./sheets-conditional-formatting.md)** - Apply conditional formatting via `sdk.sheets.addConditionalFormat()`
 
 ## 🚀 Getting Started
 
@@ -62,22 +52,23 @@ Each example follows this structure:
 ## 🛠️ Running Examples
 
 ### Using Claude Desktop
-If you have the server configured with Claude Desktop, you can copy and paste the tool calls directly into your conversation.
+If the server is configured with Claude Desktop, use the `search` tool to discover operations, then the `execute` tool with the example code.
 
-### Using Node.js
-For standalone testing, you can create a test script:
+### Example: Discover and Run
 
-```javascript
-import { Server } from "@modelcontextprotocol/sdk/server/index.js";
-
-// Your example code here
+**Step 1 — Discover Drive search:**
+```json
+{ "name": "search", "arguments": { "service": "drive", "operation": "search" } }
 ```
 
-### Using curl (Advanced)
-For direct MCP protocol testing:
-
-```bash
-echo '{"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": {"name": "search", "arguments": {"query": "test"}}}' | node ./dist/index.js
+**Step 2 — Execute code:**
+```json
+{
+  "name": "execute",
+  "arguments": {
+    "code": "const results = await sdk.drive.search({ query: 'budget', pageSize: 10 }); return results.files.map(f => ({ id: f.id, name: f.name }));"
+  }
+}
 ```
 
 ## 🤝 Contributing Examples
@@ -85,17 +76,16 @@ echo '{"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": {"name": "se
 We welcome additional examples! When contributing:
 
 1. **Follow the established format** with clear explanations
-2. **Include error handling** and edge cases
-3. **Add performance considerations** where relevant
+2. **Use v4 architecture** — `search` for discovery, `execute` with `sdk.*` for operations
+3. **Include error handling** and edge cases
 4. **Test your examples** before submitting
 5. **Update this README** with your new example
 
 ## 📚 Additional Resources
 
 - **[Main README](../../README.md)** - Complete server documentation
-- **[API Reference](../api-reference.md)** - Detailed tool and resource specifications
 - **[Authentication Guide](../authentication.md)** - Setup and security best practices
-- **[Performance Guide](../performance.md)** - Optimization strategies
+- **[Architecture](../Architecture/ARCHITECTURE.md)** - Server architecture and design
 
 ---
 

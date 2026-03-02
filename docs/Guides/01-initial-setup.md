@@ -5,7 +5,7 @@ This guide walks you through the complete setup process for the Google Drive MCP
 ## Prerequisites
 
 Before starting, ensure you have:
-- **Node.js 18+** installed
+- **Node.js 22+** installed
 - **Git** for cloning the repository
 - **Google Account** with access to Google Cloud Console
 - **Terminal/Command Line** access
@@ -20,7 +20,7 @@ Before starting, ensure you have:
 
 2. **Create New Project**
    ```
-   Project Name: gdrive-mcp-server (or your preferred name)
+   Project Name: gdrive (or your preferred name)
    Project ID: Will be auto-generated or customize
    Location: No organization (for personal projects)
    ```
@@ -100,6 +100,12 @@ Before starting, ensure you have:
      https://www.googleapis.com/auth/documents
      https://www.googleapis.com/auth/forms
      https://www.googleapis.com/auth/script.projects.readonly
+     https://www.googleapis.com/auth/gmail.readonly
+     https://www.googleapis.com/auth/gmail.send
+     https://www.googleapis.com/auth/gmail.compose
+     https://www.googleapis.com/auth/gmail.modify
+     https://www.googleapis.com/auth/calendar.readonly
+     https://www.googleapis.com/auth/calendar.events
      ```
 
 5. **Add Test Users** (for External apps)
@@ -133,10 +139,10 @@ Before starting, ensure you have:
 ```bash
 # Clone the repository
 git clone <repository-url>
-cd gdrive-mcp-server
+cd gdrive
 
 # Or if you have the source locally
-cd /path/to/gdrive-mcp-server
+cd /path/to/gdrive
 ```
 
 ### 3.2 Install Dependencies
@@ -221,7 +227,7 @@ tree . -I 'node_modules|dist'
 ```bash
 # Verify Node.js version
 node --version
-# Should be 18.0.0 or higher
+# Should be 22.0.0 or higher
 
 # Verify npm installation
 npm --version
@@ -267,7 +273,7 @@ node -e "require('dotenv').config(); console.log('Encryption key set:', !!proces
 Your project should now look like this:
 
 ```
-gdrive-mcp-server/
+gdrive/
 ├── credentials/
 │   └── gcp-oauth.keys.json     # OAuth credentials (secure)
 ├── dist/                       # Compiled JavaScript
@@ -379,10 +385,10 @@ echo $ENCRYPTION_KEY | base64 -d | wc -c
 # Check Node.js version
 node --version
 
-# Install Node.js 18+ if needed
+# Install Node.js 22+ if needed
 # Using nvm (recommended)
-nvm install 18
-nvm use 18
+nvm install 22
+nvm use 22
 
 # Or using package manager
 # Ubuntu/Debian:

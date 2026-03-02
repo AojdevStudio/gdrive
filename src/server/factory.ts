@@ -3,7 +3,11 @@
  *
  * Registers exactly 2 tools:
  *   - search: Query the SDK spec to discover available operations
- *   - execute: Run arbitrary agent code in the NodeSandbox with full SDK access
+ *   - execute: Call SDK operations directly or run agent code in sandbox
+ *
+ * Supports two execution modes:
+ *   - Structured: service + operation + args → direct SDK call (works everywhere)
+ *   - Code: JavaScript string → NodeSandbox (Node.js only, not available on Workers)
  *
  * The 6 legacy operation-based tools (drive, sheets, forms, docs, gmail, calendar)
  * are intentionally NOT registered here. Agents use the sdk object instead.
@@ -17,11 +21,10 @@ import {
 import { google } from 'googleapis';
 import type { Logger } from 'winston';
 import type { CacheManagerLike, PerformanceMonitorLike } from '../modules/types.js';
-import { NodeSandbox } from '../sdk/sandbox-node.js';
 import { SDK_SPEC } from '../sdk/spec.js';
 import { createSDKRuntime } from '../sdk/runtime.js';
 import { RateLimiter } from '../sdk/rate-limiter.js';
-import type { FullContext } from '../sdk/types.js';
+import type { FullContext, Executor } from '../sdk/types.js';
 
 // Auth object accepted by googleapis — OAuth2Client or similar credential
 // We use a broad type here since the factory accepts both OAuth2Client (Node) and
@@ -29,11 +32,17 @@ import type { FullContext } from '../sdk/types.js';
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type GoogleAuth = any;
 
+// Valid service names for structured execution
+const VALID_SERVICES = ['drive', 'sheets', 'forms', 'docs', 'gmail', 'calendar'] as const;
+type ServiceName = (typeof VALID_SERVICES)[number];
+
 export interface ServerConfig {
   logger: Logger;
   cacheManager: CacheManagerLike;
   performanceMonitor: PerformanceMonitorLike;
   auth: GoogleAuth;
+  /** Optional sandbox for code execution. Omit on Workers where eval is unavailable. */
+  sandbox?: Executor;
 }
 
 export function createConfiguredServer(deps: ServerConfig): Server {
@@ -42,7 +51,7 @@ export function createConfiguredServer(deps: ServerConfig): Server {
     { capabilities: { tools: {} } }
   );
 
-  const sandbox = new NodeSandbox();
+  const sandbox = deps.sandbox;
   const sharedRateLimiter = new RateLimiter();
 
   function buildContext(): FullContext {
@@ -88,17 +97,32 @@ export function createConfiguredServer(deps: ServerConfig): Server {
       {
         name: 'execute',
         description:
-          'Run arbitrary JavaScript code in a sandboxed Node.js environment with full access to the Google Workspace SDK. The sdk object provides typed methods for all 47 operations. console.log output is returned as logs.',
+          'Call Google Workspace SDK operations. Preferred: use service + operation + args for direct calls. Alternative (Node.js only): pass JavaScript code string.',
         inputSchema: {
           type: 'object' as const,
           properties: {
+            service: {
+              type: 'string',
+              description:
+                'Service to call (drive | sheets | forms | docs | gmail | calendar). Use with operation and args.',
+              enum: ['drive', 'sheets', 'forms', 'docs', 'gmail', 'calendar'],
+            },
+            operation: {
+              type: 'string',
+              description:
+                'Operation name to call (e.g. "search", "readSheet", "sendMessage"). Use search tool to discover available operations.',
+            },
+            args: {
+              type: 'object',
+              description:
+                'Arguments object to pass to the operation. Structure depends on the operation — use search tool to see parameter details.',
+            },
             code: {
               type: 'string',
               description:
-                'JavaScript code to execute. The sdk object is available globally. Use top-level await. Return a value with `return` to get structured output. Example: `const files = await sdk.drive.search({ query: "report" }); return files;`',
+                'JavaScript code to execute in sandbox (Node.js only, not available on remote Workers). Use service + operation + args instead for universal compatibility.',
             },
           },
-          required: ['code'],
           additionalProperties: false,
         },
       },
@@ -163,41 +187,120 @@ export function createConfiguredServer(deps: ServerConfig): Server {
     }
 
     if (name === 'execute') {
-      const { code } = (args ?? {}) as { code: string };
-      if (!code || typeof code !== 'string') {
-        return {
-          content: [{ type: 'text' as const, text: JSON.stringify({ error: 'code is required' }) }],
-          isError: true,
-        };
-      }
+      const { service, operation, args: opArgs, code } = (args ?? {}) as {
+        service?: string;
+        operation?: string;
+        args?: Record<string, unknown>;
+        code?: string;
+      };
 
       const context = buildContext();
       const sdk = createSDKRuntime(context, sharedRateLimiter);
 
-      const result = await sandbox.execute(code, { sdk });
+      // Structured execution: service + operation + args → direct SDK call
+      if (service && operation) {
+        if (!VALID_SERVICES.includes(service as ServiceName)) {
+          return {
+            content: [{
+              type: 'text' as const,
+              text: JSON.stringify({
+                error: `Unknown service '${service}'`,
+                available: [...VALID_SERVICES],
+              }),
+            }],
+            isError: true,
+          };
+        }
 
-      if (result.error) {
-        return {
-          content: [
-            {
+        const serviceObj = sdk[service as ServiceName];
+        const fn = serviceObj[operation as keyof typeof serviceObj] as
+          | ((opts: unknown) => Promise<unknown>)
+          | undefined;
+
+        if (!fn) {
+          const available = Object.keys(serviceObj);
+          return {
+            content: [{
+              type: 'text' as const,
+              text: JSON.stringify({
+                error: `Unknown operation '${service}.${operation}'`,
+                available,
+              }),
+            }],
+            isError: true,
+          };
+        }
+
+        try {
+          const result = await fn(opArgs ?? {});
+          return {
+            content: [{
+              type: 'text' as const,
+              text: JSON.stringify({ result }),
+            }],
+          };
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
+          return {
+            content: [{
+              type: 'text' as const,
+              text: JSON.stringify({ error: message }),
+            }],
+            isError: true,
+          };
+        }
+      }
+
+      // Code execution: requires sandbox (Node.js only)
+      if (code && typeof code === 'string') {
+        if (!sandbox) {
+          return {
+            content: [{
+              type: 'text' as const,
+              text: JSON.stringify({
+                error: 'Code execution is not available on this server. Use service + operation + args instead.',
+                hint: 'Call search tool to discover available operations, then use execute with service, operation, and args parameters.',
+              }),
+            }],
+            isError: true,
+          };
+        }
+
+        const result = await sandbox.execute(code, { sdk });
+
+        if (result.error) {
+          return {
+            content: [{
               type: 'text' as const,
               text: JSON.stringify({
                 error: result.error.message,
                 logs: result.logs,
               }),
-            },
-          ],
-          isError: true,
+            }],
+            isError: true,
+          };
+        }
+
+        return {
+          content: [{
+            type: 'text' as const,
+            text: JSON.stringify({ result: result.result, logs: result.logs }),
+          }],
         };
       }
 
       return {
-        content: [
-          {
-            type: 'text' as const,
-            text: JSON.stringify({ result: result.result, logs: result.logs }),
-          },
-        ],
+        content: [{
+          type: 'text' as const,
+          text: JSON.stringify({
+            error: 'Either provide service + operation (+ optional args), or code.',
+            usage: {
+              structured: '{ service: "drive", operation: "search", args: { query: "..." } }',
+              code: '{ code: "return await sdk.drive.search({ query: \\"...\\" })" }',
+            },
+          }),
+        }],
+        isError: true,
       };
     }
 

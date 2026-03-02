@@ -2,11 +2,13 @@
 
 ## Project Overview
 
-The Google Drive MCP Server provides comprehensive integration with Google Drive API through the Model Context Protocol (MCP), enabling seamless access to Google Drive files, sheets, documents, and forms with enterprise-grade security features.
+The Google Drive MCP Server provides comprehensive integration with Google Workspace through the Model Context Protocol (MCP), enabling access to Drive, Sheets, Forms, Docs, Gmail, and Calendar with enterprise-grade security features.
 
-**Current Version**: 0.6.2  
-**Roadmap Planning Period**: Q4 2024 - Q4 2025  
-**Last Updated**: August 19, 2025
+**Current Version**: 4.0.0-alpha  
+**Architecture**: v4 code mode with `search` + `execute` tools (progressive SDK discovery and sandboxed execution)  
+**Last Updated**: February 2026
+
+> **Note**: CHANGELOG reflects released versions up to 3.3.0. Package version 4.0.0-alpha represents the current codebase; roadmap uses current-state-first assumptions where history may lag.
 
 ---
 
@@ -33,13 +35,14 @@ Extend Google Workspace integration and add advanced functionality.
 - **Enhanced Encryption Infrastructure**: AES-256-GCM encryption with versioned key rotation support
 - **Key Rotation Manager**: Complete versioned key storage and rotation mechanism
 - **Token Manager**: Encrypted token storage with audit trail and legacy migration support
-- **Core API Integration**: Drive, Sheets, Docs, Forms, and Apps Script support
-- **Caching Infrastructure**: Redis-based caching with performance monitoring  
+- **Core API Integration**: Drive, Sheets, Docs, Forms, Gmail, and Calendar (6 modules, 47 operations)
+- **v4 Architecture**: `search` + `execute` tools — progressive SDK discovery and sandboxed code execution
+- **Caching Infrastructure**: Redis-based caching with performance monitoring
 - **Batch Operations**: Multi-file operations (create, update, delete, move)
 - **Docker Support**: Containerized deployment with Docker Compose
-- **Natural Language Search**: Enhanced search with filtering capabilities
+- **Natural Language Search**: Enhanced Drive search with filtering capabilities
 - **Performance Monitoring**: Winston logging with comprehensive metrics
-- **CLI Tools**: Key management commands (rotate-key, verify-keys, migrate-tokens)
+- **CLI Tools**: Key management commands (`rotate-key`, `verify-keys`, `migrate-tokens`)
 - **Shell Scripts**: Automated key rotation and authentication scripts
 - **Comprehensive Documentation**: Complete setup and usage guides
 
@@ -66,7 +69,7 @@ Extend Google Workspace integration and add advanced functionality.
 
 # Phase-Based Roadmap
 
-## ✅ **Phase 1: Security Foundation** (COMPLETED - Q4 2024)
+## ✅ **Phase 1: Security Foundation** (COMPLETED)
 **Theme**: Security & Compliance  
 **Priority**: CRITICAL  
 **Status**: ✅ COMPLETED  
@@ -179,12 +182,12 @@ Extend Google Workspace integration and add advanced functionality.
 
 ---
 
-## 🟡 **Phase 2: Testing & Quality Assurance** (Q1 2025 - Weeks 1-8)
+## 🟡 **Phase 2: Testing & Quality Assurance** (Next)
 **Theme**: Developer Experience & Quality  
 **Priority**: HIGH  
 **Target**: Comprehensive test coverage and quality validation
 
-### Epic 2.1: Key Rotation Testing Infrastructure (Weeks 1-3)
+### Epic 2.1: Key Rotation Testing Infrastructure
 **Status**: 🔴 PENDING - High Priority
 
 #### GDRIVE-7: Comprehensive Key Rotation Testing
@@ -212,12 +215,12 @@ Extend Google Workspace integration and add advanced functionality.
   - **Dependencies**: Integration Tests
   - **Risk**: Medium
 
-### Epic 2.2: API and Feature Testing (Weeks 3-6)
+### Epic 2.2: API and Feature Testing
 **Status**: 🔴 PENDING - High Priority
 
 #### GDRIVE-8: Core Functionality Testing
 - **API Integration Testing**
-  - Test all 22 Google Workspace tools with real API responses
+  - Test all 6 modules (Drive, Sheets, Forms, Docs, Gmail, Calendar) and 47 operations
   - Mock Google API services for reliable testing
   - Error handling and retry logic validation
   - **Effort**: 24 hours
@@ -240,7 +243,7 @@ Extend Google Workspace integration and add advanced functionality.
   - **Dependencies**: Core functionality tests
   - **Risk**: Low
 
-### Epic 2.3: Documentation and Examples (Weeks 6-8)
+### Epic 2.3: Documentation and Examples
 **Status**: 🟡 PARTIAL - Medium Priority
 
 #### GDRIVE-9: Enhanced Documentation
@@ -283,12 +286,12 @@ Extend Google Workspace integration and add advanced functionality.
 
 ---
 
-## 🔵 **Phase 3: Performance Optimization** (Q2 2025 - Weeks 9-16)
+## 🔵 **Phase 3: Performance Optimization** (Future)
 **Theme**: Performance & Scalability  
 **Priority**: MEDIUM  
-**Target**: Sub-200ms response times and 10x throughput improvement
+**Target**: Sub-200ms response times and throughput improvement
 
-### Epic 3.1: Advanced Caching Strategy (Weeks 9-12)
+### Epic 3.1: Advanced Caching Strategy
 **Status**: 🟡 PARTIAL - Medium Priority
 
 #### GDRIVE-10: Intelligent Cache Management
@@ -316,7 +319,7 @@ Extend Google Workspace integration and add advanced functionality.
   - **Dependencies**: Multi-tier Caching
   - **Risk**: Low
 
-### Epic 3.2: API Performance Optimization (Weeks 11-15)
+### Epic 3.2: API Performance Optimization
 **Status**: 🟡 PARTIAL - Medium Priority
 
 #### GDRIVE-11: Request Optimization
@@ -344,7 +347,7 @@ Extend Google Workspace integration and add advanced functionality.
   - **Dependencies**: Response Optimization
   - **Risk**: Medium
 
-### Epic 3.3: Performance Monitoring and Analytics (Weeks 14-16)
+### Epic 3.3: Performance Monitoring and Analytics
 **Status**: 🟡 PARTIAL - Medium Priority
 
 #### GDRIVE-12: Advanced Performance Tracking
@@ -379,23 +382,17 @@ Extend Google Workspace integration and add advanced functionality.
 
 ---
 
-## 🟢 **Phase 4: Feature Expansion** (Q3 2025 - Weeks 17-28)
+## 🟢 **Phase 4: Feature Expansion** (Future)
 **Theme**: Feature Expansion  
 **Priority**: LOW  
-**Target**: Extended Google Workspace integration
+**Target**: Optional new Google Workspace integrations
 
-### Epic 4.1: Advanced Google Workspace Features (Weeks 17-22)
+### Epic 4.1: Optional Google Workspace Integrations
 **Status**: 🟢 FUTURE - Low Priority
 
-#### GDRIVE-13: Extended API Support
-- **Google Calendar Integration** 🟢 FUTURE
-  - Add calendar event management and scheduling
-  - Implement meeting room booking and availability
-  - Add calendar search and filtering capabilities
-  - **Effort**: 28 hours
-  - **Dependencies**: Core infrastructure
-  - **Risk**: Low
+> **Note**: Gmail and Calendar are already implemented (v3.2.0, v3.3.0). Phase 4 focuses on optional additions.
 
+#### GDRIVE-13: Extended API Support (Optional)
 - **Google Photos Integration** 🟢 FUTURE
   - Add photo upload and album management
   - Implement photo search and metadata extraction
@@ -412,7 +409,7 @@ Extend Google Workspace integration and add advanced functionality.
   - **Dependencies**: Extended API Support
   - **Risk**: Medium
 
-### Epic 4.2: Advanced Security Features (Weeks 21-25)
+### Epic 4.2: Advanced Security Features
 **Status**: 🟢 FUTURE - Low Priority
 
 #### GDRIVE-14: Enterprise Security Enhancement
@@ -432,7 +429,7 @@ Extend Google Workspace integration and add advanced functionality.
   - **Dependencies**: RBAC implementation
   - **Risk**: Medium
 
-### Epic 4.3: AI/ML Integration (Weeks 25-28)
+### Epic 4.3: AI/ML Integration
 **Status**: 🟢 FUTURE - Low Priority
 
 #### GDRIVE-15: Intelligent Features
@@ -452,8 +449,8 @@ Extend Google Workspace integration and add advanced functionality.
   - **Dependencies**: Content Analysis
   - **Risk**: High
 
-**Phase 4 Deliverables**:
-- ✅ Extended Google Workspace integration (Calendar, Photos, Classroom)
+**Phase 4 Deliverables** (if pursued):
+- Optional integrations: Photos, Classroom
 - ✅ Enterprise security features and compliance tools
 - ✅ AI-powered intelligent features and automation
 - ✅ Advanced analytics and recommendation systems
@@ -523,7 +520,7 @@ Extend Google Workspace integration and add advanced functionality.
 ### **External Dependencies**
 - Google API availability and stability ✅ STABLE
 - Redis for caching (optional but recommended) ✅ INTEGRATED
-- Node.js 18+ for ES2022 support ✅ COMPATIBLE
+- Node.js 22+ for ES2022 support ✅ COMPATIBLE
 - Docker for containerized deployment ✅ SUPPORTED
 
 ### **Internal Dependencies**
@@ -597,29 +594,30 @@ Extend Google Workspace integration and add advanced functionality.
 
 ## Timeline Summary
 
-| Phase | Duration | Key Deliverable | Priority | Status |
-|-------|----------|-----------------|----------|---------|
-| **Phase 1** | 8 weeks | Encryption Key Rotation | 🔴 CRITICAL | ✅ COMPLETED |
-| **Phase 2** | 8 weeks | Testing & Quality Assurance | 🟡 HIGH | 🔴 PENDING |
-| **Phase 3** | 8 weeks | Performance Optimization | 🔵 MEDIUM | 🔴 PENDING |
-| **Phase 4** | 12 weeks | Feature Expansion | 🟢 LOW | 🔴 PENDING |
+| Phase | Key Deliverable | Priority | Status |
+|-------|-----------------|----------|--------|
+| **Phase 1** | Encryption Key Rotation | 🔴 CRITICAL | ✅ COMPLETED |
+| **Phase 2** | Testing & Quality Assurance | 🟡 HIGH | 🔴 PENDING |
+| **Phase 3** | Performance Optimization | 🔵 MEDIUM | 🔴 PENDING |
+| **Phase 4** | Optional Integrations (Photos, Classroom) | 🟢 LOW | 🔴 PENDING |
 
-**Total Duration**: 36 weeks (~9 months)
 **Critical Path**: Phase 2 → Testing Infrastructure Development
-**Next Milestone**: Comprehensive Test Suite Implementation (Week 4 of Phase 2)
-**Current Status**: Phase 1 completed successfully, Phase 2 ready to begin
+**Next Milestone**: Comprehensive Test Suite Implementation
+**Current Status**: Phase 1 completed; Gmail and Calendar shipped; Phase 2 ready to begin
 
 ---
 
-## Recent Progress Summary (Q4 2024 Achievements)
+## Recent Progress Summary
 
 ### 🎯 **Major Accomplishments**
 1. **✅ Complete Key Rotation Infrastructure** - Full implementation of versioned encryption key management
 2. **✅ Enhanced Security Architecture** - Enterprise-grade token management with audit trails
-3. **✅ CLI Tool Suite** - Complete command-line interface for key management operations
+3. **✅ CLI Tool Suite** - Key management commands: `rotate-key`, `verify-keys`, `migrate-tokens`
 4. **✅ Automation Scripts** - Shell scripts for streamlined key rotation and authentication
 5. **✅ Docker Integration** - Full containerization support with Redis caching
-6. **✅ Documentation Overhaul** - Comprehensive guides and API documentation
+6. **✅ Gmail Integration** - 10 operations (listMessages, searchMessages, sendMessage, etc.)
+7. **✅ Calendar Integration** - 9 operations (listEvents, createEvent, checkFreeBusy, etc.)
+8. **✅ v4 Architecture** - `search` + `execute` tools with progressive SDK discovery
 
 ### 🔄 **Recent Issues Resolved**
 1. **✅ GitHub README Display Issue** - Fixed .github/README.md precedence and updated repository links
@@ -628,22 +626,19 @@ Extend Google Workspace integration and add advanced functionality.
 4. **✅ Legacy Token Migration** - Complete migration system for existing installations
 
 ### 📈 **Progress vs. Original Roadmap**
-- **Security Foundation (Phase 1)**: ✅ 100% complete (originally estimated 8 weeks, completed in 6 weeks)
-- **Key Rotation Implementation**: ✅ Exceeded expectations with full CLI and automation
+- **Security Foundation (Phase 1)**: ✅ 100% complete
+- **Key Rotation Implementation**: ✅ Full CLI and automation
+- **Gmail & Calendar**: ✅ Implemented (CHANGELOG 3.2.0, 3.3.0)
 - **Documentation**: ✅ Significantly enhanced beyond original scope
-- **Shell Script Automation**: ✅ Additional scope completed for operational efficiency
 
 ---
 
 ## Approval & Sign-off
 
-**Roadmap Status**: ✅ UPDATED - Phase 1 Complete  
-**Next Review Date**: October 1, 2025  
-**Roadmap Version**: 2.0  
+**Roadmap Status**: ✅ Re-baselined to current implementation (4.0.0-alpha)  
+**Roadmap Version**: 3.0  
 **Document Owner**: Technical Lead  
 
-**Phase 1 Retrospective**: Successfully delivered comprehensive security infrastructure ahead of schedule with enhanced automation and documentation. All critical security objectives achieved with production-ready implementation.
+**Current State**: Phase 1 security complete; Gmail and Calendar implemented; v4 `search` + `execute` architecture in place. Key rotation tooling (`rotate-key`, `verify-keys`, `migrate-tokens`) production-ready.
 
-**Phase 2 Priority**: Focus shifts to comprehensive testing and quality assurance to validate the robust security infrastructure and ensure production reliability.
-
-This updated roadmap reflects the significant progress made in implementing enterprise-grade security features, with Phase 1 security objectives fully achieved and a clear path forward for testing, performance optimization, and feature expansion.
+**Phase 2 Priority**: Testing hardening, docs alignment, and performance tuning. Phase 4 reframed as optional integrations (Photos, Classroom) — Calendar no longer future work.

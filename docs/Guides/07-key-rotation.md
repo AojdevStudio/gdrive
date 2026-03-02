@@ -2,7 +2,9 @@
 
 ## Overview
 
-This runbook provides comprehensive procedures for managing encryption key rotation in the Google Drive MCP Server. Key rotation is critical for maintaining security compliance and protecting OAuth tokens.
+This runbook provides procedures for managing encryption key rotation in the gdrive MCP server. Key rotation is critical for maintaining security compliance and protecting OAuth tokens.
+
+**Supported CLI commands:** `auth`, `health`, `rotate-key`, `verify-keys`, `migrate-tokens`
 
 ## 🔄 Routine Key Rotation (Quarterly)
 
@@ -22,8 +24,8 @@ This runbook provides comprehensive procedures for managing encryption key rotat
 
 1. **Backup Current State**
    ```bash
-   # Create manual backup
-   cp .gdrive-mcp-tokens.json .gdrive-mcp-tokens.manual-backup.$(date +%Y%m%d-%H%M%S).json
+   # Create manual backup (adjust path if GDRIVE_TOKEN_STORAGE_PATH is set)
+   cp credentials/.gdrive-mcp-tokens.json credentials/.gdrive-mcp-tokens.manual-backup.$(date +%Y%m%d-%H%M%S).json
    
    # Verify backup integrity
    node dist/index.js verify-keys
@@ -47,17 +49,14 @@ This runbook provides comprehensive procedures for managing encryption key rotat
    # Verify all tokens work with new key
    node dist/index.js verify-keys
    
-   # Check key status
-   node dist/index.js key-status
-   
    # Test server functionality
    node dist/index.js health
    ```
 
 4. **Cleanup Old Backups**
    ```bash
-   # Keep only last 5 backups (configurable via GDRIVE_ROTATION_BACKUP_COUNT)
-   find . -name ".gdrive-mcp-tokens.backup.*.json" -type f | sort -r | tail -n +6 | xargs rm -f
+   # Keep only last 5 backups
+   find credentials -name ".gdrive-mcp-tokens.backup.*.json" -type f 2>/dev/null | sort -r | tail -n +6 | xargs rm -f
    ```
 
 ### Success Criteria
@@ -82,8 +81,8 @@ This runbook provides comprehensive procedures for managing encryption key rotat
    # Stop server immediately
    pkill -f "gdrive-mcp"
    
-   # Rotate key immediately (no pre-checks)
-   node dist/index.js rotate-key --force
+   # Rotate key immediately
+   node dist/index.js rotate-key
    
    # Restart server
    node dist/index.js &
@@ -97,8 +96,9 @@ This runbook provides comprehensive procedures for managing encryption key rotat
 
 3. **Additional Security Measures**
    ```bash
-   # Revoke and refresh all OAuth tokens
-   node dist/index.js revoke-all-tokens
+   # Revoke access in Google Account settings (myaccount.google.com/permissions)
+   # then re-authenticate:
+   rm -f credentials/.gdrive-mcp-tokens.json
    node dist/index.js auth
    
    # Rotate again if compromise was recent
@@ -120,17 +120,17 @@ This runbook provides comprehensive procedures for managing encryption key rotat
 #!/bin/bash
 # /usr/local/bin/check-gdrive-health.sh
 
-# Check key status
-KEY_STATUS=$(node /path/to/gdrive-mcp/dist/index.js key-status 2>&1)
+# Check token validity
+TOKEN_CHECK=$(node /path/to/gdrive/dist/index.js verify-keys 2>&1)
 if [ $? -ne 0 ]; then
-    echo "CRITICAL: Key status check failed - $KEY_STATUS"
+    echo "CRITICAL: Token verification failed - $TOKEN_CHECK"
     exit 2
 fi
 
-# Check token validity
-TOKEN_CHECK=$(node /path/to/gdrive-mcp/dist/index.js verify-keys 2>&1)
+# Check token health
+HEALTH=$(node /path/to/gdrive/dist/index.js health 2>&1)
 if [ $? -ne 0 ]; then
-    echo "CRITICAL: Token verification failed - $TOKEN_CHECK"
+    echo "CRITICAL: Health check failed - $HEALTH"
     exit 2
 fi
 
@@ -143,9 +143,6 @@ exit 0
 # Add to crontab for regular monitoring
 # Check health every 15 minutes
 */15 * * * * /usr/local/bin/check-gdrive-health.sh
-
-# Weekly key status report
-0 9 * * 1 node /path/to/gdrive-mcp/dist/index.js key-status | mail -s "Weekly Key Status Report" admin@company.com
 ```
 
 ### Alert Conditions
@@ -188,11 +185,11 @@ ERROR: Invalid authentication - token appears corrupted
 
 **Resolution:**
 ```bash
-# Check key status
-node dist/index.js key-status
+# Check token verification
+node dist/index.js verify-keys
 
 # Restore from most recent backup
-cp .gdrive-mcp-tokens.backup.$(ls -t .gdrive-mcp-tokens.backup.*.json | head -1) .gdrive-mcp-tokens.json
+cp credentials/.gdrive-mcp-tokens.backup.$(ls -t credentials/.gdrive-mcp-tokens.backup.*.json 2>/dev/null | head -1) credentials/.gdrive-mcp-tokens.json
 
 # Verify restoration
 node dist/index.js verify-keys
@@ -255,10 +252,11 @@ node dist/index.js rotate-key
    systemctl stop gdrive-mcp
    
    # Emergency key rotation
-   node dist/index.js rotate-key --force
+   node dist/index.js rotate-key
    
-   # Revoke all tokens
-   node dist/index.js revoke-all-tokens
+   # Revoke access in Google Account settings, then re-authenticate:
+   rm -f credentials/.gdrive-mcp-tokens.json
+   node dist/index.js auth
    ```
 
 2. **Assessment** (15-30 minutes)
@@ -301,10 +299,10 @@ node dist/index.js rotate-key
 2. **Restore Previous State**
    ```bash
    # Find most recent working backup
-   ls -t .gdrive-mcp-tokens.backup.*.json | head -1
+   ls -t credentials/.gdrive-mcp-tokens.backup.*.json 2>/dev/null | head -1
    
    # Restore backup
-   cp .gdrive-mcp-tokens.backup.YYYYMMDD-HHMMSS.json .gdrive-mcp-tokens.json
+   cp credentials/.gdrive-mcp-tokens.backup.YYYYMMDD-HHMMSS.json credentials/.gdrive-mcp-tokens.json
    
    # Verify restoration
    node dist/index.js verify-keys
@@ -362,7 +360,7 @@ grep "KEY_ROTATION\|TOKEN_" .gdrive-mcp-audit.log | tail -100
 - [Authentication Flow Guide](./02-authentication-flow.md)
 - [Environment Variables Guide](./06-environment-variables.md)
 - [Architecture Documentation](../Architecture/ARCHITECTURE.md)
-- [Security Documentation](../Architecture/ARCHITECTURE.md#security)
+- [Security Documentation](../Architecture/ARCHITECTURE.md#security-model)
 
 ---
 

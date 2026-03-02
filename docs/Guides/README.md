@@ -31,7 +31,7 @@ For production deployment with all features:
 - Credentials directory preparation
 - Security configuration
 
-**Prerequisites:** Google account, Node.js 18+, terminal access
+**Prerequisites:** Google account, Node.js 22+, terminal access
 **Time required:** 30-45 minutes
 **Difficulty:** Beginner
 
@@ -136,7 +136,7 @@ All guides in sequence (01 → 02 → 03 → 04 → 05 → 06)
 
 ### Required for All Setups
 - **Google Account** with Google Cloud Console access
-- **Node.js 18+** installed locally
+- **Node.js 22+** installed locally
 - **Git** for cloning repository
 - **Terminal/Command Line** access
 - **Text editor** for configuration files
@@ -155,7 +155,7 @@ All guides in sequence (01 → 02 → 03 → 04 → 05 → 06)
 Before starting any guide, ensure you have:
 
 - [ ] **Google account** with admin access
-- [ ] **Node.js 18+** installed (`node --version`)
+- [ ] **Node.js 22+** installed (`node --version`)
 - [ ] **npm** working (`npm --version`)
 - [ ] **Git** available (`git --version`)
 - [ ] **Terminal** access and basic command line knowledge
@@ -232,7 +232,7 @@ After completing the guides, you should have:
 ### Validation Tests (✓)
 - [ ] Health check returns "HEALTHY" status
 - [ ] Can list Google Drive files through Claude
-- [ ] Can read file contents via `gdrive://` URIs
+- [ ] Can read file contents through `execute` using `sdk.drive.read()`
 - [ ] Can create and modify files through Claude
 - [ ] Performance metrics are being collected
 
@@ -240,4 +240,4 @@ After completing the guides, you should have:
 
 **Ready to get started?** Begin with the **[Initial Setup & Installation Guide](./01-initial-setup.md)** →
 
-*Last updated: January 2025*
+*Last updated: February 2026*

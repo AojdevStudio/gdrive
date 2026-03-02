@@ -53,7 +53,7 @@ Host Machine                     Docker Network (mcp-network)
 
 ```bash
 # Navigate to project directory
-cd /path/to/gdrive-mcp-server
+cd /path/to/gdrive
 
 # Verify all prerequisites
 ls -la credentials/gcp-oauth.keys.json  # OAuth keys
@@ -120,7 +120,7 @@ The multi-stage Dockerfile includes:
 
 ```dockerfile
 # Key features of our Dockerfile:
-# • Node.js 20 slim base image
+# • Node.js 22 slim base image
 # • System dependencies for native modules
 # • Layer caching optimization
 # • Security hardening
@@ -179,9 +179,9 @@ docker-compose up -d
 docker-compose ps
 
 # Expected output:
-NAME                IMAGE               STATUS
-gdrive-mcp-server   gdrive-mcp-server   Up (healthy)
-gdrive-mcp-redis    redis:7-alpine      Up (healthy)
+NAME                 IMAGE               STATUS
+gdrive-mcp-server    gdrive-mcp-server   Up (healthy)
+gdrive-mcp-redis    redis:7-alpine       Up (healthy)
 ```
 
 ### 3.3 Verify Deployment Success

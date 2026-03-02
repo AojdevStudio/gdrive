@@ -1,180 +1,180 @@
-# Docker Setup Guide for Google Drive MCP Server
+# Docker Deployment Guide
 
 ## Overview
 
-This guide provides comprehensive instructions for containerizing and running the Google Drive MCP Server using Docker. The containerized approach ensures consistent environments and simplifies deployment.
+This guide documents the **current** Docker setup for the v4 server.
 
-## Docker Configuration
+- Runtime image: `node:22-slim`
+- MCP transport: stdio
+- Health checks:
+  - Dockerfile: `node dist/health-check.js`
+  - docker-compose: `node dist/index.js health`
+- Optional Redis service is included in compose by default
 
-### Dockerfile
+## Prerequisites
 
-Create a `Dockerfile` in the project root:
+- Docker and Docker Compose installed
+- OAuth keys file at `credentials/gcp-oauth.keys.json`
+- `.env` with `GDRIVE_TOKEN_ENCRYPTION_KEY` set
+
+## Authenticate First (Host Machine)
+
+Authentication opens a browser, so run it on the host before starting containers.
+
+```bash
+./scripts/auth.sh
+```
+
+Equivalent direct command:
+
+```bash
+node ./dist/index.js auth
+```
+
+Verify token file exists:
+
+```bash
+ls -la credentials/.gdrive-mcp-tokens.json
+```
+
+## Dockerfile Reference
+
+Current Dockerfile behavior:
 
 ```dockerfile
-FROM node:20-slim
+FROM node:22-slim
 
-# Install system dependencies
 RUN apt-get update && apt-get install -y \
     python3 \
     make \
     g++ \
-    ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
-# Create app directory
 WORKDIR /app
 
-# Copy package files
 COPY package*.json ./
 COPY tsconfig.json ./
+RUN npm ci --ignore-scripts
 
-# Install dependencies
-RUN npm ci --only=production && \
-    npm cache clean --force
-
-# Copy source code
 COPY . .
+RUN NODE_OPTIONS="--max-old-space-size=4096" npm run build
 
-# Build TypeScript
-RUN npm run build
+RUN mkdir -p /credentials /app/logs && \
+    chmod 700 /credentials && \
+    chmod 755 /app/logs
 
-# Create directories for credentials and data
-RUN mkdir -p /credentials /data
+VOLUME ["/credentials"]
 
-# Environment variables
-ENV NODE_ENV=production \
-    GDRIVE_CREDENTIALS_PATH=/credentials/.gdrive-server-credentials.json \
-    GDRIVE_OAUTH_PATH=/credentials/gcp-oauth.keys.json
+ENV GDRIVE_OAUTH_PATH=/credentials/gcp-oauth.keys.json
+ENV GDRIVE_TOKEN_STORAGE_PATH=/credentials/.gdrive-mcp-tokens.json
+ENV GDRIVE_TOKEN_AUDIT_LOG_PATH=/app/logs/gdrive-mcp-audit.log
+ENV NODE_ENV=production
 
-# Add health check
-HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-  CMD node -e "console.log('healthy')" || exit 1
+HEALTHCHECK --interval=5m --timeout=10s --start-period=30s --retries=3 \
+  CMD ["node", "dist/health-check.js"]
 
-# Run as non-root user
-RUN useradd -m -u 1001 mcp-user && \
-    chown -R mcp-user:mcp-user /app /credentials /data
-
-USER mcp-user
-
-# Expose stdio
-EXPOSE 3000
-
-# Run the MCP server
 CMD ["node", "dist/index.js"]
 ```
 
-### Docker Compose
+## docker-compose Reference
 
-Create a `docker-compose.yml` file:
+Current compose behavior:
 
 ```yaml
-version: '3.8'
-
 services:
   gdrive-mcp:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    image: gdrive-mcp-server:latest
+    build: .
     container_name: gdrive-mcp-server
     volumes:
-      # Mount credentials directory
-      - ${HOME}/.gdrive:/credentials:ro
-      # Optional: Mount local directory for file operations
+      - ./credentials:/credentials
       - ./data:/data
+      - ./logs:/app/logs
     environment:
       - NODE_ENV=production
-      - LOG_LEVEL=${LOG_LEVEL:-info}
-      - GDRIVE_CREDENTIALS_PATH=/credentials/.gdrive-server-credentials.json
+      - LOG_LEVEL=silent
+      - REDIS_URL=redis://redis:6379
       - GDRIVE_OAUTH_PATH=/credentials/gcp-oauth.keys.json
+      - GDRIVE_TOKEN_STORAGE_PATH=/credentials/.gdrive-mcp-tokens.json
+      - GDRIVE_TOKEN_AUDIT_LOG_PATH=/app/logs/gdrive-mcp-audit.log
+      - GDRIVE_TOKEN_ENCRYPTION_KEY=${GDRIVE_TOKEN_ENCRYPTION_KEY}
+      - GDRIVE_TOKEN_REFRESH_INTERVAL=1800000
+      - GDRIVE_TOKEN_PREEMPTIVE_REFRESH=600000
+      - GDRIVE_TOKEN_MAX_RETRIES=3
+      - GDRIVE_TOKEN_RETRY_DELAY=1000
+      - GDRIVE_TOKEN_HEALTH_CHECK=true
     restart: unless-stopped
     stdin_open: true
     tty: true
-    networks:
-      - mcp-network
+    depends_on:
+      - redis
+    healthcheck:
+      test: ["CMD", "node", "dist/index.js", "health"]
+      interval: 5m
+      timeout: 10s
+      retries: 3
+      start_period: 30s
 
-  # Optional: Redis for caching (future enhancement)
   redis:
     image: redis:7-alpine
     container_name: gdrive-mcp-redis
-    command: redis-server --appendonly yes
     volumes:
-      - redis-data:/data
-    networks:
-      - mcp-network
-    profiles:
-      - with-cache
-
-networks:
-  mcp-network:
-    driver: bridge
-
-volumes:
-  redis-data:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
 ```
 
-## Building and Running
+## Build and Run
 
-### 1. Build the Docker Image
+## 1) Build image
 
 ```bash
-# Build the image
-docker build -t gdrive-mcp-server:latest .
-
-# Or with Docker Compose
-docker-compose build
+docker build -t gdrive-mcp-server .
 ```
 
-### 2. Initial Authentication
-
-Before running the server, you need to authenticate with Google:
-
-```bash
-# Create credentials directory
-mkdir -p ~/.gdrive
-
-# Copy your OAuth keys
-cp /path/to/gcp-oauth.keys.json ~/.gdrive/
-
-# Run authentication
-docker run -it --rm \
-  -v ~/.gdrive:/credentials \
-  -e GDRIVE_OAUTH_PATH=/credentials/gcp-oauth.keys.json \
-  -e GDRIVE_CREDENTIALS_PATH=/credentials/.gdrive-server-credentials.json \
-  -p 3000:3000 \
-  gdrive-mcp-server \
-  node dist/index.js auth
-```
-
-### 3. Running the Server
-
-#### Using Docker Run
+## 2) Run container directly
 
 ```bash
 docker run -i --rm \
-  --name gdrive-mcp \
-  -v ~/.gdrive:/credentials:ro \
+  -v "$(pwd)/credentials:/credentials" \
+  -v "$(pwd)/logs:/app/logs" \
+  -e GDRIVE_TOKEN_ENCRYPTION_KEY="$GDRIVE_TOKEN_ENCRYPTION_KEY" \
   gdrive-mcp-server
 ```
 
-#### Using Docker Compose
+## 3) Run with docker compose
 
 ```bash
-# Start the service
 docker-compose up -d
-
-# View logs
+docker-compose ps
 docker-compose logs -f gdrive-mcp
+```
 
-# Stop the service
+Stop:
+
+```bash
 docker-compose down
 ```
 
-## Claude Desktop Integration
+## Health Checks
 
-### Configuration for Docker
+Container-level check:
 
-Add to your Claude Desktop configuration:
+```bash
+docker inspect gdrive-mcp-server --format='{{json .State.Health}}'
+```
+
+Manual check inside container:
+
+```bash
+docker exec -i gdrive-mcp-server node dist/index.js health
+```
+
+## Claude Desktop Integration (Docker)
+
+Example `claude_desktop_config.json` entry:
 
 ```json
 {
@@ -187,323 +187,67 @@ Add to your Claude Desktop configuration:
         "--rm",
         "--init",
         "-v",
-        "${HOME}/.gdrive:/credentials:ro",
-        "gdrive-mcp-server:latest"
+        "/absolute/path/to/credentials:/credentials",
+        "-v",
+        "/absolute/path/to/logs:/app/logs",
+        "--env-file",
+        "/absolute/path/to/.env",
+        "gdrive-mcp-server"
       ]
     }
   }
 }
 ```
 
-### Using Docker Compose
+If using compose and persistent container:
 
 ```json
 {
   "mcpServers": {
     "gdrive": {
-      "command": "docker-compose",
-      "args": [
-        "-f",
-        "/path/to/gdrive/docker-compose.yml",
-        "run",
-        "--rm",
-        "gdrive-mcp"
-      ]
+      "command": "docker",
+      "args": ["exec", "-i", "gdrive-mcp-server", "node", "dist/index.js"]
     }
   }
 }
 ```
 
-## Advanced Configuration
-
-### Multi-Stage Build (Production)
-
-For smaller production images:
-
-```dockerfile
-# Build stage
-FROM node:20-slim AS builder
-
-WORKDIR /app
-COPY package*.json tsconfig.json ./
-RUN npm ci
-COPY . .
-RUN npm run build
-
-# Production stage
-FROM node:20-alpine
-
-RUN apk add --no-cache tini
-
-WORKDIR /app
-COPY package*.json ./
-RUN npm ci --only=production && npm cache clean --force
-
-COPY --from=builder /app/dist ./dist
-
-# Create non-root user
-RUN addgroup -g 1001 -S mcp && \
-    adduser -S -u 1001 -G mcp mcp
-
-USER mcp
-
-ENTRYPOINT ["/sbin/tini", "--"]
-CMD ["node", "dist/index.js"]
-```
-
-### Environment Variables
-
-Complete list of supported environment variables:
-
-```bash
-# Authentication
-GDRIVE_CREDENTIALS_PATH=/credentials/.gdrive-server-credentials.json
-GDRIVE_OAUTH_PATH=/credentials/gcp-oauth.keys.json
-
-# API Configuration (planned)
-GOOGLE_API_BATCH_SIZE=100
-GOOGLE_API_TIMEOUT=30000
-GOOGLE_API_RETRY_COUNT=3
-
-# Caching (planned)
-REDIS_URL=redis://redis:6379
-CACHE_TTL=3600
-ENABLE_CACHE=true
-
-# Logging
-LOG_LEVEL=info  # debug, info, warn, error
-LOG_FORMAT=json # json, pretty
-
-# Performance
-MAX_CONCURRENT_REQUESTS=10
-REQUEST_TIMEOUT=60000
-```
-
-### Docker Secrets (Production)
-
-For production deployments, use Docker secrets:
-
-```yaml
-version: '3.8'
-
-services:
-  gdrive-mcp:
-    image: gdrive-mcp-server:latest
-    secrets:
-      - gdrive_credentials
-      - oauth_keys
-    environment:
-      - GDRIVE_CREDENTIALS_PATH=/run/secrets/gdrive_credentials
-      - GDRIVE_OAUTH_PATH=/run/secrets/oauth_keys
-
-secrets:
-  gdrive_credentials:
-    file: ./secrets/.gdrive-server-credentials.json
-  oauth_keys:
-    file: ./secrets/gcp-oauth.keys.json
-```
-
-## Debugging
-
-### Interactive Shell
-
-```bash
-# Run with shell access
-docker run -it --rm \
-  -v ~/.gdrive:/credentials:ro \
-  --entrypoint /bin/sh \
-  gdrive-mcp-server
-
-# Inside container
-node dist/index.js --version
-```
-
-### Debug Mode
-
-```bash
-# Run with debug logging
-docker run -i --rm \
-  -v ~/.gdrive:/credentials:ro \
-  -e LOG_LEVEL=debug \
-  -e NODE_ENV=development \
-  gdrive-mcp-server
-```
-
-### Container Logs
-
-```bash
-# View logs
-docker logs gdrive-mcp
-
-# Follow logs
-docker logs -f gdrive-mcp
-
-# Last 100 lines
-docker logs --tail 100 gdrive-mcp
-```
-
-## Performance Optimization
-
-### 1. Layer Caching
-
-Order Dockerfile commands to maximize cache usage:
-
-```dockerfile
-# Less frequently changed
-COPY package*.json ./
-RUN npm ci
-
-# More frequently changed
-COPY . .
-RUN npm run build
-```
-
-### 2. Multi-Stage Builds
-
-Reduce final image size by excluding build dependencies.
-
-### 3. Alpine Linux
-
-Use Alpine-based images for smaller size:
-- `node:20-alpine` instead of `node:20`
-- Install only required packages
-
-### 4. Resource Limits
-
-Set appropriate resource limits:
-
-```yaml
-services:
-  gdrive-mcp:
-    deploy:
-      resources:
-        limits:
-          cpus: '1.0'
-          memory: 512M
-        reservations:
-          cpus: '0.5'
-          memory: 256M
-```
-
-## Security Best Practices
-
-### 1. Non-Root User
-
-Always run as non-root user in production.
-
-### 2. Read-Only Filesystem
-
-```yaml
-services:
-  gdrive-mcp:
-    read_only: true
-    tmpfs:
-      - /tmp
-    volumes:
-      - ~/.gdrive:/credentials:ro
-```
-
-### 3. Security Scanning
-
-```bash
-# Scan for vulnerabilities
-docker scan gdrive-mcp-server:latest
-
-# Use Trivy
-trivy image gdrive-mcp-server:latest
-```
-
-### 4. Minimal Base Image
-
-Use distroless or scratch images when possible.
-
 ## Troubleshooting
 
-### Common Issues
+### Missing encryption key
 
-1. **Permission Denied**
-   ```bash
-   # Fix credential permissions
-   chmod 600 ~/.gdrive/*
-   ```
+Symptom: startup fails with `GDRIVE_TOKEN_ENCRYPTION_KEY environment variable is required`.
 
-2. **Cannot Connect to Docker**
-   ```bash
-   # Ensure Docker is running
-   docker info
-   ```
-
-3. **Authentication Failures**
-   ```bash
-   # Re-run authentication
-   docker run -it --rm -v ~/.gdrive:/credentials \
-     gdrive-mcp-server node dist/index.js auth
-   ```
-
-### Health Checks
+Fix:
 
 ```bash
-# Check container health
-docker inspect --format='{{.State.Health.Status}}' gdrive-mcp
-
-# Manual health check
-docker exec gdrive-mcp node -e "console.log('healthy')"
+openssl rand -base64 32
 ```
 
-## CI/CD Integration
+Set value in `.env` and restart container.
 
-### GitHub Actions Example
+### OAuth keys not found
 
-```yaml
-name: Build and Push
+Symptom: `OAuth keys not found at: /credentials/gcp-oauth.keys.json`.
 
-on:
-  push:
-    branches: [main]
+Fix:
 
-jobs:
-  build:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-      
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v2
-      
-      - name: Login to Docker Hub
-        uses: docker/login-action@v2
-        with:
-          username: ${{ secrets.DOCKER_USERNAME }}
-          password: ${{ secrets.DOCKER_TOKEN }}
-      
-      - name: Build and push
-        uses: docker/build-push-action@v4
-        with:
-          push: true
-          tags: user/gdrive-mcp:latest
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-```
+- ensure `credentials/gcp-oauth.keys.json` exists
+- verify credentials volume mount path
 
-## Monitoring
+### Auth required at startup
 
-### Prometheus Metrics (Planned)
+Symptom: `Authentication required. Please run with 'auth' argument first.`
 
-```yaml
-services:
-  gdrive-mcp:
-    ports:
-      - "9090:9090"  # Metrics endpoint
-```
+Fix:
 
-### Log Aggregation
+- run `./scripts/auth.sh` on host
+- confirm token file exists in `credentials/`
+- restart container
 
-Use Fluentd or Logstash for centralized logging:
+## Notes
 
-```yaml
-logging:
-  driver: fluentd
-  options:
-    fluentd-address: localhost:24224
-    tag: gdrive-mcp
-```
+- Redis is optional in runtime behavior; if unavailable, server continues without cache.
+- Keep `credentials/` and `.env` out of version control.
+- For exact env variables, use `.env.example` as source of truth.
+

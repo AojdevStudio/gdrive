@@ -37,8 +37,8 @@ Claude Desktop → MCP Client → stdio transport → MCP Server Process
 
 - **stdio Transport**: Claude Desktop communicates via stdin/stdout
 - **JSON-RPC Protocol**: MCP standard request/response format
-- **Resource Access**: Files accessible via `gdrive:///file_id` URIs
-- **Tool Execution**: 22 comprehensive tools for Google Workspace
+- **Operation Access**: File/data operations run through `execute` using `sdk.*`
+- **Tool Execution**: 2 MCP tools (`search`, `execute`); the SDK surface exposes 47 operations across Drive, Sheets, Forms, Docs, Gmail, and Calendar
 - **Real-time Communication**: Live interaction with Google services
 
 ## Step 1: Locate Claude Desktop Configuration
@@ -104,7 +104,7 @@ fi
   "mcpServers": {
     "gdrive": {
       "command": "node",
-      "args": ["/absolute/path/to/gdrive-mcp-server/dist/index.js"],
+      "args": ["/absolute/path/to/gdrive/dist/index.js"],
       "env": {
         "GDRIVE_TOKEN_ENCRYPTION_KEY": "your-base64-encryption-key",
         "REDIS_URL": "redis://localhost:6379",
@@ -275,7 +275,7 @@ node "$(pwd)/dist/index.js" << 'EOF'
 {"jsonrpc": "2.0", "id": 1, "method": "tools/list"}
 EOF
 
-# Expected: JSON response with list of 22 tools
+# Expected: JSON response with list of tools
 ```
 
 **Test Docker Setup:**
@@ -360,14 +360,13 @@ open -a "Claude"
      Show me my recent documents
      ```
 
-### 4.3 Verify Resource Access
+### 4.3 Verify Operation Access
 
 ```bash
 # In Claude Desktop, try:
-"Can you read the contents of gdrive:///1abc123def456?" 
+"Find my latest budget spreadsheet and show a short preview of its contents."
 
-# Replace with an actual file ID from your Drive
-# You can get file IDs by asking Claude to search your Drive first
+# Claude should discover operations with `search` and then run `execute` with sdk.drive.search/read
 ```
 
 ## Step 5: Advanced Configuration Options
@@ -379,7 +378,7 @@ open -a "Claude"
   "mcpServers": {
     "gdrive-dev": {
       "command": "node",
-      "args": ["/path/to/dev/gdrive-mcp-server/dist/index.js"],
+      "args": ["/path/to/dev/gdrive/dist/index.js"],
       "env": {
         "GDRIVE_TOKEN_ENCRYPTION_KEY": "dev-key",
         "LOG_LEVEL": "debug",
@@ -446,10 +445,10 @@ open -a "Claude"
 
 ### 6.1 Comprehensive Integration Test
 
-**Test Resource Listing:**
+**Test Operation Discovery:**
 ```
-Claude: "List my Google Drive files"
-Expected: List of files with names, types, and gdrive:// URIs
+Claude: "What Drive operations are available?"
+Expected: Discovery response for Drive operations (via the `search` MCP tool)
 ```
 
 **Test File Search:**
