@@ -1,3 +1,4 @@
+/* global fetch */
 /**
  * Cloudflare Workers entry point for the gdrive MCP server.
  *
