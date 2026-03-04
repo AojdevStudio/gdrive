@@ -470,6 +470,138 @@ export const SDK_SPEC: SDKSpec = {
       },
       returns: "{ messageId, labelIds: string[] } — updated list of all label IDs on message",
     },
+    replyToMessage: {
+      signature: "replyToMessage(options: { messageId: string, body: string, isHtml?: boolean, cc?: string[], bcc?: string[], from?: string }): Promise<{ messageId, threadId, labelIds, message }>",
+      description: "Reply to a specific message with proper MIME threading (In-Reply-To and References headers). Fetches the original to extract its MIME Message-ID. Reply is placed in the same thread.",
+      example: "const result = await sdk.gmail.replyToMessage({\n  messageId: '18c123abc',\n  body: 'Thanks for the update, I will follow up shortly.',\n});\nreturn result.messageId;",
+      params: {
+        messageId: "string (required) — Gmail message ID to reply to",
+        body: "string (required) — reply body text or HTML",
+        isHtml: "boolean (optional, default false) — whether body is HTML",
+        cc: "string[] (optional) — additional CC recipients",
+        bcc: "string[] (optional) — BCC recipients",
+        from: "string (optional) — send from a specific send-as alias",
+      },
+      returns: "{ messageId, threadId, labelIds: string[], message: string }",
+    },
+    replyAllToMessage: {
+      signature: "replyAllToMessage(options: { messageId: string, body: string, isHtml?: boolean, bcc?: string[], from?: string }): Promise<{ messageId, threadId, labelIds, message }>",
+      description: "Reply-all to a message. Automatically includes all original To/Cc recipients and excludes your own email. Deduplicates recipients.",
+      example: "const result = await sdk.gmail.replyAllToMessage({\n  messageId: '18c123abc',\n  body: 'Thanks everyone, see you all at the meeting.',\n});\nreturn result.messageId;",
+      params: {
+        messageId: "string (required) — Gmail message ID to reply-all to",
+        body: "string (required) — reply body text or HTML",
+        isHtml: "boolean (optional, default false) — whether body is HTML",
+        bcc: "string[] (optional) — additional BCC recipients",
+        from: "string (optional) — send from a specific send-as alias",
+      },
+      returns: "{ messageId, threadId, labelIds: string[], message: string }",
+    },
+    forwardMessage: {
+      signature: "forwardMessage(options: { messageId: string, to: string[], cc?: string[], bcc?: string[], body?: string, isHtml?: boolean, from?: string }): Promise<{ messageId, threadId, labelIds, message }>",
+      description: "Forward a message to new recipients. Quotes the original message content. Optionally prepends a custom message. Creates a new thread (no threading headers).",
+      example: "const result = await sdk.gmail.forwardMessage({\n  messageId: '18c123abc',\n  to: ['colleague@example.com'],\n  body: 'FYI — thought this might be relevant to you.',\n});\nreturn result.messageId;",
+      params: {
+        messageId: "string (required) — Gmail message ID to forward",
+        to: "string[] (required) — recipients to forward to",
+        cc: "string[] (optional) — CC recipients",
+        bcc: "string[] (optional) — BCC recipients",
+        body: "string (optional) — custom message to prepend before the forwarded content",
+        isHtml: "boolean (optional, default false) — whether body is HTML",
+        from: "string (optional) — send from a specific send-as alias",
+      },
+      returns: "{ messageId, threadId, labelIds: string[], message: string }",
+    },
+    listAttachments: {
+      signature: "listAttachments(options: { messageId: string }): Promise<{ messageId, attachments: AttachmentInfo[] }>",
+      description: "List all attachments for a message. Returns metadata (filename, mimeType, size, attachmentId). Use downloadAttachment() to get file content.",
+      example: "const result = await sdk.gmail.listAttachments({ messageId: '18c123abc' });\nresult.attachments.forEach(att => {\n  console.log(`${att.filename} (${att.size} bytes)`);\n});",
+      params: {
+        messageId: "string (required) — Gmail message ID",
+      },
+      returns: "{ messageId, attachments: AttachmentInfo[] } — AttachmentInfo = { attachmentId, filename, mimeType, size }",
+    },
+    downloadAttachment: {
+      signature: "downloadAttachment(options: { messageId: string, attachmentId: string }): Promise<{ messageId, attachmentId, filename, mimeType, size, data }>",
+      description: "Download a specific attachment from a message. Returns base64url-encoded file content.",
+      example: "const att = await sdk.gmail.downloadAttachment({\n  messageId: '18c123abc',\n  attachmentId: 'ANGjdJ...',\n});\n// Decode: Buffer.from(att.data, 'base64url')\nconsole.log(`Downloaded: ${att.filename}`);",
+      params: {
+        messageId: "string (required) — Gmail message ID",
+        attachmentId: "string (required) — attachment ID from listAttachments()",
+      },
+      returns: "{ messageId, attachmentId, filename, mimeType, size, data: string } — data is base64url-encoded",
+    },
+    sendWithAttachments: {
+      signature: "sendWithAttachments(options: { to: string[], subject: string, body: string, attachments: OutboundAttachment[], cc?: string[], bcc?: string[], isHtml?: boolean, from?: string }): Promise<{ messageId, threadId, labelIds, message }>",
+      description: "Send an email with file attachments using multipart/mixed MIME encoding.",
+      example: "const result = await sdk.gmail.sendWithAttachments({\n  to: ['recipient@example.com'],\n  subject: 'Here is the report',\n  body: 'Please find the quarterly report attached.',\n  attachments: [{\n    filename: 'report.pdf',\n    mimeType: 'application/pdf',\n    data: pdfBase64String,\n  }],\n});\nreturn result.messageId;",
+      params: {
+        to: "string[] (required) — recipient email addresses",
+        subject: "string (required) — email subject",
+        body: "string (required) — email body text or HTML",
+        "attachments": "OutboundAttachment[] (required) — [{ filename, mimeType, data: base64 }]",
+        cc: "string[] (optional) — CC recipients",
+        bcc: "string[] (optional) — BCC recipients",
+        isHtml: "boolean (optional, default false) — whether body is HTML",
+        from: "string (optional) — send from a specific send-as alias",
+      },
+      returns: "{ messageId, threadId, labelIds: string[], message: string }",
+    },
+    trashMessage: {
+      signature: "trashMessage(options: { id: string }): Promise<{ id, labelIds, message }>",
+      description: "Move a message to the trash. Recoverable with untrashMessage(). Use deleteMessage() for permanent deletion.",
+      example: "const result = await sdk.gmail.trashMessage({ id: '18c123abc' });\nconsole.log(result.message); // 'Message moved to trash'",
+      params: {
+        id: "string (required) — message ID to trash",
+      },
+      returns: "{ id, labelIds: string[], message: string }",
+    },
+    untrashMessage: {
+      signature: "untrashMessage(options: { id: string }): Promise<{ id, labelIds, message }>",
+      description: "Restore a message from the trash.",
+      example: "const result = await sdk.gmail.untrashMessage({ id: '18c123abc' });\nconsole.log(result.message); // 'Message restored from trash'",
+      params: {
+        id: "string (required) — message ID to restore",
+      },
+      returns: "{ id, labelIds: string[], message: string }",
+    },
+    deleteMessage: {
+      signature: "deleteMessage(options: { id: string, safetyAcknowledged: true }): Promise<{ id, message }>",
+      description: "Permanently and irrecoverably delete a message. Cannot be undone. Requires safetyAcknowledged: true. Use trashMessage() for recoverable deletion.",
+      example: "// PERMANENT — cannot be undone!\nconst result = await sdk.gmail.deleteMessage({\n  id: '18c123abc',\n  safetyAcknowledged: true,\n});\nconsole.log(result.message);",
+      params: {
+        id: "string (required) — message ID to permanently delete",
+        safetyAcknowledged: "true (required) — must be true to confirm permanent deletion",
+      },
+      returns: "{ id, message: string }",
+    },
+    markAsRead: {
+      signature: "markAsRead(options: { id: string }): Promise<{ id, labelIds, message }>",
+      description: "Mark a message as read by removing the UNREAD label.",
+      example: "await sdk.gmail.markAsRead({ id: '18c123abc' });",
+      params: {
+        id: "string (required) — message ID",
+      },
+      returns: "{ id, labelIds: string[], message: string }",
+    },
+    markAsUnread: {
+      signature: "markAsUnread(options: { id: string }): Promise<{ id, labelIds, message }>",
+      description: "Mark a message as unread by adding the UNREAD label.",
+      example: "await sdk.gmail.markAsUnread({ id: '18c123abc' });",
+      params: {
+        id: "string (required) — message ID",
+      },
+      returns: "{ id, labelIds: string[], message: string }",
+    },
+    archiveMessage: {
+      signature: "archiveMessage(options: { id: string }): Promise<{ id, labelIds, message }>",
+      description: "Archive a message by removing the INBOX label. Message remains searchable.",
+      example: "await sdk.gmail.archiveMessage({ id: '18c123abc' });",
+      params: {
+        id: "string (required) — message ID to archive",
+      },
+      returns: "{ id, labelIds: string[], message: string }",
+    },
   },
 
   // ─────────────────────────────────────────

@@ -313,3 +313,306 @@ export interface ModifyLabelsResult {
   labelIds: string[];
   message: string;
 }
+
+// ============================================================================
+// Reply Operations
+// ============================================================================
+
+/**
+ * Options for replying to a message
+ */
+export interface ReplyToMessageOptions {
+  /** The Gmail message ID to reply to */
+  messageId: string;
+  /** Reply body text */
+  body: string;
+  /** Whether body is HTML (default: false) */
+  isHtml?: boolean;
+  /** CC recipients */
+  cc?: string[];
+  /** BCC recipients */
+  bcc?: string[];
+  /** Send from a different email address (send-as alias) */
+  from?: string;
+}
+
+/**
+ * Result of sending a reply
+ */
+export interface ReplyToMessageResult {
+  messageId: string;
+  threadId: string;
+  labelIds: string[];
+  message: string;
+}
+
+/**
+ * Options for reply-all to a message
+ */
+export interface ReplyAllToMessageOptions {
+  /** The Gmail message ID to reply-all to */
+  messageId: string;
+  /** Reply body text */
+  body: string;
+  /** Whether body is HTML (default: false) */
+  isHtml?: boolean;
+  /** BCC recipients (additional, beyond auto-detected) */
+  bcc?: string[];
+  /** Send from a different email address (send-as alias) */
+  from?: string;
+}
+
+/**
+ * Result of sending a reply-all
+ */
+export interface ReplyAllToMessageResult {
+  messageId: string;
+  threadId: string;
+  labelIds: string[];
+  message: string;
+}
+
+// ============================================================================
+// Forward Operations
+// ============================================================================
+
+/**
+ * Options for forwarding a message
+ */
+export interface ForwardMessageOptions {
+  /** The Gmail message ID to forward */
+  messageId: string;
+  /** Recipients to forward to */
+  to: string[];
+  /** CC recipients */
+  cc?: string[];
+  /** BCC recipients */
+  bcc?: string[];
+  /** Optional custom message to prepend before the forwarded content */
+  body?: string;
+  /** Whether body is HTML (default: false) */
+  isHtml?: boolean;
+  /** Send from a different email address (send-as alias) */
+  from?: string;
+}
+
+/**
+ * Result of forwarding a message
+ */
+export interface ForwardMessageResult {
+  messageId: string;
+  threadId: string;
+  labelIds: string[];
+  message: string;
+}
+
+// ============================================================================
+// Attachment Operations
+// ============================================================================
+
+/**
+ * Metadata about a single attachment
+ */
+export interface AttachmentInfo {
+  /** Gmail attachment ID (use with downloadAttachment) */
+  attachmentId: string;
+  /** Filename of the attachment */
+  filename: string;
+  /** MIME type of the attachment */
+  mimeType: string;
+  /** Size in bytes */
+  size: number;
+}
+
+/**
+ * Options for listing attachments on a message
+ */
+export interface ListAttachmentsOptions {
+  /** The Gmail message ID */
+  messageId: string;
+}
+
+/**
+ * Result of listing attachments
+ */
+export interface ListAttachmentsResult {
+  messageId: string;
+  attachments: AttachmentInfo[];
+}
+
+/**
+ * Options for downloading a specific attachment
+ */
+export interface DownloadAttachmentOptions {
+  /** The Gmail message ID */
+  messageId: string;
+  /** The attachment ID from listAttachments */
+  attachmentId: string;
+}
+
+/**
+ * Result of downloading an attachment
+ */
+export interface DownloadAttachmentResult {
+  messageId: string;
+  attachmentId: string;
+  filename: string;
+  mimeType: string;
+  size: number;
+  /** Base64url-encoded attachment data */
+  data: string;
+}
+
+/**
+ * An attachment to include when sending a message
+ */
+export interface OutboundAttachment {
+  /** Filename to use for the attachment */
+  filename: string;
+  /** MIME type of the attachment */
+  mimeType: string;
+  /** Base64-encoded file content */
+  data: string;
+}
+
+/**
+ * Options for sending a message with attachments
+ */
+export interface SendWithAttachmentsOptions {
+  /** Recipient email addresses */
+  to: string[];
+  /** CC recipients */
+  cc?: string[];
+  /** BCC recipients */
+  bcc?: string[];
+  /** Email subject */
+  subject: string;
+  /** Email body */
+  body: string;
+  /** Whether body is HTML (default: false) */
+  isHtml?: boolean;
+  /** Send from a different email address (send-as alias) */
+  from?: string;
+  /** File attachments to include */
+  attachments: OutboundAttachment[];
+}
+
+/**
+ * Result of sending a message with attachments
+ */
+export interface SendWithAttachmentsResult {
+  messageId: string;
+  threadId: string;
+  labelIds: string[];
+  message: string;
+}
+
+// ============================================================================
+// Message Management Operations
+// ============================================================================
+
+/**
+ * Options for trashing a message
+ */
+export interface TrashMessageOptions {
+  /** The message ID */
+  id: string;
+}
+
+/**
+ * Result of trashing a message
+ */
+export interface TrashMessageResult {
+  id: string;
+  labelIds: string[];
+  message: string;
+}
+
+/**
+ * Options for untrashing a message
+ */
+export interface UntrashMessageOptions {
+  /** The message ID */
+  id: string;
+}
+
+/**
+ * Result of untrashing a message
+ */
+export interface UntrashMessageResult {
+  id: string;
+  labelIds: string[];
+  message: string;
+}
+
+/**
+ * Options for permanently deleting a message
+ */
+export interface DeleteMessageOptions {
+  /** The message ID */
+  id: string;
+  /**
+   * Must be true to confirm permanent deletion.
+   * This operation cannot be undone — use trashMessage() for recoverable deletion.
+   */
+  safetyAcknowledged: boolean;
+}
+
+/**
+ * Result of deleting a message
+ */
+export interface DeleteMessageResult {
+  id: string;
+  message: string;
+}
+
+/**
+ * Options for marking a message as read
+ */
+export interface MarkAsReadOptions {
+  /** The message ID */
+  id: string;
+}
+
+/**
+ * Result of marking as read
+ */
+export interface MarkAsReadResult {
+  id: string;
+  labelIds: string[];
+  message: string;
+}
+
+/**
+ * Options for marking a message as unread
+ */
+export interface MarkAsUnreadOptions {
+  /** The message ID */
+  id: string;
+}
+
+/**
+ * Result of marking as unread
+ */
+export interface MarkAsUnreadResult {
+  id: string;
+  labelIds: string[];
+  message: string;
+}
+
+/**
+ * Options for archiving a message
+ */
+export interface ArchiveMessageOptions {
+  /** The message ID */
+  id: string;
+}
+
+/**
+ * Result of archiving a message
+ */
+export interface ArchiveMessageResult {
+  id: string;
+  labelIds: string[];
+  message: string;
+}

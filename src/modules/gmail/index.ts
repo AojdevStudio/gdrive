@@ -2,7 +2,7 @@
  * Gmail module - Email operations for the gdrive MCP server
  *
  * @module gmail
- * @version 3.2.0
+ * @version 3.3.0
  */
 
 // Types
@@ -36,6 +36,36 @@ export type {
   LabelInfo,
   ModifyLabelsOptions,
   ModifyLabelsResult,
+  // Reply types
+  ReplyToMessageOptions,
+  ReplyToMessageResult,
+  ReplyAllToMessageOptions,
+  ReplyAllToMessageResult,
+  // Forward types
+  ForwardMessageOptions,
+  ForwardMessageResult,
+  // Attachment types
+  AttachmentInfo,
+  ListAttachmentsOptions,
+  ListAttachmentsResult,
+  DownloadAttachmentOptions,
+  DownloadAttachmentResult,
+  OutboundAttachment,
+  SendWithAttachmentsOptions,
+  SendWithAttachmentsResult,
+  // Management types
+  TrashMessageOptions,
+  TrashMessageResult,
+  UntrashMessageOptions,
+  UntrashMessageResult,
+  DeleteMessageOptions,
+  DeleteMessageResult,
+  MarkAsReadOptions,
+  MarkAsReadResult,
+  MarkAsUnreadOptions,
+  MarkAsUnreadResult,
+  ArchiveMessageOptions,
+  ArchiveMessageResult,
 } from './types.js';
 
 // List operations
@@ -55,3 +85,15 @@ export { sendMessage, sendDraft } from './send.js';
 
 // Label operations
 export { listLabels, modifyLabels } from './labels.js';
+
+// Reply operations
+export { replyToMessage, replyAllToMessage } from './reply.js';
+
+// Forward operations
+export { forwardMessage } from './forward.js';
+
+// Attachment operations
+export { listAttachments, downloadAttachment, sendWithAttachments } from './attachments.js';
+
+// Message management operations
+export { trashMessage, untrashMessage, deleteMessage, markAsRead, markAsUnread, archiveMessage } from './manage.js';
