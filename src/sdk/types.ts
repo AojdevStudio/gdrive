@@ -77,6 +77,18 @@ export interface SDKRuntime {
     sendDraft(options: unknown): Promise<unknown>;
     listLabels(options: unknown): Promise<unknown>;
     modifyLabels(options: unknown): Promise<unknown>;
+    replyToMessage(options: unknown): Promise<unknown>;
+    replyAllToMessage(options: unknown): Promise<unknown>;
+    forwardMessage(options: unknown): Promise<unknown>;
+    listAttachments(options: unknown): Promise<unknown>;
+    downloadAttachment(options: unknown): Promise<unknown>;
+    sendWithAttachments(options: unknown): Promise<unknown>;
+    trashMessage(options: unknown): Promise<unknown>;
+    untrashMessage(options: unknown): Promise<unknown>;
+    deleteMessage(options: unknown): Promise<unknown>;
+    markAsRead(options: unknown): Promise<unknown>;
+    markAsUnread(options: unknown): Promise<unknown>;
+    archiveMessage(options: unknown): Promise<unknown>;
   };
   calendar: {
     listCalendars(options: unknown): Promise<unknown>;

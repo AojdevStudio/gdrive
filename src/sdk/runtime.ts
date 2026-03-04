@@ -180,6 +180,54 @@ export function createSDKRuntime(
         const { modifyLabels } = await import('../modules/gmail/index.js');
         return modifyLabels(opts as Parameters<typeof modifyLabels>[0], context);
       }),
+      replyToMessage: limiter.wrap('gmail', async (opts: unknown) => {
+        const { replyToMessage } = await import('../modules/gmail/index.js');
+        return replyToMessage(opts as Parameters<typeof replyToMessage>[0], context);
+      }),
+      replyAllToMessage: limiter.wrap('gmail', async (opts: unknown) => {
+        const { replyAllToMessage } = await import('../modules/gmail/index.js');
+        return replyAllToMessage(opts as Parameters<typeof replyAllToMessage>[0], context);
+      }),
+      forwardMessage: limiter.wrap('gmail', async (opts: unknown) => {
+        const { forwardMessage } = await import('../modules/gmail/index.js');
+        return forwardMessage(opts as Parameters<typeof forwardMessage>[0], context);
+      }),
+      listAttachments: limiter.wrap('gmail', async (opts: unknown) => {
+        const { listAttachments } = await import('../modules/gmail/index.js');
+        return listAttachments(opts as Parameters<typeof listAttachments>[0], context);
+      }),
+      downloadAttachment: limiter.wrap('gmail', async (opts: unknown) => {
+        const { downloadAttachment } = await import('../modules/gmail/index.js');
+        return downloadAttachment(opts as Parameters<typeof downloadAttachment>[0], context);
+      }),
+      sendWithAttachments: limiter.wrap('gmail', async (opts: unknown) => {
+        const { sendWithAttachments } = await import('../modules/gmail/index.js');
+        return sendWithAttachments(opts as Parameters<typeof sendWithAttachments>[0], context);
+      }),
+      trashMessage: limiter.wrap('gmail', async (opts: unknown) => {
+        const { trashMessage } = await import('../modules/gmail/index.js');
+        return trashMessage(opts as Parameters<typeof trashMessage>[0], context);
+      }),
+      untrashMessage: limiter.wrap('gmail', async (opts: unknown) => {
+        const { untrashMessage } = await import('../modules/gmail/index.js');
+        return untrashMessage(opts as Parameters<typeof untrashMessage>[0], context);
+      }),
+      deleteMessage: limiter.wrap('gmail', async (opts: unknown) => {
+        const { deleteMessage } = await import('../modules/gmail/index.js');
+        return deleteMessage(opts as Parameters<typeof deleteMessage>[0], context);
+      }),
+      markAsRead: limiter.wrap('gmail', async (opts: unknown) => {
+        const { markAsRead } = await import('../modules/gmail/index.js');
+        return markAsRead(opts as Parameters<typeof markAsRead>[0], context);
+      }),
+      markAsUnread: limiter.wrap('gmail', async (opts: unknown) => {
+        const { markAsUnread } = await import('../modules/gmail/index.js');
+        return markAsUnread(opts as Parameters<typeof markAsUnread>[0], context);
+      }),
+      archiveMessage: limiter.wrap('gmail', async (opts: unknown) => {
+        const { archiveMessage } = await import('../modules/gmail/index.js');
+        return archiveMessage(opts as Parameters<typeof archiveMessage>[0], context);
+      }),
     },
 
     calendar: {

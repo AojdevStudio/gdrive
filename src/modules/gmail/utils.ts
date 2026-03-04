@@ -157,3 +157,120 @@ export function encodeToBase64Url(content: string): string {
     .replace(/\//g, '_')
     .replace(/=+$/, '');
 }
+
+/**
+ * Attachment data for building multipart MIME messages
+ */
+export interface AttachmentData {
+  filename: string;
+  mimeType: string;
+  /** Base64-encoded file content */
+  data: string;
+}
+
+/**
+ * Build a multipart/mixed RFC 2822 email message with attachments.
+ *
+ * Structure:
+ *   Content-Type: multipart/mixed; boundary="<boundary>"
+ *   [headers]
+ *
+ *   --<boundary>
+ *   Content-Type: text/plain (or text/html)
+ *   [body text]
+ *
+ *   --<boundary>
+ *   Content-Type: <attachment mimeType>
+ *   Content-Disposition: attachment; filename="<filename>"
+ *   Content-Transfer-Encoding: base64
+ *   [base64 attachment data]
+ *   --<boundary>--
+ *
+ * @param options Message content, recipients, and attachments
+ * @returns RFC 2822 formatted multipart email string
+ */
+export function buildMultipartMessage(options: {
+  to: string[];
+  cc?: string[];
+  bcc?: string[];
+  subject: string;
+  body: string;
+  isHtml?: boolean;
+  from?: string;
+  inReplyTo?: string;
+  references?: string;
+  attachments: AttachmentData[];
+}): string {
+  const { to, cc, bcc, subject, body, isHtml = false, from, inReplyTo, references, attachments } = options;
+
+  // Generate a unique boundary
+  const boundary = `----=_Part_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+
+  const lines: string[] = [];
+
+  // Add envelope headers
+  if (from) {
+    const sanitizedFrom = sanitizeHeaderValue(from);
+    if (!isValidEmailAddress(sanitizedFrom)) {
+      throw new Error(`Invalid from email address: ${sanitizedFrom}`);
+    }
+    lines.push(`From: ${sanitizedFrom}`);
+  }
+
+  const sanitizedTo = validateAndSanitizeRecipients(to, 'to');
+  lines.push(`To: ${sanitizedTo.join(', ')}`);
+
+  if (cc && cc.length > 0) {
+    const sanitizedCc = validateAndSanitizeRecipients(cc, 'cc');
+    lines.push(`Cc: ${sanitizedCc.join(', ')}`);
+  }
+
+  if (bcc && bcc.length > 0) {
+    const sanitizedBcc = validateAndSanitizeRecipients(bcc, 'bcc');
+    lines.push(`Bcc: ${sanitizedBcc.join(', ')}`);
+  }
+
+  lines.push(`Subject: ${encodeSubject(subject)}`);
+
+  if (inReplyTo) {
+    lines.push(`In-Reply-To: ${sanitizeHeaderValue(inReplyTo)}`);
+  }
+  if (references) {
+    lines.push(`References: ${sanitizeHeaderValue(references)}`);
+  }
+
+  lines.push('MIME-Version: 1.0');
+  lines.push(`Content-Type: multipart/mixed; boundary="${boundary}"`);
+  lines.push(''); // Blank line between headers and body
+
+  // Body part
+  lines.push(`--${boundary}`);
+  lines.push(`Content-Type: ${isHtml ? 'text/html' : 'text/plain'}; charset="UTF-8"`);
+  lines.push('Content-Transfer-Encoding: quoted-printable');
+  lines.push('');
+  lines.push(body);
+  lines.push('');
+
+  // Attachment parts
+  for (const attachment of attachments) {
+    const safeName = sanitizeHeaderValue(attachment.filename);
+    lines.push(`--${boundary}`);
+    lines.push(`Content-Type: ${sanitizeHeaderValue(attachment.mimeType)}; name="${safeName}"`);
+    lines.push(`Content-Disposition: attachment; filename="${safeName}"`);
+    lines.push('Content-Transfer-Encoding: base64');
+    lines.push('');
+    // Break base64 data into 76-char lines per RFC 2045
+    const b64 = attachment.data.replace(/[^A-Za-z0-9+/=]/g, '');
+    const chunks: string[] = [];
+    for (let i = 0; i < b64.length; i += 76) {
+      chunks.push(b64.slice(i, i + 76));
+    }
+    lines.push(chunks.join('\r\n'));
+    lines.push('');
+  }
+
+  // Final boundary
+  lines.push(`--${boundary}--`);
+
+  return lines.join('\r\n');
+}
