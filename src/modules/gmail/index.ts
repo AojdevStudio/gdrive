@@ -66,6 +66,16 @@ export type {
   MarkAsUnreadResult,
   ArchiveMessageOptions,
   ArchiveMessageResult,
+  // Template & outreach types
+  DryRunOptions,
+  DryRunResult,
+  SendFromTemplateOptions,
+  SendFromTemplateResult,
+  BatchRecipient,
+  BatchSendOptions,
+  BatchSendItemResult,
+  BatchPreviewItem,
+  BatchSendResult,
 } from './types.js';
 
 // List operations
@@ -78,7 +88,7 @@ export { getMessage, getThread } from './read.js';
 export { searchMessages } from './search.js';
 
 // Compose operations
-export { createDraft } from './compose.js';
+export { createDraft, dryRunMessage } from './compose.js';
 
 // Send operations
 export { sendMessage, sendDraft } from './send.js';
@@ -97,3 +107,6 @@ export { listAttachments, downloadAttachment, sendWithAttachments } from './atta
 
 // Message management operations
 export { trashMessage, untrashMessage, deleteMessage, markAsRead, markAsUnread, archiveMessage } from './manage.js';
+
+// Template operations
+export { renderTemplate } from './templates.js';

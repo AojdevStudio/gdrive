@@ -232,6 +232,10 @@ export function createSDKRuntime(
         const { archiveMessage } = await import('../modules/gmail/index.js');
         return archiveMessage(opts as Parameters<typeof archiveMessage>[0], context);
       }),
+      dryRun: limiter.wrap('gmail', async (opts: unknown) => {
+        const { dryRunMessage } = await import('../modules/gmail/index.js');
+        return dryRunMessage(opts as Parameters<typeof dryRunMessage>[0]);
+      }),
     },
 
     calendar: {

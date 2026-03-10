@@ -615,6 +615,19 @@ export const SDK_SPEC: SDKSpec = {
       },
       returns: "{ id, labelIds: string[], message: string }",
     },
+    dryRun: {
+      signature: "dryRun(options: { to: string[], subject: string, template: string, variables: Record<string, string>, isHtml?: boolean }): DryRunResult",
+      description: "Preview a rendered templated email without sending. Renders {{variable}} placeholders in subject and body, validates recipients, returns the fully rendered email. Pure function — no API calls.",
+      example: "const preview = sdk.gmail.dryRun({\n  to: ['amy@todaysdental.com'],\n  subject: '{{firstName}}, quick follow-up',\n  template: 'Hey {{firstName}},\\n\\n{{personalNote}}',\n  variables: { firstName: 'Amy', personalNote: 'We rebuilt your claims sheet' },\n});\nconsole.log(preview.subject); // 'Amy, quick follow-up'\nconsole.log(preview.wouldSend); // false",
+      params: {
+        to: "string[] (required) — recipient email addresses",
+        subject: "string (required) — subject line with {{variable}} placeholders",
+        template: "string (required) — email body with {{variable}} placeholders",
+        variables: "Record<string, string> (required) — key-value map for placeholder replacement",
+        isHtml: "boolean (optional, default false) — when true, variable values are HTML-escaped",
+      },
+      returns: "{ to: string[], subject: string, body: string, isHtml: boolean, wouldSend: false }",
+    },
   },
 
   // ─────────────────────────────────────────

@@ -90,6 +90,7 @@ export interface SDKRuntime {
     markAsRead(options: unknown): Promise<unknown>;
     markAsUnread(options: unknown): Promise<unknown>;
     archiveMessage(options: unknown): Promise<unknown>;
+    dryRun(options: unknown): Promise<unknown>;
   };
   calendar: {
     listCalendars(options: unknown): Promise<unknown>;

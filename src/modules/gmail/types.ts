@@ -616,3 +616,131 @@ export interface ArchiveMessageResult {
   labelIds: string[];
   message: string;
 }
+
+// ============================================================================
+// Template & Outreach Operations
+// ============================================================================
+
+/**
+ * Options for dry-running (previewing) a templated email
+ */
+export interface DryRunOptions {
+  /** Recipient email addresses */
+  to: string[];
+  /** Subject line (supports {{variable}} placeholders) */
+  subject: string;
+  /** Email body template (supports {{variable}} placeholders) */
+  template: string;
+  /** Variables to replace in subject and template */
+  variables: Record<string, string>;
+  /** Whether template body is HTML (default: false) */
+  isHtml?: boolean;
+}
+
+/**
+ * Result of a dry run — the rendered email without sending
+ */
+export interface DryRunResult {
+  /** Validated recipient addresses */
+  to: string[];
+  /** Rendered subject line */
+  subject: string;
+  /** Rendered email body */
+  body: string;
+  /** Whether body is HTML */
+  isHtml: boolean;
+  /** Always false — email was not sent */
+  wouldSend: false;
+}
+
+/**
+ * Options for sending a templated email
+ */
+export interface SendFromTemplateOptions {
+  /** Recipient email addresses */
+  to: string[];
+  /** CC recipients */
+  cc?: string[];
+  /** BCC recipients */
+  bcc?: string[];
+  /** Subject line (supports {{variable}} placeholders) */
+  subject: string;
+  /** Email body template (supports {{variable}} placeholders) */
+  template: string;
+  /** Variables to replace in subject and template */
+  variables: Record<string, string>;
+  /** Whether template body is HTML (default: false) */
+  isHtml?: boolean;
+  /** Send from a different email address (send-as alias) */
+  from?: string;
+}
+
+/**
+ * Result of sending a templated email
+ */
+export interface SendFromTemplateResult {
+  messageId: string;
+  threadId: string;
+  rendered: true;
+}
+
+/**
+ * A single recipient in a batch send operation
+ */
+export interface BatchRecipient {
+  /** Recipient email address */
+  to: string;
+  /** Per-recipient template variables */
+  variables: Record<string, string>;
+}
+
+/**
+ * Options for batch sending templated emails
+ */
+export interface BatchSendOptions {
+  /** Email body template (supports {{variable}} placeholders) */
+  template: string;
+  /** Subject line (supports {{variable}} placeholders) */
+  subject: string;
+  /** Array of recipients with per-recipient variables */
+  recipients: BatchRecipient[];
+  /** Delay between sends in milliseconds (default: 5000) */
+  delayMs?: number;
+  /** Whether template body is HTML (default: false) */
+  isHtml?: boolean;
+  /** Preview all emails without sending (default: false) */
+  dryRun?: boolean;
+  /** Send from a different email address (send-as alias) */
+  from?: string;
+}
+
+/**
+ * Result for a single item in a batch send
+ */
+export interface BatchSendItemResult {
+  to: string;
+  messageId: string;
+  threadId: string;
+  status: 'sent' | 'failed';
+  error?: string;
+}
+
+/**
+ * Preview for a single item in a batch dry run
+ */
+export interface BatchPreviewItem {
+  to: string;
+  subject: string;
+  body: string;
+  wouldSend: false;
+}
+
+/**
+ * Result of a batch send operation
+ */
+export interface BatchSendResult {
+  sent: number;
+  failed: number;
+  results?: BatchSendItemResult[];
+  previews?: BatchPreviewItem[];
+}
