@@ -101,6 +101,9 @@ export async function readSheet(
  * Read sheet data as an array of keyed objects.
  * First row is treated as headers (keys). Each subsequent row becomes an object.
  *
+ * Sparse rows (fewer cells than headers) produce `null` for missing values.
+ * This matches Google Sheets API behavior where trailing empty cells are omitted.
+ *
  * @param options Read parameters (same as readSheet)
  * @param context Sheets API context
  * @returns Array of keyed objects with column names as keys

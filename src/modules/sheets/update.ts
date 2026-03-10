@@ -341,7 +341,9 @@ export async function updateRecords(
     // Update each specified column
     for (const [colName, value] of Object.entries(update.values)) {
       const colIndex = headers.indexOf(colName);
-      if (colIndex === -1) continue; // skip unknown columns
+      if (colIndex === -1) {
+        continue; // skip unknown columns
+      }
 
       const cellRef = `${sheetPrefix}${columnToLetter(colIndex)}${rowIndex + 1}`;
 

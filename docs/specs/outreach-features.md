@@ -62,7 +62,7 @@ Accepts an inline template string with `{{variable}}` placeholders + a variables
   service: "gmail",
   operation: "sendFromTemplate",
   args: {
-    to: ["amy@todaysdental.com"],
+    to: ["amy@todaysdental.com"],  // string[] — always an array, not a bare string
     subject: "{{firstName}}, quick follow-up on claims",
     template: "Hey {{firstName}},\n\n{{personalNote}}\n\nYou know that thing we've all dealt with...",
     variables: { firstName: "Amy", personalNote: "We rebuilt your claims sheet together last year" },
@@ -70,7 +70,7 @@ Accepts an inline template string with `{{variable}}` placeholders + a variables
   }
 }
 
-// Output
+// Output (Promise<SendFromTemplateResult>)
 { messageId: "abc123", threadId: "xyz789", rendered: true }
 ```
 
@@ -82,7 +82,7 @@ Accepts an inline template string with `{{variable}}` placeholders + a variables
 
 ### 2. `gmail.dryRun`
 
-Same signature as `sendFromTemplate` but returns the rendered email without sending. Ossie reviews, approves, then the real send fires.
+Same signature as `sendFromTemplate` but returns the rendered email without sending. Ossie reviews, approves, then the real send fires. This is a pure function (no API calls) so it resolves instantly.
 
 ```typescript
 // Input
@@ -90,14 +90,14 @@ Same signature as `sendFromTemplate` but returns the rendered email without send
   service: "gmail",
   operation: "dryRun",
   args: {
-    to: ["amy@todaysdental.com"],
+    to: ["amy@todaysdental.com"],  // string[] — always an array
     subject: "{{firstName}}, quick follow-up on claims",
     template: "Hey {{firstName}},\n\n...",
     variables: { firstName: "Amy" }
   }
 }
 
-// Output
+// Output (Promise<DryRunResult> — use await)
 {
   to: ["amy@todaysdental.com"],
   subject: "Amy, quick follow-up on claims",
@@ -135,7 +135,7 @@ Reads a Sheet tab and returns rows as keyed objects. First row = keys.
 
 **Implementation notes:**
 - Thin wrapper over existing `readSheet()` — zip headers with rows
-- Sparse rows (fewer cells than headers) → `null` for missing values
+- **Sparse rows** (fewer cells than headers) produce `null` for missing values. This is by design — Google Sheets API omits trailing empty cells, so the code explicitly fills gaps with `null` rather than `undefined`
 - Empty sheets (header only) → `records: [], count: 0`
 
 ### 4. `gmail.sendBatch`

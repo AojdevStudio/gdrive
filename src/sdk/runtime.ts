@@ -236,10 +236,11 @@ export function createSDKRuntime(
         const { archiveMessage } = await import('../modules/gmail/index.js');
         return archiveMessage(opts as Parameters<typeof archiveMessage>[0], context);
       }),
-      dryRun: limiter.wrap('gmail', async (opts: unknown) => {
+      dryRun: async (opts: unknown) => {
+        // No rate limiter — dryRunMessage is a pure function with zero API calls
         const { dryRunMessage } = await import('../modules/gmail/index.js');
         return dryRunMessage(opts as Parameters<typeof dryRunMessage>[0]);
-      }),
+      },
       sendFromTemplate: limiter.wrap('gmail', async (opts: unknown) => {
         const { sendFromTemplate } = await import('../modules/gmail/index.js');
         return sendFromTemplate(opts as Parameters<typeof sendFromTemplate>[0], context);

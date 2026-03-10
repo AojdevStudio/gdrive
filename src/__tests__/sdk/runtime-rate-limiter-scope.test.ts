@@ -12,9 +12,9 @@ describe('createSDKRuntime rate limiter injection', () => {
     createSDKRuntime(context, limiter);
     createSDKRuntime(context, limiter);
 
-    // 66 wrapped SDK operations per runtime creation (47 original + 12 Gmail v3.2 ops + 7 outreach ops).
-    // Outreach P0: readAsRecords, dryRun, sendFromTemplate, sendBatch = 4.
+    // 65 wrapped SDK operations per runtime creation (47 original + 12 Gmail v3.2 ops + 6 outreach ops).
+    // Outreach P0: readAsRecords, sendFromTemplate, sendBatch = 3 (dryRun is unwrapped — pure function).
     // Outreach P1: updateRecords, detectReplies, getTrackingData = 3.
-    expect(wrap).toHaveBeenCalledTimes(132);
+    expect(wrap).toHaveBeenCalledTimes(130);
   });
 });

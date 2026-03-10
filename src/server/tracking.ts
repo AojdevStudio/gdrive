@@ -82,14 +82,22 @@ function parseTrackingPath(pathname: string): TrackingParams | null {
   // Expected: /track/<campaignId>/<recipientId>/pixel.gif
   const parts = pathname.split('/').filter(Boolean);
   // parts should be: ['track', campaignId, recipientId, 'pixel.gif']
-  if (parts.length !== 4) return null;
-  if (parts[0] !== 'track') return null;
-  if (parts[3] !== 'pixel.gif') return null;
+  if (parts.length !== 4) {
+    return null;
+  }
+  if (parts[0] !== 'track') {
+    return null;
+  }
+  if (parts[3] !== 'pixel.gif') {
+    return null;
+  }
 
   const campaignId = parts[1];
   const recipientId = parts[2];
 
-  if (!campaignId || !recipientId) return null;
+  if (!campaignId || !recipientId) {
+    return null;
+  }
 
   return { campaignId, recipientId };
 }
@@ -116,6 +124,10 @@ export async function handleTrackingRequest(
   const kvKey = `tracking:summary:${campaignId}`;
 
   // Read existing summary (or start fresh)
+  // NOTE: This is a read-modify-write on KV. Two concurrent pixel hits may read
+  // the same snapshot, causing one write to overwrite the other's increment.
+  // For email open tracking this is an acceptable approximation — exact counts
+  // are not critical, and the race window is small relative to open frequency.
   const raw = await kv.get(kvKey);
   const summary: TrackingSummary = raw
     ? JSON.parse(raw)

@@ -16,7 +16,7 @@ import type {
   BatchSendItemResult,
   BatchPreviewItem,
 } from './types.js';
-import { buildEmailMessage, encodeToBase64Url } from './utils.js';
+import { buildEmailMessage, encodeToBase64Url, validateAndSanitizeRecipients } from './utils.js';
 import { renderTemplate } from './templates.js';
 
 /**
@@ -185,9 +185,19 @@ export async function sendFromTemplate(
     body: renderedBody,
     isHtml,
   };
-  if (options.cc) sendOpts.cc = options.cc;
-  if (options.bcc) sendOpts.bcc = options.bcc;
-  if (options.from) sendOpts.from = options.from;
+  // Validate recipients upfront (matches dryRunMessage behavior)
+  validateAndSanitizeRecipients(to, 'to');
+  if (options.cc) {
+    validateAndSanitizeRecipients(options.cc, 'cc');
+    sendOpts.cc = options.cc;
+  }
+  if (options.bcc) {
+    validateAndSanitizeRecipients(options.bcc, 'bcc');
+    sendOpts.bcc = options.bcc;
+  }
+  if (options.from) {
+    sendOpts.from = options.from;
+  }
 
   const result = await sendMessage(sendOpts, context);
 
@@ -242,9 +252,7 @@ export async function sendBatch(
   let sent = 0;
   let failed = 0;
 
-  for (let i = 0; i < recipients.length; i++) {
-    const recipient = recipients[i]!;
-
+  for (const [i, recipient] of recipients.entries()) {
     try {
       const renderedSubject = renderTemplate(subject, recipient.variables, false);
       const renderedBody = renderTemplate(template, recipient.variables, isHtml);
@@ -255,7 +263,9 @@ export async function sendBatch(
         body: renderedBody,
         isHtml,
       };
-      if (from) sendOpts.from = from;
+      if (from) {
+        sendOpts.from = from;
+      }
 
       const sendResult = await sendMessage(sendOpts, context);
 
