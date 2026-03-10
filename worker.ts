@@ -157,8 +157,16 @@ function makeLogger() {
 export default {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   async fetch(request: Request, env: Env, _ctx: any): Promise<Response> {
-    // Only handle POST requests to /mcp (or root)
     const url = new URL(request.url);
+
+    // Tracking pixel route: GET /track/:campaignId/:recipientId/pixel.gif
+    // Handled before auth — tracking pixels are fire-and-forget from email clients.
+    if (request.method === 'GET' && url.pathname.startsWith('/track/')) {
+      const { handleTrackingRequest } = await import('./src/server/tracking.js');
+      return handleTrackingRequest(request, env.GDRIVE_KV);
+    }
+
+    // Only handle POST requests to /mcp (or root)
     if (request.method !== 'POST' || (url.pathname !== '/' && url.pathname !== '/mcp')) {
       return new Response('gdrive-mcp Worker v4.0.0-alpha\nPOST /mcp to connect.', {
         status: url.pathname === '/' ? 200 : 404,

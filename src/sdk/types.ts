@@ -6,6 +6,7 @@
 import type { Logger } from 'winston';
 import type { drive_v3, sheets_v4, forms_v1, docs_v1, gmail_v1, calendar_v3 } from 'googleapis';
 import type { CacheManagerLike, PerformanceMonitorLike } from '../modules/types.js';
+import type { KVLike } from '../server/tracking.js';
 export type { ExecuteResult, Executor } from './executor.js';
 
 /**
@@ -23,6 +24,8 @@ export interface FullContext {
   docs: docs_v1.Docs;
   gmail: gmail_v1.Gmail;
   calendar: calendar_v3.Calendar;
+  /** CF Workers KV namespace — only available in Worker runtime. */
+  kv?: KVLike;
 }
 
 /**
@@ -52,6 +55,8 @@ export interface SDKRuntime {
     freezeRowsColumns(options: unknown): Promise<unknown>;
     setColumnWidth(options: unknown): Promise<unknown>;
     appendRows(options: unknown): Promise<unknown>;
+    readAsRecords(options: unknown): Promise<unknown>;
+    updateRecords(options: unknown): Promise<unknown>;
   };
   forms: {
     createForm(options: unknown): Promise<unknown>;
@@ -89,6 +94,11 @@ export interface SDKRuntime {
     markAsRead(options: unknown): Promise<unknown>;
     markAsUnread(options: unknown): Promise<unknown>;
     archiveMessage(options: unknown): Promise<unknown>;
+    dryRun(options: unknown): Promise<unknown>;
+    sendFromTemplate(options: unknown): Promise<unknown>;
+    sendBatch(options: unknown): Promise<unknown>;
+    detectReplies(options: unknown): Promise<unknown>;
+    getTrackingData(options: unknown): Promise<unknown>;
   };
   calendar: {
     listCalendars(options: unknown): Promise<unknown>;

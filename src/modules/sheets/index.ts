@@ -37,8 +37,10 @@ export {
 // Read operations
 export {
   readSheet,
+  readAsRecords,
   type ReadSheetOptions,
   type ReadSheetResult,
+  type ReadAsRecordsResult,
 } from './read.js';
 
 // Sheet management (create, rename, delete)
@@ -60,12 +62,15 @@ export {
   updateCells,
   updateFormula,
   appendRows,
+  updateRecords,
   type UpdateCellsOptions,
   type UpdateCellsResult,
   type UpdateFormulaOptions,
   type UpdateFormulaResult,
   type AppendRowsOptions,
   type AppendRowsResult,
+  type UpdateRecordsOptions,
+  type UpdateRecordsResult,
 } from './update.js';
 
 // Format operations

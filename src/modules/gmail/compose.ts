@@ -1,13 +1,16 @@
 /**
- * Gmail compose operations - createDraft
+ * Gmail compose operations - createDraft, dryRunMessage
  */
 
 import type { GmailContext } from '../types.js';
 import type {
   CreateDraftOptions,
   CreateDraftResult,
+  DryRunOptions,
+  DryRunResult,
 } from './types.js';
-import { buildEmailMessage, encodeToBase64Url } from './utils.js';
+import { buildEmailMessage, encodeToBase64Url, validateAndSanitizeRecipients } from './utils.js';
+import { renderTemplate } from './templates.js';
 
 /**
  * Create a draft email
@@ -64,5 +67,37 @@ export async function createDraft(
     messageId,
     threadId: threadId || '',
     message: 'Draft created successfully',
+  };
+}
+
+/**
+ * Preview a rendered templated email without sending.
+ * Pure function — does not call any APIs.
+ *
+ * Renders {{variable}} placeholders in both subject and template body,
+ * validates recipient addresses, and returns the fully rendered email
+ * for review before sending.
+ *
+ * @param options Template, variables, and recipients
+ * @returns Rendered email preview with wouldSend: false
+ */
+export function dryRunMessage(options: DryRunOptions): DryRunResult {
+  const { to, subject, template, variables, isHtml = false } = options;
+
+  // Validate recipients (throws on invalid addresses)
+  const sanitizedTo = validateAndSanitizeRecipients(to, 'to');
+
+  // Render subject (never HTML-escaped — subjects are plain text headers)
+  const renderedSubject = renderTemplate(subject, variables, false);
+
+  // Render body (HTML-escaped when isHtml is true)
+  const renderedBody = renderTemplate(template, variables, isHtml);
+
+  return {
+    to: sanitizedTo,
+    subject: renderedSubject,
+    body: renderedBody,
+    isHtml,
+    wouldSend: false,
   };
 }

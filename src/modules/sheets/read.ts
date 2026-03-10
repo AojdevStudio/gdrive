@@ -23,6 +23,15 @@ export interface ReadSheetResult {
 }
 
 /**
+ * Result of reading sheet as keyed records
+ */
+export interface ReadAsRecordsResult {
+  records: Record<string, unknown>[];
+  count: number;
+  columns: string[];
+}
+
+/**
  * Read data from a Google Sheet range
  *
  * Supports flexible range formats:
@@ -86,4 +95,40 @@ export async function readSheet(
   context.performanceMonitor.track('sheets:read', Date.now() - context.startTime);
 
   return result;
+}
+
+/**
+ * Read sheet data as an array of keyed objects.
+ * First row is treated as headers (keys). Each subsequent row becomes an object.
+ *
+ * Sparse rows (fewer cells than headers) produce `null` for missing values.
+ * This matches Google Sheets API behavior where trailing empty cells are omitted.
+ *
+ * @param options Read parameters (same as readSheet)
+ * @param context Sheets API context
+ * @returns Array of keyed objects with column names as keys
+ */
+export async function readAsRecords(
+  options: ReadSheetOptions,
+  context: SheetsContext
+): Promise<ReadAsRecordsResult> {
+  const { values } = await readSheet(options, context);
+
+  if (!values || values.length === 0) {
+    throw new Error('No header row found in the specified range');
+  }
+
+  const columns: string[] = (values[0] as string[]).map(h => String(h));
+  const rows = values.slice(1);
+
+  const records = rows.map(row => {
+    const record: Record<string, unknown> = {};
+    for (let i = 0; i < columns.length; i++) {
+      const key = columns[i]!;
+      record[key] = i < row.length ? row[i] : null;
+    }
+    return record;
+  });
+
+  return { records, count: records.length, columns };
 }
