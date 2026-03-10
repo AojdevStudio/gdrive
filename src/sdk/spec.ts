@@ -628,6 +628,37 @@ export const SDK_SPEC: SDKSpec = {
       },
       returns: "{ to: string[], subject: string, body: string, isHtml: boolean, wouldSend: false }",
     },
+    sendFromTemplate: {
+      signature: "sendFromTemplate(options: { to: string[], subject: string, template: string, variables: Record<string, string>, cc?: string[], bcc?: string[], isHtml?: boolean, from?: string }): Promise<SendFromTemplateResult>",
+      description: "Render {{variable}} placeholders in subject and body template, then send the resulting email via Gmail. Combines template rendering with sendMessage in a single call.",
+      example: "const result = await sdk.gmail.sendFromTemplate({\n  to: ['amy@todaysdental.com'],\n  subject: '{{firstName}}, quick follow-up',\n  template: 'Hey {{firstName}},\\n\\n{{personalNote}}',\n  variables: { firstName: 'Amy', personalNote: 'We rebuilt your claims sheet' },\n});\nconsole.log(result.messageId);",
+      params: {
+        to: "string[] (required) — recipient email addresses",
+        subject: "string (required) — subject line with {{variable}} placeholders",
+        template: "string (required) — email body with {{variable}} placeholders",
+        variables: "Record<string, string> (required) — key-value map for placeholder replacement",
+        cc: "string[] (optional) — CC recipients",
+        bcc: "string[] (optional) — BCC recipients",
+        isHtml: "boolean (optional, default false) — when true, variable values are HTML-escaped",
+        from: "string (optional) — send-as alias email address",
+      },
+      returns: "{ messageId: string, threadId: string, rendered: true }",
+    },
+    sendBatch: {
+      signature: "sendBatch(options: { subject: string, template: string, recipients: BatchRecipient[], delayMs?: number, isHtml?: boolean, dryRun?: boolean, from?: string }): Promise<BatchSendResult>",
+      description: "Send a templated email to multiple recipients with per-recipient variables. Sends sequentially with configurable delay for rate limiting. Set dryRun: true to preview all rendered emails without sending. Continues on individual failures, reporting per-recipient status.",
+      example: "const result = await sdk.gmail.sendBatch({\n  subject: 'Hi {{name}}',\n  template: 'Hello {{name}}, {{note}}',\n  recipients: [\n    { to: 'alice@example.com', variables: { name: 'Alice', note: 'checking in' } },\n    { to: 'bob@example.com', variables: { name: 'Bob', note: 'quick update' } },\n  ],\n  delayMs: 5000,\n});\nconsole.log(`Sent: ${result.sent}, Failed: ${result.failed}`);",
+      params: {
+        subject: "string (required) — subject line with {{variable}} placeholders",
+        template: "string (required) — email body with {{variable}} placeholders",
+        recipients: "BatchRecipient[] (required) — array of { to: string, variables: Record<string, string> }",
+        delayMs: "number (optional, default 5000) — milliseconds between sends for rate limiting",
+        isHtml: "boolean (optional, default false) — when true, variable values are HTML-escaped",
+        dryRun: "boolean (optional, default false) — preview all emails without sending",
+        from: "string (optional) — send-as alias email address",
+      },
+      returns: "{ sent: number, failed: number, results?: BatchSendItemResult[], previews?: BatchPreviewItem[] }",
+    },
   },
 
   // ─────────────────────────────────────────

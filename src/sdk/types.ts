@@ -91,6 +91,8 @@ export interface SDKRuntime {
     markAsUnread(options: unknown): Promise<unknown>;
     archiveMessage(options: unknown): Promise<unknown>;
     dryRun(options: unknown): Promise<unknown>;
+    sendFromTemplate(options: unknown): Promise<unknown>;
+    sendBatch(options: unknown): Promise<unknown>;
   };
   calendar: {
     listCalendars(options: unknown): Promise<unknown>;

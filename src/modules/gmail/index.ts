@@ -91,7 +91,7 @@ export { searchMessages } from './search.js';
 export { createDraft, dryRunMessage } from './compose.js';
 
 // Send operations
-export { sendMessage, sendDraft } from './send.js';
+export { sendMessage, sendDraft, sendFromTemplate, sendBatch } from './send.js';
 
 // Label operations
 export { listLabels, modifyLabels } from './labels.js';

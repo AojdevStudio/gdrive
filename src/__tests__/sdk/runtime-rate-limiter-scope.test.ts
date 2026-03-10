@@ -12,10 +12,8 @@ describe('createSDKRuntime rate limiter injection', () => {
     createSDKRuntime(context, limiter);
     createSDKRuntime(context, limiter);
 
-    // 59 wrapped SDK operations per runtime creation (47 original + 12 new Gmail operations).
-    // Actual: replyToMessage, replyAllToMessage, forwardMessage, listAttachments,
-    //         downloadAttachment, sendWithAttachments, trashMessage, untrashMessage,
-    //         deleteMessage, markAsRead, markAsUnread, archiveMessage = 12 new.
-    expect(wrap).toHaveBeenCalledTimes(118);
+    // 63 wrapped SDK operations per runtime creation (47 original + 12 Gmail v3.2 ops + 4 outreach ops).
+    // Outreach: readAsRecords, dryRun, sendFromTemplate, sendBatch = 4 new.
+    expect(wrap).toHaveBeenCalledTimes(126);
   });
 });

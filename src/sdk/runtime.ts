@@ -236,6 +236,14 @@ export function createSDKRuntime(
         const { dryRunMessage } = await import('../modules/gmail/index.js');
         return dryRunMessage(opts as Parameters<typeof dryRunMessage>[0]);
       }),
+      sendFromTemplate: limiter.wrap('gmail', async (opts: unknown) => {
+        const { sendFromTemplate } = await import('../modules/gmail/index.js');
+        return sendFromTemplate(opts as Parameters<typeof sendFromTemplate>[0], context);
+      }),
+      sendBatch: limiter.wrap('gmail', async (opts: unknown) => {
+        const { sendBatch } = await import('../modules/gmail/index.js');
+        return sendBatch(opts as Parameters<typeof sendBatch>[0], context);
+      }),
     },
 
     calendar: {
