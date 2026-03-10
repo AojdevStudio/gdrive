@@ -99,6 +99,10 @@ export function createSDKRuntime(
         const { readAsRecords } = await import('../modules/sheets/index.js');
         return readAsRecords(opts as Parameters<typeof readAsRecords>[0], context);
       }),
+      updateRecords: limiter.wrap('sheets', async (opts: unknown) => {
+        const { updateRecords } = await import('../modules/sheets/index.js');
+        return updateRecords(opts as Parameters<typeof updateRecords>[0], context);
+      }),
     },
 
     forms: {
@@ -243,6 +247,19 @@ export function createSDKRuntime(
       sendBatch: limiter.wrap('gmail', async (opts: unknown) => {
         const { sendBatch } = await import('../modules/gmail/index.js');
         return sendBatch(opts as Parameters<typeof sendBatch>[0], context);
+      }),
+      detectReplies: limiter.wrap('gmail', async (opts: unknown) => {
+        const { detectReplies } = await import('../modules/gmail/index.js');
+        return detectReplies(opts as Parameters<typeof detectReplies>[0], context);
+      }),
+      getTrackingData: limiter.wrap('gmail', async (opts: unknown) => {
+        if (!context.kv) {
+          throw new Error(
+            'getTrackingData is only available in the Cloudflare Workers runtime (requires KV namespace)'
+          );
+        }
+        const { getTrackingData } = await import('../server/tracking.js');
+        return getTrackingData(opts as { campaignId: string }, context.kv);
       }),
     },
 

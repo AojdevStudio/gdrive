@@ -243,3 +243,126 @@ export async function appendRows(
     message: `Successfully appended ${values.length} rows to ${sheetName}`,
   };
 }
+
+/**
+ * Options for updating records by key column match
+ */
+export interface UpdateRecordsOptions {
+  /** Spreadsheet ID */
+  spreadsheetId: string;
+  /** Range in A1 notation covering all columns (e.g., "Contacts!A:G") */
+  range: string;
+  /** Header name of the key column to match against */
+  keyColumn: string;
+  /** Array of updates: each has a key to match and values to set */
+  updates: Array<{
+    key: string;
+    values: Record<string, unknown>;
+  }>;
+  /** Optional sheet name (if not in range) */
+  sheetName?: string;
+}
+
+/**
+ * Result of updating records
+ */
+export interface UpdateRecordsResult {
+  updated: number;
+  notFound: string[];
+  message: string;
+}
+
+/**
+ * Convert a 0-based column index to A1 notation letter(s).
+ * 0 → A, 1 → B, 25 → Z, 26 → AA, etc.
+ */
+function columnToLetter(col: number): string {
+  let letter = '';
+  let n = col;
+  while (n >= 0) {
+    letter = String.fromCharCode((n % 26) + 65) + letter;
+    n = Math.floor(n / 26) - 1;
+  }
+  return letter;
+}
+
+/**
+ * Update cells in a Sheet by matching a key column.
+ * Reads the sheet, finds rows matching the key, computes cell ranges, and updates.
+ *
+ * @param options Update parameters with key column and values
+ * @param context Sheets API context
+ * @returns Update confirmation with counts
+ */
+export async function updateRecords(
+  options: UpdateRecordsOptions,
+  context: SheetsContext
+): Promise<UpdateRecordsResult> {
+  const { spreadsheetId, range, keyColumn, updates, sheetName } = options;
+
+  // Build resolved range
+  let resolvedRange = range;
+  if (sheetName && !range.includes('!')) {
+    resolvedRange = `${sheetName}!${range}`;
+  }
+
+  // Read existing data
+  const response = await context.sheets.spreadsheets.values.get({
+    spreadsheetId,
+    range: resolvedRange,
+  });
+
+  const values = (response.data.values ?? []) as unknown[][];
+  if (values.length === 0) {
+    throw new Error('No data found in the specified range');
+  }
+
+  const headers = (values[0] as string[]).map(h => String(h));
+  const keyColIndex = headers.indexOf(keyColumn);
+  if (keyColIndex === -1) {
+    throw new Error(`Key column '${keyColumn}' not found in headers: ${headers.join(', ')}`);
+  }
+
+  // Extract sheet name prefix from the resolved range for building cell references
+  const sheetPrefix = resolvedRange.includes('!') ? resolvedRange.split('!')[0] + '!' : '';
+
+  let updated = 0;
+  const notFound: string[] = [];
+
+  for (const update of updates) {
+    // Find matching row (1-indexed: row 1 = headers, data starts at row 2)
+    const rowIndex = values.findIndex((row, i) => i > 0 && String(row[keyColIndex]) === update.key);
+
+    if (rowIndex === -1) {
+      notFound.push(update.key);
+      continue;
+    }
+
+    // Update each specified column
+    for (const [colName, value] of Object.entries(update.values)) {
+      const colIndex = headers.indexOf(colName);
+      if (colIndex === -1) continue; // skip unknown columns
+
+      const cellRef = `${sheetPrefix}${columnToLetter(colIndex)}${rowIndex + 1}`;
+
+      await context.sheets.spreadsheets.values.update({
+        spreadsheetId,
+        range: cellRef,
+        valueInputOption: 'USER_ENTERED',
+        requestBody: { values: [[value]] },
+      });
+    }
+
+    updated++;
+  }
+
+  // Invalidate cache
+  await context.cacheManager.invalidate(`sheet:${spreadsheetId}:*`);
+  context.performanceMonitor.track('sheets:updateRecords', Date.now() - context.startTime);
+
+  return {
+    updated,
+    notFound,
+    message: `Updated ${updated} records. ${notFound.length > 0 ? `Not found: ${notFound.join(', ')}` : ''}`.trim(),
+  };
+}

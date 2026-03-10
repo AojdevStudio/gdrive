@@ -258,6 +258,19 @@ export const SDK_SPEC: SDKSpec = {
       },
       returns: "{ records: Record<string, unknown>[], count: number, columns: string[] }",
     },
+    updateRecords: {
+      signature: "updateRecords(options: { spreadsheetId: string, range: string, keyColumn: string, updates: Array<{ key: string, values: Record<string, unknown> }>, sheetName?: string }): Promise<{ updated: number, notFound: string[], message: string }>",
+      description: "Update cells in a Sheet by matching a key column. Reads the sheet, finds rows where keyColumn matches each update's key, and writes the specified column values. Continues through all updates even if some keys aren't found.",
+      example: "const result = await sdk.sheets.updateRecords({\n  spreadsheetId: 'abc123',\n  range: 'Contacts!A:G',\n  keyColumn: 'email',\n  updates: [\n    { key: 'alice@example.com', values: { status: 'sent', sentAt: '2024-01-15' } },\n    { key: 'bob@example.com', values: { status: 'sent', sentAt: '2024-01-15' } },\n  ],\n});\nconsole.log(`Updated: ${result.updated}, Not found: ${result.notFound}`);",
+      params: {
+        spreadsheetId: "string (required) — Google Sheets spreadsheet ID",
+        range: "string (required) — A1 notation range covering all columns (e.g., 'Contacts!A:G')",
+        keyColumn: "string (required) — header name of the column to match against",
+        updates: "Array<{ key: string, values: Record<string, unknown> }> (required) — array of updates with key to match and column values to set",
+        sheetName: "string (optional) — sheet name if not in range",
+      },
+      returns: "{ updated: number, notFound: string[], message: string }",
+    },
   },
 
   // ─────────────────────────────────────────
@@ -658,6 +671,24 @@ export const SDK_SPEC: SDKSpec = {
         from: "string (optional) — send-as alias email address",
       },
       returns: "{ sent: number, failed: number, results?: BatchSendItemResult[], previews?: BatchPreviewItem[] }",
+    },
+    detectReplies: {
+      signature: "detectReplies(options: { threadIds: string[] }): Promise<{ threads: Array<{ threadId: string, hasReply: boolean, replies: Array<{ messageId: string, from: string, date: string }> }> }>",
+      description: "Check threads for replies from external participants. Filters out messages from the authenticated user to identify genuine replies. Useful for tracking outreach response rates.",
+      example: "const { threads } = await sdk.gmail.detectReplies({ threadIds: ['thread1', 'thread2'] });\nconst replied = threads.filter(t => t.hasReply);\nconsole.log(`${replied.length} of ${threads.length} threads have replies`);",
+      params: {
+        threadIds: "string[] (required) — array of Gmail thread IDs to check for replies",
+      },
+      returns: "{ threads: Array<{ threadId, hasReply, replies: Array<{ messageId, from, date }> }> }",
+    },
+    getTrackingData: {
+      signature: "getTrackingData(options: { campaignId: string }): Promise<{ campaignId: string, totalOpens: number, uniqueOpens: number, recipients: Array<{ recipientId: string, openCount: number, firstOpenedAt: string, lastOpenedAt: string }> }>",
+      description: "Query open-tracking data for a campaign. Returns per-recipient open counts and timestamps. Only available in CF Workers runtime (requires KV namespace). Campaign IDs come from tracking pixels embedded in outreach emails.",
+      example: "const data = await sdk.gmail.getTrackingData({ campaignId: 'campaign-2024-q1' });\nconsole.log(`Total opens: ${data.totalOpens}, Unique: ${data.uniqueOpens}`);",
+      params: {
+        campaignId: "string (required) — campaign identifier used in tracking pixel URLs",
+      },
+      returns: "{ campaignId, totalOpens, uniqueOpens, recipients: Array<{ recipientId, openCount, firstOpenedAt, lastOpenedAt }> }",
     },
   },
 

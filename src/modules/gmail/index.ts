@@ -108,5 +108,9 @@ export { listAttachments, downloadAttachment, sendWithAttachments } from './atta
 // Message management operations
 export { trashMessage, untrashMessage, deleteMessage, markAsRead, markAsUnread, archiveMessage } from './manage.js';
 
+// Reply detection operations
+export { detectReplies } from './detect-replies.js';
+export type { DetectRepliesOptions, DetectRepliesResult } from './detect-replies.js';
+
 // Template operations
 export { renderTemplate } from './templates.js';
