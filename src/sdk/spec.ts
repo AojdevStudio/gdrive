@@ -247,6 +247,17 @@ export const SDK_SPEC: SDKSpec = {
       },
       returns: "{ spreadsheetId, tableRange, updatedRange, updatedRows }",
     },
+    readAsRecords: {
+      signature: "readAsRecords(options: { spreadsheetId: string, range: string, sheetName?: string }): Promise<{ records: Record<string, unknown>[], count: number, columns: string[] }>",
+      description: "Read a Sheet range as an array of keyed objects. First row is treated as header row (keys). Each subsequent row becomes an object with header names as keys. Sparse rows map missing values to null.",
+      example: "const { records } = await sdk.sheets.readAsRecords({ spreadsheetId: 'abc123', range: 'Contacts!A:G' });\nrecords.forEach(r => console.log(r.name, r.email));",
+      params: {
+        spreadsheetId: "string (required) — Google Sheets spreadsheet ID",
+        range: "string (required) — A1 notation range (e.g., 'Contacts!A:G')",
+        sheetName: "string (optional) — sheet name if not in range",
+      },
+      returns: "{ records: Record<string, unknown>[], count: number, columns: string[] }",
+    },
   },
 
   // ─────────────────────────────────────────

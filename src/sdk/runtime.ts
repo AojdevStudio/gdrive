@@ -95,6 +95,10 @@ export function createSDKRuntime(
         const { appendRows } = await import('../modules/sheets/index.js');
         return appendRows(opts as Parameters<typeof appendRows>[0], context);
       }),
+      readAsRecords: limiter.wrap('sheets', async (opts: unknown) => {
+        const { readAsRecords } = await import('../modules/sheets/index.js');
+        return readAsRecords(opts as Parameters<typeof readAsRecords>[0], context);
+      }),
     },
 
     forms: {

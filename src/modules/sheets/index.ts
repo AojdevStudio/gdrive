@@ -37,8 +37,10 @@ export {
 // Read operations
 export {
   readSheet,
+  readAsRecords,
   type ReadSheetOptions,
   type ReadSheetResult,
+  type ReadAsRecordsResult,
 } from './read.js';
 
 // Sheet management (create, rename, delete)

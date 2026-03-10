@@ -52,6 +52,7 @@ export interface SDKRuntime {
     freezeRowsColumns(options: unknown): Promise<unknown>;
     setColumnWidth(options: unknown): Promise<unknown>;
     appendRows(options: unknown): Promise<unknown>;
+    readAsRecords(options: unknown): Promise<unknown>;
   };
   forms: {
     createForm(options: unknown): Promise<unknown>;
