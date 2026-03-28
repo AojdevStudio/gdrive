@@ -291,6 +291,12 @@ export async function generateToolStructure(): Promise<ModuleStructure> {
         description: 'Permanently delete a draft by ID. This operation cannot be undone.',
         example: 'const result = await gmail.deleteDraft({ draftId: "r1234567890" });\nconsole.log(result.message); // "Draft r1234567890 deleted"',
       },
+      {
+        name: 'getTrackingData',
+        signature: 'getTrackingData({ campaignId: string })',
+        description: 'Query email open-tracking data for a campaign. Returns totalOpens, uniqueOpens, and per-recipient open counts with timestamps. Worker-only — requires CF Workers runtime with KV namespace. Campaign IDs come from tracking pixels embedded in outreach emails.',
+        example: 'const data = await gmail.getTrackingData({ campaignId: "q1-outreach-2026" });\nconsole.log(`Opens: ${data.totalOpens} total, ${data.uniqueOpens} unique`);\ndata.recipients.forEach(r => console.log(r.recipientId, r.openCount));',
+      },
     ],
     calendar: [
       {
