@@ -50,3 +50,6 @@ claude-config-*.json
 
 # Claude Code skills (symlinks to external tooling)
 .claude/skills/
+
+# Obsidian vault
+.obsidian/
