@@ -139,9 +139,9 @@ export async function generateToolStructure(): Promise<ModuleStructure> {
       },
       {
         name: 'addQuestion',
-        signature: 'addQuestion({ formId: string, title: string, questionType: string, ... })',
-        description: 'Add a question to a form',
-        example: 'forms.addQuestion({ formId: "abc123", title: "Your rating", questionType: "SCALE" })',
+        signature: 'addQuestion({ formId: string, title: string, type: QuestionType, required?: boolean, options?: string[], scaleMin?: number, scaleMax?: number })',
+        description: 'Add a question to a form. QuestionType: TEXT | PARAGRAPH_TEXT | MULTIPLE_CHOICE | CHECKBOX | DROPDOWN | LINEAR_SCALE | DATE | TIME',
+        example: 'forms.addQuestion({ formId: "abc123", title: "Your rating", type: "LINEAR_SCALE", scaleMin: 1, scaleMax: 5 })',
       },
       {
         name: 'listResponses',
