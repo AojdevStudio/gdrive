@@ -5,48 +5,21 @@
  * - Serves a 1x1 transparent GIF
  * - Writes open events to KV with summary record pattern
  *
- * KV key pattern: tracking:summary:{campaignId}
- * TTL: 90 days (7_776_000 seconds)
- *
- * No googleapis imports — this module only uses KV.
+ * See kv-schema.ts for the full KV schema documentation.
  */
 
-// ─── Types ───────────────────────────────────────────────────
+export type {
+  KVLike,
+  RecipientTracking,
+  TrackingSummary,
+} from './kv-schema.js';
 
-/** Minimal KV interface compatible with CF Workers KVNamespace. */
-export interface KVLike {
-  get(key: string): Promise<string | null>;
-  put(key: string, value: string, opts?: { expirationTtl?: number }): Promise<void>;
-}
-
-/** Per-recipient tracking data stored within a campaign summary. */
-export interface RecipientTracking {
-  openCount: number;
-  firstOpenedAt: string;
-  lastOpenedAt: string;
-}
-
-/** Summary record stored in KV for each campaign. */
-export interface TrackingSummary {
-  campaignId: string;
-  totalOpens: number;
-  uniqueOpens: number;
-  recipients: Record<string, RecipientTracking>;
-  updatedAt: string;
-}
-
-/** Result type for getTrackingData(). */
-export interface TrackingDataResult {
-  campaignId: string;
-  totalOpens: number;
-  uniqueOpens: number;
-  recipients: Array<{
-    recipientId: string;
-    openCount: number;
-    firstOpenedAt: string;
-    lastOpenedAt: string;
-  }>;
-}
+import {
+  summaryKey,
+  TRACKING_TTL_SECONDS,
+  type KVLike,
+  type TrackingSummary,
+} from './kv-schema.js';
 
 // ─── Constants ───────────────────────────────────────────────
 
@@ -65,7 +38,20 @@ export const TRANSPARENT_GIF = new Uint8Array([
   0x3b,                               // Trailer
 ]);
 
-const KV_TTL_SECONDS = 90 * 24 * 60 * 60; // 90 days = 7_776_000s
+// ─── Result Type ─────────────────────────────────────────────
+
+/** Result type for getTrackingData(). */
+export interface TrackingDataResult {
+  campaignId: string;
+  totalOpens: number;
+  uniqueOpens: number;
+  recipients: Array<{
+    recipientId: string;
+    openCount: number;
+    firstOpenedAt: string;
+    lastOpenedAt: string;
+  }>;
+}
 
 // ─── URL Parsing ─────────────────────────────────────────────
 
@@ -121,7 +107,7 @@ export async function handleTrackingRequest(
 
   const { campaignId, recipientId } = params;
   const now = new Date().toISOString();
-  const kvKey = `tracking:summary:${campaignId}`;
+  const kvKey = summaryKey(campaignId);
 
   // Read existing summary (or start fresh)
   // NOTE: This is a read-modify-write on KV. Two concurrent pixel hits may read
@@ -157,7 +143,7 @@ export async function handleTrackingRequest(
   summary.updatedAt = now;
 
   // Write back to KV with 90-day TTL
-  await kv.put(kvKey, JSON.stringify(summary), { expirationTtl: KV_TTL_SECONDS });
+  await kv.put(kvKey, JSON.stringify(summary), { expirationTtl: TRACKING_TTL_SECONDS });
 
   // Return the transparent GIF
   return new Response(TRANSPARENT_GIF, {
@@ -181,7 +167,7 @@ export async function getTrackingData(
   kv: KVLike
 ): Promise<TrackingDataResult> {
   const { campaignId } = opts;
-  const raw = await kv.get(`tracking:summary:${campaignId}`);
+  const raw = await kv.get(summaryKey(campaignId));
 
   if (!raw) {
     return {
