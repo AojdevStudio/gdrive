@@ -220,12 +220,12 @@ export async function updateDraft(
 
   // Build message options — exactOptionalPropertyTypes requires omitting undefined keys
   const msgOptions: Parameters<typeof buildEmailMessage>[0] = { to, subject, body };
-  if (cc) msgOptions.cc = cc;
-  if (bcc) msgOptions.bcc = bcc;
-  if (isHtml !== undefined) msgOptions.isHtml = isHtml;
-  if (from) msgOptions.from = from;
-  if (inReplyTo) msgOptions.inReplyTo = inReplyTo;
-  if (references) msgOptions.references = references;
+  if (cc) { msgOptions.cc = cc; }
+  if (bcc) { msgOptions.bcc = bcc; }
+  if (isHtml !== undefined) { msgOptions.isHtml = isHtml; }
+  if (from) { msgOptions.from = from; }
+  if (inReplyTo) { msgOptions.inReplyTo = inReplyTo; }
+  if (references) { msgOptions.references = references; }
 
   const emailMessage = buildEmailMessage(msgOptions);
 
