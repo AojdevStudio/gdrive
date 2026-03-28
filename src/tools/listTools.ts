@@ -261,6 +261,30 @@ export async function generateToolStructure(): Promise<ModuleStructure> {
         description: 'Send templated emails to multiple recipients with per-recipient variable substitution and configurable delay between sends (default 5000ms). Set dryRun: true to preview all rendered emails without sending. Returns { sent, failed, results?, previews? }.',
         example: 'const result = await gmail.sendBatch({ subject: "Hi {{name}}", template: "Hello {{name}}, {{note}}", recipients: [{ to: "alice@example.com", variables: { name: "Alice", note: "checking in" } }, { to: "bob@example.com", variables: { name: "Bob", note: "quick update" } }], delayMs: 5000 });\nconsole.log(`Sent: ${result.sent}, Failed: ${result.failed}`);',
       },
+      {
+        name: 'listDrafts',
+        signature: 'listDrafts({ maxResults?: number, pageToken?: string })',
+        description: 'List all drafts in the user\'s mailbox. Returns draft IDs, subjects, recipients, and snippets. Use getDraft() to retrieve the full content.',
+        example: 'const result = await gmail.listDrafts({ maxResults: 10 });\nresult.drafts.forEach(d => console.log(d.draftId, d.subject));',
+      },
+      {
+        name: 'getDraft',
+        signature: 'getDraft({ draftId: string })',
+        description: 'Get the full content of a specific draft by ID. Returns all headers and decoded body (to, subject, body, cc, bcc).',
+        example: 'const draft = await gmail.getDraft({ draftId: "r1234567890" });\nconsole.log(draft.subject, draft.body);',
+      },
+      {
+        name: 'updateDraft',
+        signature: 'updateDraft({ draftId: string, to: string[], subject: string, body: string, cc?: string[], bcc?: string[], isHtml?: boolean, from?: string })',
+        description: 'Update an existing draft in place. Replaces draft content without creating a new draft. The draft ID remains the same.',
+        example: 'const result = await gmail.updateDraft({ draftId: "r1234567890", to: ["recipient@example.com"], subject: "Updated subject", body: "Updated body." });\nconsole.log(result.message);',
+      },
+      {
+        name: 'deleteDraft',
+        signature: 'deleteDraft({ draftId: string })',
+        description: 'Permanently delete a draft by ID. This operation cannot be undone.',
+        example: 'const result = await gmail.deleteDraft({ draftId: "r1234567890" });\nconsole.log(result.message); // "Draft r1234567890 deleted"',
+      },
     ],
     calendar: [
       {

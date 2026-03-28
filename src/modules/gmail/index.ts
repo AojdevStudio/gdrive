@@ -7,6 +7,16 @@
 
 // Types
 export type {
+  // Draft management types
+  ListDraftsOptions,
+  ListDraftsResult,
+  DraftSummary,
+  GetDraftOptions,
+  GetDraftResult,
+  UpdateDraftOptions,
+  UpdateDraftResult,
+  DeleteDraftOptions,
+  DeleteDraftResult,
   // List types
   ListMessagesOptions,
   ListMessagesResult,
@@ -111,6 +121,9 @@ export { trashMessage, untrashMessage, deleteMessage, markAsRead, markAsUnread, 
 // Reply detection operations
 export { detectReplies } from './detect-replies.js';
 export type { DetectRepliesOptions, DetectRepliesResult } from './detect-replies.js';
+
+// Draft management operations
+export { listDrafts, getDraft, updateDraft, deleteDraft } from './drafts.js';
 
 // Template operations
 export { renderTemplate } from './templates.js';

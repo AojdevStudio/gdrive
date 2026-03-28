@@ -618,6 +618,123 @@ export interface ArchiveMessageResult {
 }
 
 // ============================================================================
+// Draft Management Operations
+// ============================================================================
+
+/**
+ * Options for listing drafts
+ */
+export interface ListDraftsOptions {
+  /** Maximum number of drafts to return (default: 10, max: 500) */
+  maxResults?: number;
+  /** Page token for pagination */
+  pageToken?: string;
+}
+
+/**
+ * Summary of a single draft
+ */
+export interface DraftSummary {
+  /** The draft ID */
+  draftId: string;
+  /** The underlying message ID */
+  messageId: string;
+  /** Draft subject line */
+  subject: string;
+  /** Draft recipient(s) */
+  to: string;
+  /** Short preview snippet */
+  snippet: string;
+}
+
+/**
+ * Result of listing drafts
+ */
+export interface ListDraftsResult {
+  drafts: DraftSummary[];
+  nextPageToken?: string | undefined;
+  resultSizeEstimate: number;
+}
+
+/**
+ * Options for getting a specific draft
+ */
+export interface GetDraftOptions {
+  /** The draft ID */
+  draftId: string;
+}
+
+/**
+ * Full content of a draft
+ */
+export interface GetDraftResult {
+  draftId: string;
+  messageId: string;
+  threadId: string;
+  subject: string;
+  from: string;
+  to: string;
+  cc: string;
+  bcc: string;
+  date: string;
+  body: string;
+  isHtml: boolean;
+  snippet: string;
+}
+
+/**
+ * Options for updating an existing draft
+ */
+export interface UpdateDraftOptions {
+  /** The draft ID to update */
+  draftId: string;
+  /** New recipient email addresses */
+  to: string[];
+  /** New CC recipients */
+  cc?: string[];
+  /** New BCC recipients */
+  bcc?: string[];
+  /** New email subject */
+  subject: string;
+  /** New email body */
+  body: string;
+  /** Whether body is HTML (default: false) */
+  isHtml?: boolean;
+  /** Send from a different email address (send-as alias) */
+  from?: string;
+  /** Message ID to reply to (for threading) */
+  inReplyTo?: string;
+  /** Thread references (for threading) */
+  references?: string;
+}
+
+/**
+ * Result of updating a draft
+ */
+export interface UpdateDraftResult {
+  draftId: string;
+  messageId: string;
+  threadId: string;
+  message: string;
+}
+
+/**
+ * Options for deleting a draft
+ */
+export interface DeleteDraftOptions {
+  /** The draft ID to delete */
+  draftId: string;
+}
+
+/**
+ * Result of deleting a draft
+ */
+export interface DeleteDraftResult {
+  draftId: string;
+  message: string;
+}
+
+// ============================================================================
 // Template & Outreach Operations
 // ============================================================================
 
