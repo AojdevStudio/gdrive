@@ -249,6 +249,18 @@ export async function generateToolStructure(): Promise<ModuleStructure> {
         description: 'Preview a rendered templated email without sending. Returns rendered subject, body, and recipients. Pure function — no API calls.',
         example: 'const preview = gmail.dryRun({ to: ["amy@example.com"], subject: "{{firstName}}, quick follow-up", template: "Hey {{firstName}},\\n\\n{{note}}", variables: { firstName: "Amy", note: "checking in" } });\nconsole.log(preview.subject); // "Amy, quick follow-up"\nconsole.log(preview.wouldSend); // false',
       },
+      {
+        name: 'sendFromTemplate',
+        signature: 'sendFromTemplate({ to: string[], subject: string, template: string, variables: Record<string, string>, cc?: string[], bcc?: string[], isHtml?: boolean, from?: string })',
+        description: 'Render a templated email ({{variable}} substitution in subject and body) and send it. Returns messageId and threadId.',
+        example: 'const result = await gmail.sendFromTemplate({ to: ["amy@example.com"], subject: "{{firstName}}, quick follow-up", template: "Hey {{firstName}},\\n\\n{{personalNote}}", variables: { firstName: "Amy", personalNote: "Great chat!" } });\nconsole.log(result.messageId);',
+      },
+      {
+        name: 'sendBatch',
+        signature: 'sendBatch({ subject: string, template: string, recipients: Array<{ to: string, variables: Record<string, string>, cc?: string[], bcc?: string[] }>, delayMs?: number, isHtml?: boolean, dryRun?: boolean, from?: string })',
+        description: 'Send templated emails to multiple recipients with per-recipient variable substitution and configurable delay between sends (default 5000ms). Set dryRun: true to preview all rendered emails without sending. Returns { sent, failed, results?, previews? }.',
+        example: 'const result = await gmail.sendBatch({ subject: "Hi {{name}}", template: "Hello {{name}}, {{note}}", recipients: [{ to: "alice@example.com", variables: { name: "Alice", note: "checking in" } }, { to: "bob@example.com", variables: { name: "Bob", note: "quick update" } }], delayMs: 5000 });\nconsole.log(`Sent: ${result.sent}, Failed: ${result.failed}`);',
+      },
     ],
     calendar: [
       {
