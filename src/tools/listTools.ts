@@ -262,6 +262,12 @@ export async function generateToolStructure(): Promise<ModuleStructure> {
         example: 'const result = await gmail.sendBatch({ subject: "Hi {{name}}", template: "Hello {{name}}, {{note}}", recipients: [{ to: "alice@example.com", variables: { name: "Alice", note: "checking in" } }, { to: "bob@example.com", variables: { name: "Bob", note: "quick update" } }], delayMs: 5000 });\nconsole.log(`Sent: ${result.sent}, Failed: ${result.failed}`);',
       },
       {
+        name: 'detectReplies',
+        signature: 'detectReplies({ threadIds: string[] })',
+        description: 'Check an array of Gmail thread IDs for replies from external participants. Filters out messages sent by the authenticated user to identify genuine inbound replies. Useful for tracking campaign response rates.',
+        example: 'const { threads } = await gmail.detectReplies({ threadIds: ["thread1", "thread2"] });\nconst replied = threads.filter(t => t.hasReply);\nconsole.log(`${replied.length} of ${threads.length} threads have replies`);',
+      },
+      {
         name: 'listDrafts',
         signature: 'listDrafts({ maxResults?: number, pageToken?: string })',
         description: 'List all drafts in the user\'s mailbox. Returns draft IDs, subjects, recipients, and snippets. Use getDraft() to retrieve the full content.',
