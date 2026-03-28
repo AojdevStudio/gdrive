@@ -13,6 +13,7 @@ const SheetsOperationEnum = z.enum([
   'append',
   'freeze',
   'setColumnWidth',
+  'updateRecords',
 ]);
 
 const SheetsBaseSchema = z.object({
@@ -181,6 +182,21 @@ export const SheetsSetColumnWidthSchema = SheetsBaseSchema.extend({
   columns: z.array(ColumnWidthSchema).min(1),
 });
 
+const UpdateEntrySchema = z
+  .object({
+    key: z.string().min(1),
+    values: z.record(z.string(), z.unknown()),
+  })
+  .strict();
+
+export const SheetsUpdateRecordsSchema = SheetsBaseSchema.extend({
+  operation: z.literal('updateRecords'),
+  range: z.string().min(1, 'Range is required'),
+  keyColumn: z.string().min(1, 'keyColumn is required'),
+  updates: z.array(UpdateEntrySchema).min(1, 'At least one update entry is required'),
+  sheetName: z.string().min(1).optional(),
+});
+
 export const SheetsToolSchema = z.discriminatedUnion('operation', [
   SheetsListSchema,
   SheetsReadSchema,
@@ -194,6 +210,7 @@ export const SheetsToolSchema = z.discriminatedUnion('operation', [
   SheetsAppendSchema,
   SheetsFreezeSchema,
   SheetsSetColumnWidthSchema,
+  SheetsUpdateRecordsSchema,
 ])
   .refine(
     (data) => data.operation !== 'rename' || data.sheetName !== undefined || data.sheetId !== undefined,

@@ -277,6 +277,8 @@ export async function handleSheetsTool(
       return handleFreezeRowsColumns(validated, context);
     case 'setColumnWidth':
       return handleSetColumnWidth(validated, context);
+    case 'updateRecords':
+      return handleUpdateRecords(validated, context);
     default:
       throw new Error(`Unsupported sheets operation: ${(validated as SheetsToolInput).operation}`);
   }
@@ -294,6 +296,7 @@ type ConditionalFormatArgs = Extract<SheetsToolInput, { operation: 'conditionalF
 type AppendArgs = Extract<SheetsToolInput, { operation: 'append' }>;
 type FreezeArgs = Extract<SheetsToolInput, { operation: 'freeze' }>;
 type SetColumnWidthArgs = Extract<SheetsToolInput, { operation: 'setColumnWidth' }>;
+type UpdateRecordsArgs = Extract<SheetsToolInput, { operation: 'updateRecords' }>;
 
 async function handleListSheets(args: ListArgs, context: SheetsHandlerContext) {
   const response = await context.sheets.spreadsheets.get({
@@ -944,5 +947,107 @@ async function handleSetColumnWidth(args: SetColumnWidthArgs, context: SheetsHan
       type: 'text',
       text: summary,
     }],
+  };
+}
+
+/**
+ * Convert a 0-based column index to A1 notation letter(s).
+ * 0 → A, 1 → B, 25 → Z, 26 → AA, etc.
+ */
+function columnIndexToLetter(col: number): string {
+  let letter = '';
+  let n = col;
+  while (n >= 0) {
+    letter = String.fromCharCode((n % 26) + 65) + letter;
+    n = Math.floor(n / 26) - 1;
+  }
+  return letter;
+}
+
+async function handleUpdateRecords(args: UpdateRecordsArgs, context: SheetsHandlerContext) {
+  const { spreadsheetId, range, keyColumn, updates, sheetName } = args;
+
+  // Build resolved range
+  let resolvedRange = range;
+  if (sheetName && !range.includes('!')) {
+    resolvedRange = `${sheetName}!${range}`;
+  }
+
+  // Read existing data
+  const response = await context.sheets.spreadsheets.values.get({
+    spreadsheetId,
+    range: resolvedRange,
+  });
+
+  const values = (response.data.values ?? []) as unknown[][];
+  if (values.length === 0) {
+    throw new Error('No data found in the specified range');
+  }
+
+  const headers = (values[0] as string[]).map((h) => String(h));
+  const keyColIndex = headers.indexOf(keyColumn);
+  if (keyColIndex === -1) {
+    throw new Error(`Key column '${keyColumn}' not found in headers: ${headers.join(', ')}`);
+  }
+
+  // Extract sheet name prefix for cell references
+  const sheetPrefix = resolvedRange.includes('!') ? resolvedRange.split('!')[0] + '!' : '';
+
+  let updated = 0;
+  const notFound: string[] = [];
+
+  for (const update of updates) {
+    const rowIndex = values.findIndex(
+      (row, i) => i > 0 && String((row as unknown[])[keyColIndex]) === update.key
+    );
+
+    if (rowIndex === -1) {
+      notFound.push(update.key);
+      continue;
+    }
+
+    for (const [colName, value] of Object.entries(update.values)) {
+      const colIndex = headers.indexOf(colName);
+      if (colIndex === -1) {
+        continue; // skip unknown columns
+      }
+
+      const cellRef = `${sheetPrefix}${columnIndexToLetter(colIndex)}${rowIndex + 1}`;
+
+      await context.sheets.spreadsheets.values.update({
+        spreadsheetId,
+        range: cellRef,
+        valueInputOption: 'USER_ENTERED',
+        requestBody: { values: [[value]] },
+      });
+    }
+
+    updated++;
+  }
+
+  await context.cacheManager.invalidate(`sheet:${spreadsheetId}:*`);
+  context.performanceMonitor.track('updateRecords', Date.now() - context.startTime);
+  context.logger.info('Records updated by key column', {
+    spreadsheetId,
+    keyColumn,
+    updated,
+    notFound: notFound.length,
+  });
+
+  const notFoundMsg =
+    notFound.length > 0 ? ` Keys not found: ${notFound.join(', ')}.` : '';
+
+  return {
+    content: [
+      {
+        type: 'text',
+        text: JSON.stringify({
+          updated,
+          notFound,
+          errors: [],
+          message: `Updated ${updated} record${updated === 1 ? '' : 's'}.${notFoundMsg}`,
+        }),
+      },
+    ],
   };
 }
