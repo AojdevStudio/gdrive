@@ -4,6 +4,8 @@
 
 MCP server for Google Workspace integration (Drive, Sheets, Forms, Docs, Gmail, Calendar). Version 3.3.0.
 
+**Linear:** Team "Google Drive" (ID: `9fd7c68d-cf3f-4ac0-a0d7-42605c079da1`) — issues prefixed `GDRIVE-`
+
 - 6 operation-based tools with 47 total operations
 - Redis caching (optional, graceful fallback)
 - Token encryption with key rotation
