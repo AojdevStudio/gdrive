@@ -243,6 +243,12 @@ export async function generateToolStructure(): Promise<ModuleStructure> {
         description: 'Add or remove labels from a message',
         example: 'gmail.modifyLabels({ id: "18c123abc", removeLabelIds: ["UNREAD", "INBOX"] })',
       },
+      {
+        name: 'dryRun',
+        signature: 'dryRun({ to: string[], subject: string, template: string, variables: Record<string, string>, isHtml?: boolean })',
+        description: 'Preview a rendered templated email without sending. Returns rendered subject, body, and recipients. Pure function — no API calls.',
+        example: 'const preview = gmail.dryRun({ to: ["amy@example.com"], subject: "{{firstName}}, quick follow-up", template: "Hey {{firstName}},\\n\\n{{note}}", variables: { firstName: "Amy", note: "checking in" } });\nconsole.log(preview.subject); // "Amy, quick follow-up"\nconsole.log(preview.wouldSend); // false',
+      },
     ],
     calendar: [
       {
