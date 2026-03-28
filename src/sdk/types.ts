@@ -99,6 +99,10 @@ export interface SDKRuntime {
     sendBatch(options: unknown): Promise<unknown>;
     detectReplies(options: unknown): Promise<unknown>;
     getTrackingData(options: unknown): Promise<unknown>;
+    listDrafts(options: unknown): Promise<unknown>;
+    getDraft(options: unknown): Promise<unknown>;
+    updateDraft(options: unknown): Promise<unknown>;
+    deleteDraft(options: unknown): Promise<unknown>;
   };
   calendar: {
     listCalendars(options: unknown): Promise<unknown>;

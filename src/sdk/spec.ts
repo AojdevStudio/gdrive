@@ -697,6 +697,52 @@ export const SDK_SPEC: SDKSpec = {
       },
       returns: "{ campaignId, totalOpens, uniqueOpens, recipients: Array<{ recipientId, openCount, firstOpenedAt, lastOpenedAt }> }",
     },
+    listDrafts: {
+      signature: "listDrafts(options?: { maxResults?: number, pageToken?: string }): Promise<{ drafts: DraftSummary[], nextPageToken?, resultSizeEstimate: number }>",
+      description: "List all drafts in the user's mailbox. Returns draft IDs, subjects, recipients, and snippets. Use getDraft() to retrieve the full content of a specific draft.",
+      example: "const result = await sdk.gmail.listDrafts({ maxResults: 10 });\nresult.drafts.forEach(d => console.log(d.draftId, d.subject));",
+      params: {
+        maxResults: "number (optional, default 10, max 500) — maximum drafts to return",
+        pageToken: "string (optional) — pagination token from a previous listDrafts call",
+      },
+      returns: "{ drafts: DraftSummary[], nextPageToken?, resultSizeEstimate } — DraftSummary = { draftId, messageId, subject, to, snippet }",
+    },
+    getDraft: {
+      signature: "getDraft(options: { draftId: string }): Promise<{ draftId, messageId, threadId, subject, from, to, cc, bcc, date, body, isHtml, snippet }>",
+      description: "Get the full content of a specific draft by ID. Returns all headers and decoded body.",
+      example: "const draft = await sdk.gmail.getDraft({ draftId: 'r1234567890' });\nconsole.log(draft.subject, draft.body);",
+      params: {
+        draftId: "string (required) — draft ID from listDrafts() or createDraft()",
+      },
+      returns: "{ draftId, messageId, threadId, subject, from, to, cc, bcc, date, body: string, isHtml: boolean, snippet }",
+    },
+    updateDraft: {
+      signature: "updateDraft(options: { draftId: string, to: string[], subject: string, body: string, cc?: string[], bcc?: string[], isHtml?: boolean, from?: string, inReplyTo?: string, references?: string }): Promise<{ draftId, messageId, threadId, message }>",
+      description: "Update an existing draft in place. Replaces the draft content without creating a new draft. The draft ID remains the same.",
+      example: "const result = await sdk.gmail.updateDraft({\n  draftId: 'r1234567890',\n  to: ['recipient@example.com'],\n  subject: 'Updated subject',\n  body: 'Updated body content.',\n});\nconsole.log(result.message); // 'Draft updated successfully'",
+      params: {
+        draftId: "string (required) — draft ID to update",
+        to: "string[] (required) — new recipient email addresses",
+        subject: "string (required) — new email subject",
+        body: "string (required) — new email body",
+        cc: "string[] (optional) — new CC recipients",
+        bcc: "string[] (optional) — new BCC recipients",
+        isHtml: "boolean (optional, default false) — whether body is HTML",
+        from: "string (optional) — send-as alias email address",
+        inReplyTo: "string (optional) — message ID for threading",
+        references: "string (optional) — thread references for threading",
+      },
+      returns: "{ draftId, messageId, threadId, message: string }",
+    },
+    deleteDraft: {
+      signature: "deleteDraft(options: { draftId: string }): Promise<{ draftId, message }>",
+      description: "Permanently delete a draft by ID. This operation cannot be undone.",
+      example: "const result = await sdk.gmail.deleteDraft({ draftId: 'r1234567890' });\nconsole.log(result.message); // 'Draft r1234567890 deleted'",
+      params: {
+        draftId: "string (required) — draft ID to delete",
+      },
+      returns: "{ draftId, message: string }",
+    },
   },
 
   // ─────────────────────────────────────────

@@ -253,6 +253,22 @@ export function createSDKRuntime(
         const { detectReplies } = await import('../modules/gmail/index.js');
         return detectReplies(opts as Parameters<typeof detectReplies>[0], context);
       }),
+      listDrafts: limiter.wrap('gmail', async (opts: unknown) => {
+        const { listDrafts } = await import('../modules/gmail/index.js');
+        return listDrafts(opts as Parameters<typeof listDrafts>[0], context);
+      }),
+      getDraft: limiter.wrap('gmail', async (opts: unknown) => {
+        const { getDraft } = await import('../modules/gmail/index.js');
+        return getDraft(opts as Parameters<typeof getDraft>[0], context);
+      }),
+      updateDraft: limiter.wrap('gmail', async (opts: unknown) => {
+        const { updateDraft } = await import('../modules/gmail/index.js');
+        return updateDraft(opts as Parameters<typeof updateDraft>[0], context);
+      }),
+      deleteDraft: limiter.wrap('gmail', async (opts: unknown) => {
+        const { deleteDraft } = await import('../modules/gmail/index.js');
+        return deleteDraft(opts as Parameters<typeof deleteDraft>[0], context);
+      }),
       getTrackingData: limiter.wrap('gmail', async (opts: unknown) => {
         if (!context.kv) {
           throw new Error(
