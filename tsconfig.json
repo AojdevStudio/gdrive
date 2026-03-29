@@ -19,7 +19,8 @@
     "noImplicitReturns": true,
     "noFallthroughCasesInSwitch": true,
     "noUncheckedIndexedAccess": true,
-    "exactOptionalPropertyTypes": true
+    "exactOptionalPropertyTypes": true,
+    "ignoreDeprecations": "5.0"
   },
   "include": [
     "./**/*.ts"
