@@ -14,14 +14,46 @@
  */
 
 import { runStdioServer, authenticateAndSave } from './src/server/transports/stdio.js';
+import { runHttpServer } from './src/server/transports/http.js';
 import { performHealthCheck, HealthStatus } from './src/health-check.js';
 
 const cmd = process.argv[2];
+
+function readFlag(name: string): string | undefined {
+  const index = process.argv.indexOf(name);
+  if (index === -1) {
+    return undefined;
+  }
+  return process.argv[index + 1];
+}
+
+function readHttpPort(): number | undefined {
+  const raw = readFlag('--port');
+  if (!raw) {
+    return undefined;
+  }
+
+  const port = Number(raw);
+  if (!Number.isInteger(port) || port <= 0 || port > 65535) {
+    throw new Error(`Invalid --port value: ${raw}`);
+  }
+  return port;
+}
 
 switch (cmd) {
   case 'auth':
     authenticateAndSave().catch((err) => {
       console.error('Auth flow failed:', err);
+      process.exit(1);
+    });
+    break;
+
+  case 'http':
+    runHttpServer({
+      host: readFlag('--host'),
+      port: readHttpPort(),
+    }).catch((err) => {
+      console.error('HTTP server startup failed:', err);
       process.exit(1);
     });
     break;
