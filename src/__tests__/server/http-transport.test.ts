@@ -101,6 +101,44 @@ describe('createHttpRequestHandler', () => {
     });
   });
 
+  it('returns protected resource metadata', async () => {
+    const handler = createHttpRequestHandler({
+      bearerToken: 'secret-token',
+      createServer: makeCreateServer(),
+    });
+
+    await withServer(handler, async (server) => {
+      const response = await request(server, '/.well-known/oauth-protected-resource');
+
+      expect(response.status).toBe(200);
+      expect(JSON.parse(response.body)).toEqual({
+        resource: expect.stringContaining('/mcp'),
+        authorization_servers: [],
+        auth_mode: 'static_bearer',
+        mcp_endpoint: '/mcp',
+        note: 'Static bearer auth is currently required. OAuth authorization server metadata is not implemented.',
+      });
+    });
+  });
+
+  it('returns a clear OAuth authorization server metadata error', async () => {
+    const handler = createHttpRequestHandler({
+      bearerToken: 'secret-token',
+      createServer: makeCreateServer(),
+    });
+
+    await withServer(handler, async (server) => {
+      const response = await request(server, '/.well-known/oauth-authorization-server');
+
+      expect(response.status).toBe(501);
+      expect(JSON.parse(response.body)).toEqual({
+        error: 'OAuth authorization server is not implemented',
+        auth_mode: 'static_bearer',
+        mcp_endpoint: '/mcp',
+      });
+    });
+  });
+
   it('returns 404 for non-MCP paths', async () => {
     const handler = createHttpRequestHandler({
       bearerToken: 'secret-token',

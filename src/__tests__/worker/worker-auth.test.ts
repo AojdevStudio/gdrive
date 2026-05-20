@@ -1,5 +1,5 @@
 import { describe, it, expect } from '@jest/globals';
-import { validateWorkerRequestAuth, type Env } from '../../../worker.js';
+import worker, { validateWorkerRequestAuth, type Env } from '../../../worker.js';
 
 function makeEnv(overrides: Partial<Env> = {}): Env {
   return {
@@ -74,5 +74,39 @@ describe('validateWorkerRequestAuth', () => {
     );
 
     expect(response).toBeNull();
+  });
+});
+
+describe('worker metadata endpoints', () => {
+  it('returns protected resource metadata', async () => {
+    const response = await worker.fetch(
+      new Request('https://example.com/.well-known/oauth-protected-resource', { method: 'GET' }),
+      makeEnv(),
+      {}
+    );
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({
+      resource: 'https://example.com/mcp',
+      authorization_servers: [],
+      auth_mode: 'static_bearer',
+      mcp_endpoint: '/mcp',
+      note: 'Static bearer auth is currently required. OAuth authorization server metadata is not implemented.',
+    });
+  });
+
+  it('returns a clear OAuth authorization server metadata error', async () => {
+    const response = await worker.fetch(
+      new Request('https://example.com/.well-known/oauth-authorization-server', { method: 'GET' }),
+      makeEnv(),
+      {}
+    );
+
+    expect(response.status).toBe(501);
+    expect(await response.json()).toEqual({
+      error: 'OAuth authorization server is not implemented',
+      auth_mode: 'static_bearer',
+      mcp_endpoint: '/mcp',
+    });
   });
 });

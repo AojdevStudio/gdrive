@@ -6,6 +6,10 @@ import { AuthManager, AuthState } from '../../auth/AuthManager.js';
 import { createCacheManager, createLogger, createPerformanceMonitor } from '../bootstrap.js';
 import { createConfiguredServer } from '../factory.js';
 import { jsonError, validateBearerRequest } from '../http-auth.js';
+import {
+  oauthAuthorizationServerNotImplemented,
+  protectedResourceMetadata,
+} from '../http-metadata.js';
 import { NodeSandbox } from '../../sdk/sandbox-node.js';
 import { resolveOAuthPath } from './stdio.js';
 
@@ -87,6 +91,16 @@ export function createHttpRequestHandler(
 
     if (req.method === 'GET' && url.pathname === '/') {
       writeText(res, 200, 'gdrive-mcp HTTP transport v4.0.0-alpha\nPOST /mcp to connect.');
+      return;
+    }
+
+    if (req.method === 'GET' && url.pathname === '/.well-known/oauth-protected-resource') {
+      writeJson(res, 200, protectedResourceMetadata(requestUrl(req)));
+      return;
+    }
+
+    if (req.method === 'GET' && url.pathname === '/.well-known/oauth-authorization-server') {
+      writeJson(res, 501, oauthAuthorizationServerNotImplemented());
       return;
     }
 

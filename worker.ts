@@ -22,6 +22,11 @@ import { WorkersKVCache, NullCache } from './src/storage/kv-store.js';
 import { getValidAccessToken, type KVNamespace } from './src/auth/workers-auth.js';
 import { createConfiguredServer } from './src/server/factory.js';
 import { jsonError, validateBearerRequest } from './src/server/http-auth.js';
+import {
+  jsonMetadata,
+  oauthAuthorizationServerNotImplemented,
+  protectedResourceMetadata,
+} from './src/server/http-metadata.js';
 
 export interface Env {
   GDRIVE_KV: KVNamespace;
@@ -126,6 +131,14 @@ export default {
     if (request.method === 'GET' && url.pathname.startsWith('/track/')) {
       const { handleTrackingRequest } = await import('./src/server/tracking.js');
       return handleTrackingRequest(request, env.GDRIVE_KV);
+    }
+
+    if (request.method === 'GET' && url.pathname === '/.well-known/oauth-protected-resource') {
+      return jsonMetadata(protectedResourceMetadata(request.url));
+    }
+
+    if (request.method === 'GET' && url.pathname === '/.well-known/oauth-authorization-server') {
+      return jsonMetadata(oauthAuthorizationServerNotImplemented(), 501);
     }
 
     // Only handle POST requests to /mcp (or root)
