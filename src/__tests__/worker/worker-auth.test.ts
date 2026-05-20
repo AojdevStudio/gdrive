@@ -26,7 +26,7 @@ describe('validateWorkerRequestAuth', () => {
 
     expect(response?.status).toBe(500);
     const body = await response?.json();
-    expect(body.error).toBe('Worker misconfiguration');
+    expect(body.error).toBe('Server misconfiguration');
   });
 
   it('returns 401 for missing Authorization header', async () => {
@@ -35,6 +35,7 @@ describe('validateWorkerRequestAuth', () => {
     const response = validateWorkerRequestAuth(request, makeEnv());
 
     expect(response?.status).toBe(401);
+    expect(response?.headers.get('www-authenticate')).toBe('Bearer');
     const body = await response?.json();
     expect(body.error).toBe('Unauthorized');
   });
