@@ -21,6 +21,7 @@ export interface HttpServerOptions {
 export interface HttpRequestHandlerConfig {
   bearerToken?: string | undefined;
   allowedOrigins?: string | undefined;
+  authorizationServerUrl?: string | undefined;
   createServer: () => {
     connect(transport: unknown): Promise<void>;
   };
@@ -95,7 +96,13 @@ export function createHttpRequestHandler(
     }
 
     if (req.method === 'GET' && url.pathname === '/.well-known/oauth-protected-resource') {
-      writeJson(res, 200, protectedResourceMetadata(requestUrl(req)));
+      writeJson(
+        res,
+        200,
+        protectedResourceMetadata(requestUrl(req), {
+          authorizationServerUrl: config.authorizationServerUrl,
+        })
+      );
       return;
     }
 
@@ -197,6 +204,7 @@ export async function runHttpServer(options: HttpServerOptions = {}): Promise<vo
   const handler = createHttpRequestHandler({
     bearerToken: process.env.MCP_BEARER_TOKEN,
     allowedOrigins: process.env.MCP_ALLOWED_ORIGINS,
+    authorizationServerUrl: process.env.MCP_AUTHORIZATION_SERVER_URL,
     createServer: () =>
       createConfiguredServer({
         logger,

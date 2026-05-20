@@ -121,6 +121,27 @@ describe('createHttpRequestHandler', () => {
     });
   });
 
+  it('advertises external authorization server metadata when configured', async () => {
+    const handler = createHttpRequestHandler({
+      bearerToken: 'secret-token',
+      authorizationServerUrl: 'https://auth.example.com',
+      createServer: makeCreateServer(),
+    });
+
+    await withServer(handler, async (server) => {
+      const response = await request(server, '/.well-known/oauth-protected-resource');
+
+      expect(response.status).toBe(200);
+      expect(JSON.parse(response.body)).toEqual({
+        resource: expect.stringContaining('/mcp'),
+        authorization_servers: ['https://auth.example.com'],
+        auth_mode: 'external_oauth_metadata',
+        mcp_endpoint: '/mcp',
+        note: 'External OAuth authorization server metadata is advertised, but this server still validates static bearer auth only.',
+      });
+    });
+  });
+
   it('returns a clear OAuth authorization server metadata error', async () => {
     const handler = createHttpRequestHandler({
       bearerToken: 'secret-token',

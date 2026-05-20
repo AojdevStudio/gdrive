@@ -451,24 +451,29 @@ git commit -m "docs: correct Codex MCP verification steps"
 
 ---
 
-## Task 7: Optional Phase 2 OAuth Compatibility
+## Task 7: Metadata-Only External OAuth Compatibility
 
-Only start this after static bearer auth works from Codex.
+Static bearer auth remains the supported MCP client-to-server auth mode. This task adds only the metadata extension point for a future external authorization server.
 
 **Files:**
-- Create: `src/server/oauth-metadata.ts`
-- Create: `src/server/transports/oauth.ts`
-- Create: `src/__tests__/server/oauth-metadata.test.ts`
+- Modify: `src/server/http-metadata.ts`
 - Modify: `src/server/transports/http.ts`
 - Modify: `worker.ts`
+- Modify: `src/__tests__/server/http-transport.test.ts`
+- Modify: `src/__tests__/worker/worker-auth.test.ts`
+- Create: `CONTEXT.md`
+- Create: `docs/adr/0001-mcp-client-auth-boundary.md`
 
 **Plan:**
-- Decide whether this repo should own an OAuth authorization server or only advertise an external one.
-- Implement real RFC 8414 authorization server metadata only if token, authorize, and client behavior are actually implemented.
-- Support MCP protected resource metadata.
-- Add `codex mcp login gdrive` verification only when metadata and flow are real.
+- Do not make this repo an OAuth authorization server.
+- Keep Google OAuth as server-to-Google authorization.
+- Keep static bearer auth as MCP client-to-server authentication.
+- Add `MCP_AUTHORIZATION_SERVER_URL` as metadata-only config.
+- When configured, protected-resource metadata includes the external authorization server URL.
+- Do not accept or validate external OAuth bearer tokens in this PR.
+- Document that `codex mcp login gdrive` requires a real external/dedicated authorization server.
 
-**Non-negotiable:** Do not add fake OAuth metadata just to make clients stop saying `Auth unsupported`; that creates a worse failure mode.
+**Non-negotiable:** Do not add fake OAuth metadata just to make clients stop saying `Auth unsupported`; that creates a worse failure mode. Advertising an external server and validating its tokens are separate commitments.
 
 ---
 
@@ -481,4 +486,3 @@ Only start this after static bearer auth works from Codex.
 - Unauthenticated requests fail clearly.
 - Authenticated Codex configuration can list `search` and `execute` in a fresh session.
 - Docs explain both local Node HTTP and deployed Worker paths.
-

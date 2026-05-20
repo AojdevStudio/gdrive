@@ -95,6 +95,23 @@ describe('worker metadata endpoints', () => {
     });
   });
 
+  it('advertises external authorization server metadata when configured', async () => {
+    const response = await worker.fetch(
+      new Request('https://example.com/.well-known/oauth-protected-resource', { method: 'GET' }),
+      makeEnv({ MCP_AUTHORIZATION_SERVER_URL: 'https://auth.example.com' }),
+      {}
+    );
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({
+      resource: 'https://example.com/mcp',
+      authorization_servers: ['https://auth.example.com'],
+      auth_mode: 'external_oauth_metadata',
+      mcp_endpoint: '/mcp',
+      note: 'External OAuth authorization server metadata is advertised, but this server still validates static bearer auth only.',
+    });
+  });
+
   it('returns a clear OAuth authorization server metadata error', async () => {
     const response = await worker.fetch(
       new Request('https://example.com/.well-known/oauth-authorization-server', { method: 'GET' }),

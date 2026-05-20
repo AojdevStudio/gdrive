@@ -610,22 +610,29 @@ describe('Cryptographic Security Tests', () => {
       
       // Perform same operation with different keys multiple times
       const measurements: number[] = [];
+      const measureBatch = (keyToUse: Buffer): number => {
+        const startTime = process.hrtime.bigint();
+
+        for (let i = 0; i < 100; i++) {
+          const iv = crypto.randomBytes(16);
+          const cipher = crypto.createCipheriv('aes-256-gcm', keyToUse, iv);
+          cipher.update(testData, 'utf8', 'hex');
+          cipher.final('hex');
+          iv.fill(0);
+        }
+
+        const endTime = process.hrtime.bigint();
+        return Number(endTime - startTime);
+      };
+
+      // Warm up crypto/JIT paths so the first measured iteration does not dominate
+      // variance on slower or busy development machines.
+      measureBatch(key1);
+      measureBatch(key2);
       
       for (let i = 0; i < 10; i++) {
-        const startTime = process.hrtime.bigint();
-        
-        // Simulate key lookup operation
         const keyToUse = i % 2 === 0 ? key1 : key2;
-        const iv = crypto.randomBytes(16);
-        const cipher = crypto.createCipheriv('aes-256-gcm', keyToUse, iv);
-        cipher.update(testData, 'utf8', 'hex');
-        cipher.final('hex');
-        
-        const endTime = process.hrtime.bigint();
-        measurements.push(Number(endTime - startTime));
-        
-        // Clean up IV
-        iv.fill(0);
+        measurements.push(measureBatch(keyToUse));
       }
       
       // Calculate coefficient of variation (should be low for consistent timing)

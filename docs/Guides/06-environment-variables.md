@@ -125,7 +125,14 @@ These are only needed when using HTTP transport / remote deployment modes.
 
 ## `MCP_BEARER_TOKEN`
 
-- optional bearer token required by HTTP endpoint
+- bearer token required by HTTP endpoint
+- Codex should be configured with `--bearer-token-env-var` pointing to an env var with the same value
+
+## `MCP_AUTHORIZATION_SERVER_URL`
+
+- optional external OAuth authorization server URL for MCP protected-resource metadata
+- metadata-only; this server still validates static bearer auth
+- do not set this to a Google OAuth URL
 
 ## Cloudflare Variables (Optional)
 
@@ -204,4 +211,3 @@ node ./dist/index.js auth
 - keep `.env` minimal
 - use `.env.example` as baseline whenever updating config
 - avoid adding undocumented variables unless you also implement runtime support
-

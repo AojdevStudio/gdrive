@@ -31,6 +31,7 @@ npm run lint           # ESLint
 # Auth & Server
 node ./dist/index.js auth   # OAuth flow (requires gcp-oauth.keys.json)
 node ./dist/index.js        # Start MCP server (stdio transport)
+node ./dist/index.js http --host 127.0.0.1 --port 8788  # Start Streamable HTTP server for Codex
 
 # Changelog
 ./scripts/changelog/update-changelog.py --auto
@@ -100,6 +101,8 @@ See `.env.example` for full reference. Key variables:
 | `LOG_LEVEL` | No | Winston log level (default: info) |
 | `REDIS_URL` | No | Redis connection (default: redis://localhost:6379) |
 | `GDRIVE_TOKEN_HEALTH_CHECK` | No | Enable token health checks (default: true) |
+| `MCP_BEARER_TOKEN` | HTTP only | Static bearer token for MCP client-to-server auth |
+| `MCP_AUTHORIZATION_SERVER_URL` | No | Metadata-only external OAuth authorization server URL for MCP clients |
 
 ## Docker
 
@@ -140,6 +143,7 @@ Use conventional commits: `feat:`, `fix:`, `docs:`, `test:`, `chore:`.
 - **`isolated-vm` build deps** — Requires `python3`, `make`, `g++` at npm install time (handled in Dockerfile)
 - **Server version stale** — `index.ts:388` hardcodes version string; must be manually updated alongside `package.json`
 - **Redis optional** — Server degrades gracefully without Redis. No errors, just no caching
+- **Codex auth boundary** — Codex-to-MCP auth uses `MCP_BEARER_TOKEN`; Google OAuth remains server-to-Google auth. Do not make this server an OAuth authorization server.
 - **Calendar contacts** — Set `PAI_CONTACTS_PATH` to resolve names like "Mary" to email addresses; without it, all attendees must be email addresses
 - **ES modules** — Project uses ES2022 modules. Imports need `.js` extensions in TypeScript for Node resolution
 - **Test files excluded from Docker** — `.dockerignore` and `tsconfig.json` both exclude `__tests__/` from production builds

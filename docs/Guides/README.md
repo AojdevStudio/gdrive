@@ -20,6 +20,7 @@ For production deployment with all features:
 4. **[Redis Configuration](./04-redis-configuration.md)**
 5. **[Claude Desktop Integration](./05-claude-desktop-integration.md)**
 6. **[Environment Variables Setup](./06-environment-variables.md)**
+7. **[Codex MCP Integration](./08-codex-mcp.md)**
 
 ## 📖 Guide Details
 
@@ -105,6 +106,19 @@ For production deployment with all features:
 **Time required:** 45-60 minutes
 **Difficulty:** Intermediate to Advanced
 
+---
+
+### [08 - Codex MCP Integration](./08-codex-mcp.md)
+**What you'll accomplish:**
+- Streamable HTTP server startup
+- Codex MCP registration with bearer auth
+- MCP client auth vs Google OAuth boundary
+- Codex troubleshooting and verification
+
+**Prerequisites:** [Authentication Flow](./02-authentication-flow.md) completed, Codex CLI installed
+**Time required:** 20-30 minutes
+**Difficulty:** Intermediate
+
 ## 🚀 Getting Started
 
 ### Choose Your Deployment Scenario
@@ -122,6 +136,11 @@ For production deployment with all features:
 **Production Deployment (Complete)**
 ```
 All guides in sequence (01 → 02 → 03 → 04 → 05 → 06)
+```
+
+**Codex over Streamable HTTP**
+```
+01-initial-setup.md → 02-authentication-flow.md → 08-codex-mcp.md
 ```
 
 ### Time Estimates

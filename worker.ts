@@ -35,6 +35,7 @@ export interface Env {
   GDRIVE_TOKEN_ENCRYPTION_KEY: string;
   MCP_BEARER_TOKEN?: string;
   MCP_ALLOWED_ORIGINS?: string;
+  MCP_AUTHORIZATION_SERVER_URL?: string;
   LOG_LEVEL?: string;
 }
 
@@ -134,7 +135,11 @@ export default {
     }
 
     if (request.method === 'GET' && url.pathname === '/.well-known/oauth-protected-resource') {
-      return jsonMetadata(protectedResourceMetadata(request.url));
+      return jsonMetadata(
+        protectedResourceMetadata(request.url, {
+          authorizationServerUrl: env.MCP_AUTHORIZATION_SERVER_URL,
+        })
+      );
     }
 
     if (request.method === 'GET' && url.pathname === '/.well-known/oauth-authorization-server') {
