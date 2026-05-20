@@ -75,7 +75,7 @@ export function createConfiguredServer(deps: ServerConfig): Server {
       {
         name: 'search',
         description:
-          'Use this first to discover Google Workspace operations, signatures, parameters, and examples before calling execute. Returns the full spec or a filtered subset.',
+          'Use this first to discover Google Workspace operations, signatures, parameters, and examples before calling execute. Without filters, returns a service-to-operation summary; with service or operation filters, returns the matching detailed spec subset.',
         annotations: {
           readOnlyHint: true,
         },

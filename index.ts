@@ -49,13 +49,17 @@ switch (cmd) {
     break;
 
   case 'http':
-    runHttpServer({
-      host: readFlag('--host'),
-      port: readHttpPort(),
-    }).catch((err) => {
+    try {
+      const host = readFlag('--host');
+      const port = readHttpPort();
+      runHttpServer({ host, port }).catch((err) => {
+        console.error('HTTP server startup failed:', err);
+        process.exit(1);
+      });
+    } catch (err) {
       console.error('HTTP server startup failed:', err);
       process.exit(1);
-    });
+    }
     break;
 
   case 'health':

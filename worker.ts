@@ -171,7 +171,7 @@ export default {
       );
     } catch (err) {
       logger.error('Auth failed', err);
-      return jsonError(401, 'Authentication failed', String(err));
+      return jsonError(401, 'Authentication failed', 'Google OAuth token resolution failed');
     }
 
     const auth = makeAuth(accessToken);

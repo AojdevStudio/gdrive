@@ -136,11 +136,11 @@ export function createHttpRequestHandler(
       } as unknown as ConstructorParameters<typeof StreamableHTTPServerTransport>[0]);
       await server.connect(transport);
       await transport.handleRequest(req, res);
-    } catch (err) {
+    } catch {
       if (!res.headersSent) {
         await writeWebResponse(
           res,
-          jsonError(500, 'MCP request failed', err instanceof Error ? err.message : String(err))
+          jsonError(500, 'MCP request failed', 'Internal MCP request failure')
         );
       } else {
         res.end();

@@ -190,4 +190,29 @@ describe('createHttpRequestHandler', () => {
       expect(createServer).not.toHaveBeenCalled();
     });
   });
+
+  it('does not expose raw internal errors in MCP error responses', async () => {
+    const createServer = jest.fn(() => {
+      throw new Error('sensitive stack detail');
+    });
+    const handler = createHttpRequestHandler({
+      bearerToken: 'secret-token',
+      createServer,
+    });
+
+    await withServer(handler, async (server) => {
+      const response = await request(server, '/mcp', {
+        method: 'POST',
+        headers: { Authorization: 'Bearer secret-token' },
+        body: '{}',
+      });
+
+      expect(response.status).toBe(500);
+      expect(JSON.parse(response.body)).toEqual({
+        error: 'MCP request failed',
+        detail: 'Internal MCP request failure',
+      });
+      expect(response.body).not.toContain('sensitive stack detail');
+    });
+  });
 });

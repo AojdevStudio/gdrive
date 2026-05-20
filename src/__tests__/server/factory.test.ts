@@ -55,6 +55,16 @@ describe('createConfiguredServer', () => {
     expect(search?.annotations?.readOnlyHint).toBe(true);
   });
 
+  it('describes unfiltered search results as a summary', async () => {
+    const server = createConfiguredServer(makeDeps());
+    const result = await listTools(server);
+
+    const search = result.tools.find((tool) => tool.name === 'search');
+
+    expect(search?.description).toContain('Without filters, returns a service-to-operation summary');
+    expect(search?.description).toContain('returns the matching detailed spec subset');
+  });
+
   it('describes execute as a read/write Google Workspace operation runner', async () => {
     const server = createConfiguredServer(makeDeps());
     const result = await listTools(server);
