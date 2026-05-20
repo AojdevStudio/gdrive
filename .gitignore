@@ -35,6 +35,9 @@ coverage/
 .idea/
 .cursor/
 
+# Local git worktrees
+.worktrees/
+
 # Redis dump
 dump.rdb
 
