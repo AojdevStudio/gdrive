@@ -5,6 +5,63 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.0.0-alpha] - 2026-05-21
+
+### ✨ New Features
+
+#### Codex MCP Compatibility
+Added a first-class Streamable HTTP MCP path for Codex while preserving the existing stdio and Cloudflare Worker deployments.
+
+**New HTTP Transport:**
+- `node ./dist/index.js http --host 127.0.0.1 --port 8788` starts a local Streamable HTTP MCP server
+- `POST /mcp` exposes the MCP endpoint for Codex and other Streamable HTTP clients
+- `GET /healthz` provides a lightweight HTTP transport health check
+- `GET /` returns a minimal transport banner for manual inspection
+
+**MCP Client Authentication:**
+- Added shared static bearer validation for Node HTTP and Cloudflare Worker transports
+- `MCP_BEARER_TOKEN` is required for HTTP MCP client-to-server auth
+- `MCP_ALLOWED_ORIGINS` optionally restricts browser-originated requests
+- Worker auth now reuses the shared HTTP bearer validation helper
+
+**MCP Protected Resource Metadata:**
+- Added `/.well-known/oauth-protected-resource` metadata for MCP protected-resource discovery
+- Added metadata-only `MCP_AUTHORIZATION_SERVER_URL` support for advertising an external authorization server
+- Added explicit `/.well-known/oauth-authorization-server` response explaining this project does not implement an OAuth authorization server
+- Codex-to-MCP auth remains static bearer; Google OAuth remains server-to-Google authorization
+
+### 🔒 Security
+
+- Prevented raw internal exception details from being returned in MCP HTTP error responses
+- Worker Google OAuth resolution failures now return a generic public error while logging details server-side
+- Refreshed production lockfile transitive dependencies to clear `npm audit --audit-level=moderate --omit=dev`
+- Stabilized security timing coverage so CI validates side-channel resistance without depending on noisy wall-clock variance
+
+### 📚 Documentation
+
+- Added Codex MCP setup guide covering local HTTP server startup, `codex mcp add`, bearer-token configuration, and troubleshooting
+- Documented `MCP_BEARER_TOKEN`, `MCP_ALLOWED_ORIGINS`, and metadata-only `MCP_AUTHORIZATION_SERVER_URL`
+- Added ADR updates clarifying the auth boundary: this project is a Google Workspace MCP server, not an identity provider
+- Added implementation plan documentation for the Codex MCP compatibility pass
+- Updated repository context and agent guidance with the HTTP transport command and auth model
+
+### 🧪 Testing
+
+- Added shared bearer auth tests
+- Added Node HTTP transport route, metadata, auth, and internal-error regression tests
+- Added Worker auth and metadata coverage
+- Added tool metadata tests for Codex-friendly `search` and `execute` schemas
+- Added tool-discovery helper coverage to keep the coverage gate stable
+
+### 🏗️ Internal
+
+- Added shared HTTP auth and metadata helpers under `src/server/`
+- Added Node Streamable HTTP transport implementation under `src/server/transports/http.ts`
+- Updated tool metadata so `search` is read-only and `execute` supports both structured operation calls and Node sandbox code
+- Made the performance comparison workflow's synthetic cache benchmark deterministic to avoid false-positive regression comments
+
+---
+
 ## [3.3.0] - 2026-01-08
 
 ### ✨ New Features
