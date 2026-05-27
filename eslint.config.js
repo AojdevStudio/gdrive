@@ -76,6 +76,7 @@ export default [
     ignores: [
       'node_modules/',
       'dist/',
+      'dist-worker/',
       'coverage/',
       '*.js',
       '!jest.config.js',
