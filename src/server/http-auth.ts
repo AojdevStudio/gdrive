@@ -4,6 +4,7 @@ export interface BearerAuthConfig {
   requiredToken?: string | undefined;
   allowedOrigins?: string | undefined;
   runtimeName: string;
+  tokenName?: string | undefined;
 }
 
 export function jsonError(status: number, error: string, detail?: string): Response {
@@ -62,7 +63,7 @@ export function validateBearerRequest(
     return jsonError(
       500,
       'Server misconfiguration',
-      `MCP_BEARER_TOKEN is not configured for ${config.runtimeName}`
+      `${config.tokenName ?? 'MCP_BEARER_TOKEN'} is not configured for ${config.runtimeName}`
     );
   }
 

@@ -1,25 +1,32 @@
 /**
- * Cloudflare Workers entry point for the gdrive MCP server.
+ * Cloudflare Workers entry point for Google Workspace MCP.
  *
  * Uses WebStandardStreamableHTTPServerTransport (MCP SDK v1.27+) to handle
  * MCP-over-HTTP. Each request is stateless; the Worker does NOT maintain
  * per-session state (sessionIdGenerator: undefined).
  *
  * Auth flow:
- *   1. getValidAccessToken() reads tokens from GDRIVE_KV, refreshes if needed.
- *   2. A lightweight fetch-based auth object is injected into every Google API call.
+ *   1. GET /setup/google/start starts remote Google OAuth setup.
+ *   2. GET /setup/google/callback validates one-time state and stores encrypted tokens in GDRIVE_KV.
+ *   3. getValidAccessToken() reads tokens from GDRIVE_KV, refreshes if needed.
+ *   4. A lightweight fetch-based auth object is injected into every Google API call.
  *
  * To deploy:
  *   1. Create KV namespace: wrangler kv:namespace create GDRIVE_KV --preview false
  *   2. Fill in the id in wrangler.toml
- *   3. Upload tokens: wrangler kv:key put --namespace-id=<id> "gdrive:oauth:tokens" "$(cat .tokens.json)"
- *   4. Set secrets: wrangler secret put GDRIVE_CLIENT_ID && wrangler secret put GDRIVE_CLIENT_SECRET
- *   5. Deploy: wrangler deploy
+ *   3. Set secrets: GDRIVE_CLIENT_ID, GDRIVE_CLIENT_SECRET, GDRIVE_TOKEN_ENCRYPTION_KEY, MCP_BEARER_TOKEN, MCP_SETUP_TOKEN
+ *   4. Deploy: wrangler deploy
+ *   5. Open /setup/google/start with setup bearer auth to authorize Google Workspace APIs.
  */
 
 import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js';
 import { WorkersKVCache, NullCache } from './src/storage/kv-store.js';
 import { getValidAccessToken, type KVNamespace } from './src/auth/workers-auth.js';
+import {
+  handleGoogleOAuthCallback,
+  handleGoogleOAuthStart,
+  handleGoogleOAuthStatus,
+} from './src/auth/workers-oauth.js';
 import { createConfiguredServer } from './src/server/factory.js';
 import { jsonError, validateBearerRequest } from './src/server/http-auth.js';
 import {
@@ -34,6 +41,7 @@ export interface Env {
   GDRIVE_CLIENT_SECRET: string;
   GDRIVE_TOKEN_ENCRYPTION_KEY: string;
   MCP_BEARER_TOKEN?: string;
+  MCP_SETUP_TOKEN?: string;
   MCP_ALLOWED_ORIGINS?: string;
   MCP_AUTHORIZATION_SERVER_URL?: string;
   LOG_LEVEL?: string;
@@ -146,9 +154,21 @@ export default {
       return jsonMetadata(oauthAuthorizationServerNotImplemented(), 501);
     }
 
+    if (request.method === 'GET' && url.pathname === '/setup/google/start') {
+      return handleGoogleOAuthStart(request, env);
+    }
+
+    if (request.method === 'GET' && url.pathname === '/setup/google/callback') {
+      return handleGoogleOAuthCallback(request, env);
+    }
+
+    if (request.method === 'GET' && url.pathname === '/setup/status') {
+      return handleGoogleOAuthStatus(request, env);
+    }
+
     // Only handle POST requests to /mcp (or root)
     if (request.method !== 'POST' || (url.pathname !== '/' && url.pathname !== '/mcp')) {
-      return new Response('gdrive-mcp Worker v4.0.0-alpha\nPOST /mcp to connect.', {
+      return new Response('Google Workspace MCP Worker v4.0.0-alpha\nPOST /mcp to connect.', {
         status: url.pathname === '/' ? 200 : 404,
       });
     }
@@ -170,8 +190,13 @@ export default {
         env.GDRIVE_TOKEN_ENCRYPTION_KEY
       );
     } catch (err) {
-      logger.error('Auth failed', err);
-      return jsonError(401, 'Authentication failed', 'Google OAuth token resolution failed');
+      const message = err instanceof Error ? err.message : 'Google OAuth token resolution failed';
+      logger.error('Google OAuth token resolution failed', { message });
+      return jsonError(
+        401,
+        'Google OAuth token resolution failed',
+        'Use /setup/status to inspect remote Google OAuth state, then /setup/google/start to recover.'
+      );
     }
 
     const auth = makeAuth(accessToken);
