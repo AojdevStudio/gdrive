@@ -1,4 +1,4 @@
-# Google Drive MCP Server - Code Examples
+# Google Workspace MCP - Code Examples
 
 This directory contains code examples for the **v4 architecture**, which exposes exactly two MCP tools: `search` and `execute`. You discover operations via `search`, then run code via `execute` using the `sdk` object.
 

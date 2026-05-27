@@ -1,6 +1,6 @@
 # Docker Issues
 
-This guide covers Docker-specific problems with the Google Drive MCP Server, including container startup issues, volume mounting problems, and environment configuration.
+This guide covers Docker-specific problems with the Google Workspace MCP, including container startup issues, volume mounting problems, and environment configuration.
 
 ## 🔍 Quick Diagnosis
 
@@ -409,7 +409,7 @@ services:
 #!/bin/bash
 # save as docker-health-check.sh
 
-echo "Docker Health Check - Google Drive MCP Server"
+echo "Docker Health Check - Google Workspace MCP"
 echo "============================================="
 
 # Check Docker and Docker Compose

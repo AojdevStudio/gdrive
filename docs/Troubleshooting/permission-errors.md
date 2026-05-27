@@ -303,7 +303,7 @@ Optimize permissions for specific use cases:
 #!/bin/bash
 # save as test-permissions.sh
 
-echo "Testing Google Drive MCP Server Permissions"
+echo "Testing Google Workspace MCP Permissions"
 echo "=========================================="
 
 # Test basic Drive access
@@ -391,7 +391,7 @@ echo "\nPermission test completed."
 #!/bin/bash
 # save as audit-permissions.sh
 
-echo "Google Drive MCP Server - Permission Audit"
+echo "Google Workspace MCP - Permission Audit"
 echo "==========================================="
 
 # Check OAuth configuration

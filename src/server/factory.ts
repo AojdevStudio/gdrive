@@ -44,7 +44,7 @@ export interface ServerConfig {
 
 export function createConfiguredServer(deps: ServerConfig): Server {
   const server = new Server(
-    { name: 'gdrive-mcp', version: '4.0.0-alpha' },
+    { name: 'google-workspace', version: '4.0.0-alpha' },
     { capabilities: { tools: {} } }
   );
 

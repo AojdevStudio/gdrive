@@ -1,5 +1,5 @@
 /**
- * Gmail module - Email operations for the gdrive MCP server
+ * Gmail module - Email operations for the Google Workspace MCP server
  *
  * @module gmail
  * @version 3.3.0

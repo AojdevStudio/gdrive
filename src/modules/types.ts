@@ -1,5 +1,5 @@
 /**
- * Shared types for all Google Drive MCP modules
+ * Shared types for all Google Workspace MCP modules
  */
 
 import type { drive_v3, sheets_v4, forms_v1, docs_v1, gmail_v1, calendar_v3 } from 'googleapis';

@@ -1,6 +1,6 @@
 # Redis Connection Problems
 
-This guide covers Redis-related issues with the Google Drive MCP Server, including connection failures, performance problems, and cache management.
+This guide covers Redis-related issues with the Google Workspace MCP, including connection failures, performance problems, and cache management.
 
 ## 🔍 Quick Diagnosis
 

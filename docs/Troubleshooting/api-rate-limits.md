@@ -268,7 +268,7 @@ REDIS_RETRY_DELAY=1000
 #!/bin/bash
 # save as check-rate-limits.sh
 
-echo "Google Drive MCP Server - Rate Limit Health Check"
+echo "Google Workspace MCP - Rate Limit Health Check"
 echo "================================================="
 
 # Check recent API errors
