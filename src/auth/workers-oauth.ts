@@ -142,6 +142,25 @@ async function readStoredState(kv: KVNamespace, state: string): Promise<StoredOA
   return null;
 }
 
+async function validateCallbackStateGuard(
+  request: Request,
+  kv: KVNamespace,
+  state: string
+): Promise<StoredOAuthState | Response> {
+  const storedState = await readStoredState(kv, state);
+  if (!storedState) {
+    return jsonError(400, 'Invalid OAuth state', 'OAuth state is missing, expired, reused, or mismatched. Restart remote setup at /setup/google/start.');
+  }
+
+  await kv.delete(stateKey(state));
+
+  if (Date.now() > storedState.expiresAt || storedState.redirectUri !== callbackUrl(request)) {
+    return jsonError(400, 'Invalid OAuth state', 'OAuth state is missing, expired, reused, or mismatched. Restart remote setup at /setup/google/start.');
+  }
+
+  return storedState;
+}
+
 export async function handleGoogleOAuthStart(
   request: Request,
   env: WorkerOAuthEnv
@@ -268,19 +287,15 @@ export async function handleGoogleOAuthCallback(
     return jsonError(400, 'Invalid OAuth callback', 'Missing authorization code or OAuth state.');
   }
 
-  const storedState = await readStoredState(env.GDRIVE_KV, state);
-  if (!storedState) {
-    return jsonError(400, 'Invalid OAuth state', 'OAuth state is missing, expired, reused, or mismatched. Restart remote setup at /setup/google/start.');
-  }
-
-  await env.GDRIVE_KV.delete(stateKey(state));
-
-  if (Date.now() > storedState.expiresAt || storedState.redirectUri !== callbackUrl(request)) {
-    return jsonError(400, 'Invalid OAuth state', 'OAuth state is missing, expired, reused, or mismatched. Restart remote setup at /setup/google/start.');
+  // Google redirects cannot attach Authorization headers. The one-time, expiring
+  // state value is the setup guard for this callback and is consumed before code exchange.
+  const callbackStateGuard = await validateCallbackStateGuard(request, env.GDRIVE_KV, state);
+  if (callbackStateGuard instanceof Response) {
+    return callbackStateGuard;
   }
 
   try {
-    const tokens = await exchangeCodeForTokens(code, storedState.redirectUri, env);
+    const tokens = await exchangeCodeForTokens(code, callbackStateGuard.redirectUri, env);
     await persistEncryptedTokens(
       env.GDRIVE_KV,
       tokens,

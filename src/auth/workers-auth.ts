@@ -43,6 +43,7 @@ interface TokenResponse {
 export type WorkerOAuthStatus =
   | 'configured'
   | 'missing-token'
+  | 'malformed-token'
   | 'expired-or-refreshable'
   | 'refresh-failed';
 
@@ -251,10 +252,20 @@ export async function getWorkerOAuthStatus(
     };
   }
 
-  const { tokens, source } = await loadTokensFromKV(raw, tokenEncryptionKey);
+  let tokens: WorkersTokenData;
+  try {
+    const loaded = await loadTokensFromKV(raw, tokenEncryptionKey);
+    tokens = loaded.tokens;
 
-  if (source === 'plaintext') {
-    await persistEncryptedTokens(kv, tokens, tokenEncryptionKey);
+    if (loaded.source === 'plaintext') {
+      await persistEncryptedTokens(kv, tokens, tokenEncryptionKey);
+    }
+  } catch {
+    return {
+      status: 'malformed-token',
+      tokenStateExists: true,
+      refreshAttempted: false,
+    };
   }
 
   const needsRefresh = Date.now() >= tokens.expiry_date - preemptiveMs;

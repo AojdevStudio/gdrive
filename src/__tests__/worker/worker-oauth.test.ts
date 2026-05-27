@@ -293,6 +293,22 @@ describe('remote setup status route', () => {
     expect(text).not.toContain('leaked-refresh-token');
     expect(text).not.toContain('leaked-secret');
   });
+
+  it('reports malformed token state without throwing', async () => {
+    const kv = new MemoryKV();
+    await kv.put('gdrive:oauth:tokens', JSON.stringify({ format: 'workers-aes-gcm-v1', data: 'not-valid' }));
+
+    const response = await worker.fetch(setupRequest('/setup/status'), makeEnv(kv), {});
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({
+      status: 'malformed-token',
+      configured: false,
+      tokenStateExists: true,
+      refreshAttempted: false,
+      recovery: expect.stringContaining('/setup/google/start'),
+    });
+  });
 });
 
 describe('worker Google OAuth failures', () => {

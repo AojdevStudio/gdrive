@@ -34,10 +34,16 @@
   "dependencies": {
     "@google-cloud/local-auth": "^3.0.1",
     "@modelcontextprotocol/sdk": "^1.25.1",
-    "googleapis": "^144.0.0",
+    "googleapis": "^172.0.0",
     "isolated-vm": "^6.0.2",
     "redis": "^5.6.1",
     "winston": "^3.17.0"
+  },
+  "overrides": {
+    "gaxios": "^7.1.4",
+    "google-auth-library": "^10.6.2",
+    "qs": "^6.15.2",
+    "uuid": "^11.1.1"
   },
   "engines": {
     "node": ">=22.0.0"
