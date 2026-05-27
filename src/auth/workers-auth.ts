@@ -9,9 +9,9 @@
 
 import { decryptToken, encryptToken } from '../storage/kv-store.js';
 
-const TOKEN_ENDPOINT = 'https://oauth2.googleapis.com/token';
-const KV_TOKEN_KEY = 'gdrive:oauth:tokens';
-const WORKERS_ENCRYPTED_FORMAT = 'workers-aes-gcm-v1';
+export const TOKEN_ENDPOINT = 'https://oauth2.googleapis.com/token';
+export const KV_TOKEN_KEY = 'gdrive:oauth:tokens';
+export const WORKERS_ENCRYPTED_FORMAT = 'workers-aes-gcm-v1';
 const KV_TOKEN_TTL_SECONDS = 30 * 24 * 60 * 60;
 
 export interface WorkersTokenData {
@@ -40,6 +40,12 @@ interface TokenResponse {
   scope?: string;
 }
 
+export type WorkerOAuthStatus =
+  | 'configured'
+  | 'missing-token'
+  | 'expired-or-refreshable'
+  | 'refresh-failed';
+
 /**
  * Exchange a refresh token for a new access token via the Google token endpoint.
  * Uses fetch() — safe for Workers runtime.
@@ -63,8 +69,7 @@ export async function refreshAccessToken(
   });
 
   if (!response.ok) {
-    const text = await response.text();
-    throw new Error(`Token refresh failed (${response.status}): ${text}`);
+    throw new Error(`Token refresh failed (${response.status})`);
   }
 
   const data = (await response.json()) as TokenResponse;
@@ -120,7 +125,7 @@ function parseJSONOrThrow(raw: string, context: string): unknown {
   }
 }
 
-async function persistEncryptedTokens(
+export async function persistEncryptedTokens(
   kv: KVNamespace,
   tokens: WorkersTokenData,
   tokenEncryptionKey: string
@@ -191,7 +196,7 @@ export async function getValidAccessToken(
   const raw = await kv.get(KV_TOKEN_KEY);
   if (!raw) {
     throw new Error(
-      'No OAuth tokens found in KV. Run the auth flow (node ./dist/index.js auth) and upload tokens to KV.'
+      'No Google OAuth tokens found in KV. Start the remote setup flow at /setup/google/start and verify status at /setup/status.'
     );
   }
 
@@ -224,4 +229,70 @@ export async function getValidAccessToken(
   await persistEncryptedTokens(kv, updated, tokenEncryptionKey);
 
   return accessToken;
+}
+
+export async function getWorkerOAuthStatus(
+  kv: KVNamespace,
+  clientId: string,
+  clientSecret: string,
+  tokenEncryptionKey: string,
+  preemptiveMs = 5 * 60 * 1000
+): Promise<{
+  status: WorkerOAuthStatus;
+  tokenStateExists: boolean;
+  refreshAttempted: boolean;
+}> {
+  const raw = await kv.get(KV_TOKEN_KEY);
+  if (!raw) {
+    return {
+      status: 'missing-token',
+      tokenStateExists: false,
+      refreshAttempted: false,
+    };
+  }
+
+  const { tokens, source } = await loadTokensFromKV(raw, tokenEncryptionKey);
+
+  if (source === 'plaintext') {
+    await persistEncryptedTokens(kv, tokens, tokenEncryptionKey);
+  }
+
+  const needsRefresh = Date.now() >= tokens.expiry_date - preemptiveMs;
+  if (!needsRefresh) {
+    return {
+      status: 'configured',
+      tokenStateExists: true,
+      refreshAttempted: false,
+    };
+  }
+
+  try {
+    const { accessToken, expiryDate } = await refreshAccessToken(
+      tokens.refresh_token,
+      clientId,
+      clientSecret
+    );
+
+    await persistEncryptedTokens(
+      kv,
+      {
+        ...tokens,
+        access_token: accessToken,
+        expiry_date: expiryDate,
+      },
+      tokenEncryptionKey
+    );
+
+    return {
+      status: 'expired-or-refreshable',
+      tokenStateExists: true,
+      refreshAttempted: true,
+    };
+  } catch {
+    return {
+      status: 'refresh-failed',
+      tokenStateExists: true,
+      refreshAttempted: true,
+    };
+  }
 }
