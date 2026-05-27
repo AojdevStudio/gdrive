@@ -22,9 +22,17 @@ export interface HttpRequestHandlerConfig {
   bearerToken?: string | undefined;
   allowedOrigins?: string | undefined;
   authorizationServerUrl?: string | undefined;
+  logger?: {
+    error(message: string, metadata?: Record<string, unknown>): void;
+  };
   createServer: () => {
     connect(transport: unknown): Promise<void>;
   };
+}
+
+export interface ShutdownLogger {
+  info(message: string, metadata?: Record<string, unknown>): void;
+  error(message: string, metadata?: Record<string, unknown>): void;
 }
 
 function writeText(res: ServerResponse, status: number, body: string): void {
@@ -136,7 +144,8 @@ export function createHttpRequestHandler(
       } as unknown as ConstructorParameters<typeof StreamableHTTPServerTransport>[0]);
       await server.connect(transport);
       await transport.handleRequest(req, res);
-    } catch {
+    } catch (error) {
+      config.logger?.error('MCP HTTP request failed', { error });
       if (!res.headersSent) {
         await writeWebResponse(
           res,
@@ -147,6 +156,26 @@ export function createHttpRequestHandler(
       }
     }
   };
+}
+
+export function registerGracefulShutdown(
+  httpServer: http.Server,
+  logger: ShutdownLogger
+): void {
+  const shutdown = (signal: NodeJS.Signals) => {
+    httpServer.close((error) => {
+      if (error) {
+        logger.error('MCP HTTP server shutdown failed.', { signal, error });
+        process.exit(1);
+      }
+
+      logger.info('MCP HTTP server stopped gracefully.', { signal });
+      process.exit(0);
+    });
+  };
+
+  process.on('SIGINT', () => shutdown('SIGINT'));
+  process.on('SIGTERM', () => shutdown('SIGTERM'));
 }
 
 function readOAuthKeys(oauthPath: string): unknown {
@@ -205,6 +234,7 @@ export async function runHttpServer(options: HttpServerOptions = {}): Promise<vo
     bearerToken: process.env.MCP_BEARER_TOKEN,
     allowedOrigins: process.env.MCP_ALLOWED_ORIGINS,
     authorizationServerUrl: process.env.MCP_AUTHORIZATION_SERVER_URL,
+    logger,
     createServer: () =>
       createConfiguredServer({
         logger,
@@ -218,6 +248,7 @@ export async function runHttpServer(options: HttpServerOptions = {}): Promise<vo
   const httpServer = http.createServer((req, res) => {
     void handler(req, res);
   });
+  registerGracefulShutdown(httpServer, logger);
 
   await new Promise<void>((resolve, reject) => {
     httpServer.once('error', reject);

@@ -1,7 +1,7 @@
 import { describe, expect, it, jest } from '@jest/globals';
 import http, { type IncomingMessage, type ServerResponse } from 'node:http';
 import { AddressInfo } from 'node:net';
-import { createHttpRequestHandler } from '../../server/transports/http.js';
+import { createHttpRequestHandler, registerGracefulShutdown } from '../../server/transports/http.js';
 
 function makeCreateServer() {
   return jest.fn(() => ({
@@ -214,5 +214,59 @@ describe('createHttpRequestHandler', () => {
       });
       expect(response.body).not.toContain('sensitive stack detail');
     });
+  });
+
+  it('logs caught internal MCP request failures', async () => {
+    const createServer = jest.fn(() => {
+      throw new Error('diagnostic detail');
+    });
+    const logger = { error: jest.fn() };
+    const handler = createHttpRequestHandler({
+      bearerToken: 'secret-token',
+      createServer,
+      logger,
+    });
+
+    await withServer(handler, async (server) => {
+      await request(server, '/mcp', {
+        method: 'POST',
+        headers: { Authorization: 'Bearer secret-token' },
+        body: '{}',
+      });
+    });
+
+    expect(logger.error).toHaveBeenCalledWith(
+      'MCP HTTP request failed',
+      expect.objectContaining({ error: expect.any(Error) })
+    );
+  });
+});
+
+describe('registerGracefulShutdown', () => {
+  it('registers SIGINT and SIGTERM handlers that close the HTTP server', async () => {
+    const close = jest.fn<(callback: (err?: Error) => void) => void>((callback) => callback());
+    const httpServer = { close } as unknown as http.Server;
+    const on = jest.spyOn(process, 'on').mockReturnValue(process);
+    const exit = jest.spyOn(process, 'exit').mockImplementation((() => undefined) as never);
+    const logger = { info: jest.fn(), error: jest.fn() };
+
+    registerGracefulShutdown(httpServer, logger);
+    const sigtermHandler = on.mock.calls.find(([signal]) => signal === 'SIGTERM')?.[1] as
+      | (() => Promise<void>)
+      | undefined;
+
+    expect(on).toHaveBeenCalledWith('SIGINT', expect.any(Function));
+    expect(sigtermHandler).toBeDefined();
+
+    await sigtermHandler?.();
+
+    expect(close).toHaveBeenCalled();
+    expect(logger.info).toHaveBeenCalledWith('MCP HTTP server stopped gracefully.', {
+      signal: 'SIGTERM',
+    });
+    expect(exit).toHaveBeenCalledWith(0);
+
+    on.mockRestore();
+    exit.mockRestore();
   });
 });

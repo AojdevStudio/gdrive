@@ -62,7 +62,8 @@ describe('createConfiguredServer', () => {
     const search = result.tools.find((tool) => tool.name === 'search');
 
     expect(search?.description).toContain('Without filters, returns a service-to-operation summary');
-    expect(search?.description).toContain('returns the matching detailed spec subset');
+    expect(search?.description).toContain('with a service filter');
+    expect(search?.description).toContain('optional operation');
   });
 
   it('describes execute as a read/write Google Workspace operation runner', async () => {

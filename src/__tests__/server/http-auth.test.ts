@@ -1,5 +1,5 @@
 import { describe, expect, it } from '@jest/globals';
-import { validateBearerRequest } from '../../server/http-auth.js';
+import { timingSafeEqualString, validateBearerRequest } from '../../server/http-auth.js';
 
 describe('validateBearerRequest', () => {
   it('returns 500 when the required server token is missing', async () => {
@@ -47,6 +47,12 @@ describe('validateBearerRequest', () => {
     expect(response?.headers.get('www-authenticate')).toBe('Bearer');
     const body = await response?.json();
     expect(body.error).toBe('Unauthorized');
+  });
+
+  it('compares bearer strings without accepting different lengths', () => {
+    expect(timingSafeEqualString('Bearer secret-token', 'Bearer secret-token')).toBe(true);
+    expect(timingSafeEqualString('Bearer secret-tokem', 'Bearer secret-token')).toBe(false);
+    expect(timingSafeEqualString('Bearer short', 'Bearer secret-token')).toBe(false);
   });
 
   it('returns 403 for a disallowed origin', async () => {

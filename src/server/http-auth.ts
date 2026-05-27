@@ -1,3 +1,5 @@
+import * as crypto from 'node:crypto';
+
 export interface BearerAuthConfig {
   requiredToken?: string | undefined;
   allowedOrigins?: string | undefined;
@@ -38,6 +40,22 @@ function parseAllowedOrigins(raw?: string): Set<string> {
   );
 }
 
+export function timingSafeEqualString(actual: string, expected: string): boolean {
+  const actualBuffer = Buffer.from(actual);
+  const expectedBuffer = Buffer.from(expected);
+  const compareLength = Math.max(actualBuffer.length, expectedBuffer.length);
+  const paddedActual = Buffer.alloc(compareLength);
+  const paddedExpected = Buffer.alloc(compareLength);
+
+  actualBuffer.copy(paddedActual);
+  expectedBuffer.copy(paddedExpected);
+
+  return (
+    actualBuffer.length === expectedBuffer.length &&
+    crypto.timingSafeEqual(paddedActual, paddedExpected)
+  );
+}
+
 export function validateBearerRequest(
   request: Request,
   config: BearerAuthConfig
@@ -52,7 +70,7 @@ export function validateBearerRequest(
 
   const authHeader = request.headers.get('authorization');
   const expected = `Bearer ${config.requiredToken}`;
-  if (!authHeader || authHeader !== expected) {
+  if (!authHeader || !timingSafeEqualString(authHeader, expected)) {
     return jsonError(401, 'Unauthorized', 'Missing or invalid bearer token');
   }
 
