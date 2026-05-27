@@ -1,10 +1,10 @@
 # Authentication Documentation
 
-This document provides detailed information about the OAuth token refresh implementation in the gdrive-mcp server.
+This document provides detailed information about the OAuth token refresh implementation in the Google Workspace MCP server.
 
 ## Overview
 
-The gdrive-mcp server implements automatic OAuth token refresh to eliminate the need for manual re-authentication every hour. This feature includes:
+The Google Workspace MCP server implements automatic OAuth token refresh to eliminate the need for manual re-authentication every hour. This feature includes:
 
 - Automatic token refresh before expiry
 - Secure token storage with encryption

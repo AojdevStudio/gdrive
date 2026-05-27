@@ -1,6 +1,6 @@
 # Redis Configuration Guide
 
-This guide covers Redis cache configuration, optimization, monitoring, and troubleshooting for the Google Drive MCP Server.
+This guide covers Redis cache configuration, optimization, monitoring, and troubleshooting for the Google Workspace MCP.
 
 ## Prerequisites
 
@@ -817,4 +817,4 @@ After Redis configuration:
 
 **Redis Configuration Complete!** ⚙️
 
-Your Google Drive MCP Server now has high-performance Redis caching configured with monitoring, security, and optimization features.
+Your Google Workspace MCP now has high-performance Redis caching configured with monitoring, security, and optimization features.

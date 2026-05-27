@@ -42,6 +42,17 @@ codex mcp get google-workspace
 
 Start a fresh Codex session after adding or changing MCP server config. The expected tools are `search` and `execute`.
 
+## Replacing Legacy Names
+
+If Codex still has this Worker registered as `gdrive`, remove that stale entry and re-add the same deployed `/mcp` URL as `google-workspace`:
+
+```bash
+codex mcp remove gdrive
+codex mcp add google-workspace \
+  --url https://your-worker.workers.dev/mcp \
+  --bearer-token-env-var GDRIVE_MCP_TOKEN
+```
+
 ## External Authorization Server Metadata
 
 Set this only when a real external OAuth authorization server exists for MCP client authentication:

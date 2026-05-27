@@ -2,7 +2,7 @@
 
 ## Overview
 
-This runbook provides procedures for managing encryption key rotation in the gdrive MCP server. Key rotation is critical for maintaining security compliance and protecting OAuth tokens.
+This runbook provides procedures for managing encryption key rotation in the Google Workspace MCP server. Key rotation is critical for maintaining security compliance and protecting OAuth tokens.
 
 **Supported CLI commands:** `auth`, `health`, `rotate-key`, `verify-keys`, `migrate-tokens`
 

@@ -1,6 +1,6 @@
-# Google Drive MCP Server Troubleshooting Guide
+# Google Workspace MCP Troubleshooting Guide
 
-This directory contains comprehensive troubleshooting guides for the Google Drive MCP Server. Each guide focuses on specific issues and provides step-by-step diagnostic and resolution procedures.
+This directory contains comprehensive troubleshooting guides for the Google Workspace MCP. Each guide focuses on specific issues and provides step-by-step diagnostic and resolution procedures.
 
 ## 📋 Available Guides
 

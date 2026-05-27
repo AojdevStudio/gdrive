@@ -1,6 +1,6 @@
-# Google Drive MCP Server - Setup Guides
+# Google Workspace MCP - Setup Guides
 
-This directory contains comprehensive step-by-step guides for setting up, configuring, and deploying the Google Drive MCP Server.
+This directory contains comprehensive step-by-step guides for setting up, configuring, and deploying the Google Workspace MCP.
 
 ## 📚 Guide Overview
 
@@ -236,7 +236,7 @@ Please contribute by:
 After completing the guides, you should have:
 
 ### Basic Setup (✓)
-- [ ] Google Drive MCP Server running locally
+- [ ] Google Workspace MCP running locally
 - [ ] Successful authentication with Google APIs
 - [ ] Claude Desktop integration working
 - [ ] Basic file operations functional

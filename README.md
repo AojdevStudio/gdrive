@@ -1,6 +1,6 @@
 <div align="center">
 
-![Google Drive MCP Server](docs/images/hero-banner.png)
+![Google Workspace MCP](docs/images/hero-banner.png)
 
 ### **Your AI can reason. But can it check your calendar?**
 
@@ -74,7 +74,7 @@ Inspired by [Cloudflare's approach to remote MCP servers](https://blog.cloudflar
 | Tool | Purpose |
 |:-----|:--------|
 | `search` | Query Google Workspace via natural language SDK spec |
-| `execute` | Run sandboxed JavaScript with full googleapis SDK access |
+| `execute` | Run a specific Google Workspace operation through the SDK runtime |
 
 **88% fewer tools** in your agent's context window. The SDK handles the rest dynamically.
 
@@ -84,7 +84,7 @@ OAuth tokens stored in Cloudflare KV — encrypted, persistent, no local credent
 
 ---
 
-## Introducing gdrive MCP Server
+## Introducing Google Workspace MCP
 
 A production-ready MCP server that gives AI agents complete, secure access to Google Workspace.
 
@@ -274,6 +274,17 @@ claude mcp add --scope project --transport http google-workspace https://your-wo
 }
 ```
 
+#### Existing client migration
+
+If an existing client still has this server registered as `gdrive`, remove the old entry and re-add the same Worker `/mcp` URL under `google-workspace`:
+
+```bash
+claude mcp remove gdrive
+claude mcp add --scope user --transport http google-workspace https://your-worker.workers.dev/mcp
+```
+
+The MCP protocol server name is now `google-workspace`. Structured logs use `service: google-workspace-mcp`; update dashboards or alert filters that still match the legacy `gdrive-mcp-server` tag.
+
 ---
 
 ## How It Works
@@ -284,20 +295,32 @@ claude mcp add --scope project --transport http google-workspace https://your-wo
 
 </div>
 
-### Operation-Based Tool Pattern
+### Two-Tool SDK Pattern
 
-Instead of 47 separate tools competing for your agent's attention, the server exposes **6 tools** with an `operation` parameter:
+Instead of 47 separate tools competing for your agent's attention, the server exposes **two tools**:
 
 ```typescript
-// One tool per service, operation parameter for routing
+// Discover the available operation contract.
 {
-  name: "sheets",
+  name: "search",
   args: {
-    operation: "formatCells",    // ← The operation discriminator
-    spreadsheetId: "abc123",
-    sheetId: 0,
-    range: { startRowIndex: 0, endRowIndex: 1 },
-    format: { textFormat: { bold: true } }
+    service: "sheets",
+    operation: "formatCells"
+  }
+}
+
+// Execute the selected operation.
+{
+  name: "execute",
+  args: {
+    service: "sheets",
+    operation: "formatCells",
+    args: {
+      spreadsheetId: "abc123",
+      sheetId: 0,
+      range: { startRowIndex: 0, endRowIndex: 1 },
+      format: { textFormat: { bold: true } }
+    }
   }
 }
 ```

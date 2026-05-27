@@ -4,6 +4,10 @@
 
 **Google Workspace MCP** is a remote-only MCP server for Google Workspace: Drive, Sheets, Forms, Docs, Gmail, and Calendar.
 
+Use the canonical name **Google Workspace MCP** in docs, issues, prompts, and client configuration examples. Avoid “gdrive MCP” or “Google Drive MCP” unless referring to legacy package/repo names.
+
+**Runtime boundary:** Cloudflare Workers Streamable HTTP only. MCP clients connect to the deployed `/mcp` URL. Local stdio, local HTTP, Docker, and local bootstrap flows are not supported MCP server modes.
+
 **Linear:** Team "Google Drive" (ID: `9fd7c68d-cf3f-4ac0-a0d7-42605c079da1`) — issues prefixed `GDRIVE-`
 
 - Cloudflare Workers Streamable HTTP runtime
@@ -38,20 +42,30 @@ Do not document or recommend `node ./dist/index.js`, stdio transport, local HTTP
 
 ## Architecture
 
-### MCP Tools (Operation-Based)
+### Remote MCP Runtime
 
-All tools use an `operation` parameter — NOT separate tools per action:
+```text
+MCP client
+  |
+  | Streamable HTTP
+  v
+Cloudflare Worker /mcp
+  |
+  | Google OAuth token resolution and refresh
+  v
+Google Workspace APIs
+```
 
-| Tool | Ops | Operations |
-|------|-----|------------|
-| `drive` | 7 | search, enhancedSearch, read, createFile, createFolder, updateFile, batchOperations |
-| `sheets` | 11 | listSheets, readSheet, createSheet, renameSheet, deleteSheet, updateCells, updateFormula, formatCells, addConditionalFormat, freezeRowsColumns, setColumnWidth, appendRows |
-| `forms` | 4 | createForm, readForm, addQuestion, listResponses |
-| `docs` | 5 | createDocument, insertText, replaceText, applyTextStyle, insertTable |
-| `gmail` | 10 | listMessages, listThreads, getMessage, getThread, searchMessages, createDraft, sendMessage, sendDraft, listLabels, modifyLabels |
-| `calendar` | 9 | listCalendars, getCalendar, listEvents, getEvent, createEvent, updateEvent, deleteEvent, quickAdd, checkFreeBusy |
+`worker.ts` is the supported runtime entry point. It uses `WebStandardStreamableHTTPServerTransport` and creates the configured MCP server per request.
 
-Resources: Lists and reads Google Drive files via `gdrive:///<file_id>` URIs.
+### MCP Tools
+
+v4 exposes exactly two MCP tools:
+
+| Tool | Purpose |
+|------|---------|
+| `search` | Discover Google Workspace services, operations, signatures, parameters, and examples |
+| `execute` | Run a specific Google Workspace operation through the SDK-style runtime |
 
 ### Module Structure
 

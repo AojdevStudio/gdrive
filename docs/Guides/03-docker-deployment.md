@@ -1,6 +1,6 @@
 # Docker Deployment Guide
 
-This guide covers containerized deployment of the Google Drive MCP Server using Docker and Docker Compose, including Redis caching, production configuration, and monitoring.
+This guide covers containerized deployment of the Google Workspace MCP using Docker and Docker Compose, including Redis caching, production configuration, and monitoring.
 
 ## Prerequisites
 
@@ -317,7 +317,7 @@ docker-compose exec gdrive-mcp logrotate /etc/logrotate.conf
 ```json
 {
   "mcpServers": {
-    "gdrive": {
+    "google-workspace": {
       "command": "docker",
       "args": [
         "run", "-i", "--rm", "--init",
@@ -337,7 +337,7 @@ docker-compose exec gdrive-mcp logrotate /etc/logrotate.conf
 ```json
 {
   "mcpServers": {
-    "gdrive": {
+    "google-workspace": {
       "command": "docker",
       "args": [
         "exec", "-i", "gdrive-mcp-server",
@@ -673,4 +673,4 @@ After successful Docker deployment:
 
 **Docker Deployment Complete!** 🐳
 
-Your Google Drive MCP Server is now running in a containerized environment with Redis caching, health monitoring, and production-ready configuration.
+Your Google Workspace MCP is now running in a containerized environment with Redis caching, health monitoring, and production-ready configuration.

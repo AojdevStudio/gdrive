@@ -1,6 +1,6 @@
 # Authentication Problems
 
-This guide covers common authentication issues with the Google Drive MCP Server and provides step-by-step solutions.
+This guide covers common authentication issues with the Google Workspace MCP and provides step-by-step solutions.
 
 ## 🔍 Quick Diagnosis
 

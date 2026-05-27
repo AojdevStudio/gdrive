@@ -1,6 +1,6 @@
 # Error Messages Reference
 
-This comprehensive reference covers all common error messages you might encounter with the Google Drive MCP Server, including diagnostic steps and specific solutions.
+This comprehensive reference covers all common error messages you might encounter with the Google Workspace MCP, including diagnostic steps and specific solutions.
 
 ## 🔍 Quick Error Lookup
 
@@ -855,4 +855,4 @@ node ./dist/index.js health
 echo "\nRecovery completed. Check the output above for any remaining issues."
 ```
 
-This comprehensive error reference should help you diagnose and resolve most issues with the Google Drive MCP Server. For additional help, check the specific troubleshooting guides linked from the main [Troubleshooting README](./README.md).
+This comprehensive error reference should help you diagnose and resolve most issues with the Google Workspace MCP. For additional help, check the specific troubleshooting guides linked from the main [Troubleshooting README](./README.md).

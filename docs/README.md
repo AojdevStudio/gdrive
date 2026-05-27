@@ -1,6 +1,6 @@
-# Google Drive MCP Server Documentation
+# Google Workspace MCP Documentation
 
-Welcome to the documentation for the Google Drive MCP Server. This index helps you navigate all available guides, references, and examples.
+Welcome to the documentation for the Google Workspace MCP. This index helps you navigate all available guides, references, and examples.
 
 ## Quick Navigation
 

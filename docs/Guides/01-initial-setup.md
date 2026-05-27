@@ -1,6 +1,6 @@
 # Initial Setup and Installation Guide
 
-This guide walks you through the complete setup process for the Google Drive MCP Server, from Google Cloud configuration to local installation.
+This guide walks you through the complete setup process for the Google Workspace MCP, from Google Cloud configuration to local installation.
 
 ## Prerequisites
 
@@ -86,7 +86,7 @@ Before starting, ensure you have:
 
 3. **Fill Required Information**
    ```
-   App name: Google Drive MCP Server
+   App name: Google Workspace MCP
    User support email: your-email@example.com
    Developer contact information: your-email@example.com
    ```
@@ -124,7 +124,7 @@ Before starting, ensure you have:
 2. **Create OAuth Client ID**
    - Click "Create Credentials" → "OAuth client ID"
    - Application type: **Desktop application**
-   - Name: `Google Drive MCP Server`
+   - Name: `Google Workspace MCP`
    - Click "Create"
 
 3. **Download Credentials**
@@ -450,4 +450,4 @@ Once setup is complete, proceed to:
 
 **Installation Complete!** ✅
 
-Your Google Drive MCP Server is now installed and configured. The next step is to complete the authentication flow to start using the server.
+Your Google Workspace MCP is now installed and configured. The next step is to complete the authentication flow to start using the server.

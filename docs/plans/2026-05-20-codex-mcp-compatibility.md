@@ -339,22 +339,22 @@ node ./dist/index.js http --host 127.0.0.1 --port 8788
 - Codex command shape:
 
 ```bash
-codex mcp add gdrive --url http://127.0.0.1:8788/mcp
-codex mcp get gdrive
+codex mcp add google-workspace --url http://127.0.0.1:8788/mcp
+codex mcp get google-workspace
 ```
 
 - Header/auth configuration note: use the currently installed Codex CLI's supported bearer/env-header option. Verify with `codex mcp add --help` because CLI flags can change.
 - Cloudflare Worker URL shape:
 
 ```bash
-codex mcp add gdrive --url https://<worker-host>/mcp
+codex mcp add google-workspace --url https://<worker-host>/mcp
 ```
 
 - Troubleshooting:
   - `Auth unsupported`: server metadata/auth mode mismatch.
   - `401 Unauthorized`: bearer mismatch or missing header.
   - `Authentication required`: run `node ./dist/index.js auth`.
-  - tools missing: run `codex mcp get gdrive`, restart Codex session.
+  - tools missing: run `codex mcp get google-workspace`, restart Codex session.
 
 **Step 2: Link docs**
 
@@ -431,14 +431,14 @@ Fix before Codex verification by reinstalling/updating the Codex CLI through the
 Run:
 
 ```bash
-codex mcp add gdrive --url http://127.0.0.1:8788/mcp
-codex mcp get gdrive
+codex mcp add google-workspace --url http://127.0.0.1:8788/mcp
+codex mcp get google-workspace
 ```
 
 Then configure bearer auth using the exact flag/config supported by the installed Codex CLI and start a fresh Codex session.
 
 Expected:
-- `codex mcp get gdrive` shows configured server.
+- `codex mcp get google-workspace` shows configured server.
 - Fresh session lists `search` and `execute`.
 - Calling `search` with `{ "service": "drive" }` returns Drive operations.
 
@@ -471,7 +471,7 @@ Static bearer auth remains the supported MCP client-to-server auth mode. This ta
 - Add `MCP_AUTHORIZATION_SERVER_URL` as metadata-only config.
 - When configured, protected-resource metadata includes the external authorization server URL.
 - Do not accept or validate external OAuth bearer tokens in this PR.
-- Document that `codex mcp login gdrive` requires a real external/dedicated authorization server.
+- Document that `codex mcp login google-workspace` requires a real external/dedicated authorization server.
 
 **Non-negotiable:** Do not add fake OAuth metadata just to make clients stop saying `Auth unsupported`; that creates a worse failure mode. Advertising an external server and validating its tokens are separate commitments.
 

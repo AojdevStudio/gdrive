@@ -1,13 +1,13 @@
 # Claude Desktop Integration Guide
 
-This guide covers integrating the Google Drive MCP Server with Claude Desktop, including configuration, testing, and troubleshooting for different deployment scenarios.
+This guide covers integrating the Google Workspace MCP with Claude Desktop, including configuration, testing, and troubleshooting for different deployment scenarios.
 
 ## Prerequisites
 
 Before integrating with Claude Desktop:
 - **[Initial Setup](./01-initial-setup.md)** completed
 - **[Authentication Flow](./02-authentication-flow.md)** completed
-- **Google Drive MCP Server** working (tested with health check)
+- **Google Workspace MCP** working (tested with health check)
 - **Claude Desktop** installed and running
 - **MCP server** accessible via command line
 
@@ -22,7 +22,7 @@ Claude Desktop → MCP Client → stdio transport → MCP Server Process
                               │
                               └── JSON-RPC Messages
                                   │
-                                  │   Google Drive MCP Server
+                                  │   Google Workspace MCP
                                   └── ┌──────────────────────┐
                                       │ • Resource Handler     │
                                       │ • Tool Handler         │
@@ -102,7 +102,7 @@ fi
 ```json
 {
   "mcpServers": {
-    "gdrive": {
+    "google-workspace": {
       "command": "node",
       "args": ["/absolute/path/to/gdrive/dist/index.js"],
       "env": {
@@ -126,7 +126,7 @@ ENCRYPTION_KEY="$(grep GDRIVE_TOKEN_ENCRYPTION_KEY .env | cut -d= -f2)"
 cat > "$CONFIG_PATH" << EOF
 {
   "mcpServers": {
-    "gdrive": {
+    "google-workspace": {
       "command": "node",
       "args": ["$GDRIVE_PATH"],
       "env": {
@@ -149,7 +149,7 @@ echo "Local configuration created"
 ```json
 {
   "mcpServers": {
-    "gdrive": {
+    "google-workspace": {
       "command": "docker",
       "args": [
         "run", "-i", "--rm", "--init",
@@ -179,7 +179,7 @@ docker build -t gdrive-mcp-server .
 cat > "$CONFIG_PATH" << EOF
 {
   "mcpServers": {
-    "gdrive": {
+    "google-workspace": {
       "command": "docker",
       "args": [
         "run", "-i", "--rm", "--init",
@@ -204,7 +204,7 @@ echo "Docker run configuration created"
 ```json
 {
   "mcpServers": {
-    "gdrive": {
+    "google-workspace": {
       "command": "docker",
       "args": [
         "exec", "-i", "gdrive-mcp-server",
@@ -227,7 +227,7 @@ docker-compose ps
 cat > "$CONFIG_PATH" << EOF
 {
   "mcpServers": {
-    "gdrive": {
+    "google-workspace": {
       "command": "docker",
       "args": [
         "exec", "-i", "gdrive-mcp-server",
@@ -348,7 +348,7 @@ open -a "Claude"
 1. **Open Claude Desktop**
 2. **Check Settings/Preferences**
    - Look for MCP Servers section
-   - Verify "gdrive" server is listed
+   - Verify "google-workspace" server is listed
    - Check connection status (should be green/connected)
 
 3. **Test Basic Functionality**
@@ -376,7 +376,7 @@ open -a "Claude"
 ```json
 {
   "mcpServers": {
-    "gdrive-dev": {
+    "google-workspace-dev": {
       "command": "node",
       "args": ["/path/to/dev/gdrive/dist/index.js"],
       "env": {
@@ -385,7 +385,7 @@ open -a "Claude"
         "NODE_ENV": "development"
       }
     },
-    "gdrive-prod": {
+    "google-workspace-prod": {
       "command": "docker",
       "args": [
         "exec", "-i", "gdrive-mcp-server-prod",
@@ -401,7 +401,7 @@ open -a "Claude"
 ```json
 {
   "mcpServers": {
-    "gdrive": {
+    "google-workspace": {
       "command": "node",
       "args": ["/path/to/dist/index.js"],
       "env": {
@@ -423,7 +423,7 @@ open -a "Claude"
 ```json
 {
   "mcpServers": {
-    "gdrive": {
+    "google-workspace": {
       "command": "node",
       "args": ["/path/to/dist/index.js"],
       "env": {
@@ -684,7 +684,7 @@ redis-cli CONFIG SET tcp-keepalive 60
 ```json
 {
   "mcpServers": {
-    "gdrive": {
+    "google-workspace": {
       "command": "node",
       "args": ["/path/to/dist/index.js"],
       "env": {
@@ -766,7 +766,7 @@ grep -E "(TOKEN|AUTH)" logs/gdrive-mcp-audit.log | tail -10
 ```json
 {
   "mcpServers": {
-    "gdrive": {
+    "google-workspace": {
       "command": "node",
       "args": ["/path/to/dist/index.js"],
       "env": {
@@ -793,4 +793,4 @@ After successful Claude Desktop integration:
 
 **Claude Desktop Integration Complete!** 🎉
 
-Your Google Drive MCP Server is now fully integrated with Claude Desktop, providing seamless access to Google Workspace services through natural language interaction.
+Your Google Workspace MCP is now fully integrated with Claude Desktop, providing seamless access to Google Workspace services through natural language interaction.

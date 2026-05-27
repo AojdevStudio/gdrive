@@ -1,6 +1,6 @@
 # Authentication Flow Guide
 
-This guide covers the complete OAuth 2.0 authentication process for the Google Drive MCP Server, including initial setup, token management, and troubleshooting.
+This guide covers the complete OAuth 2.0 authentication process for the Google Workspace MCP, including initial setup, token management, and troubleshooting.
 
 ## Prerequisites
 
@@ -98,7 +98,7 @@ node ./dist/index.js auth
 
 3. **OAuth Consent Screen**
    ```
-   Google Drive MCP Server wants to:
+   Google Workspace MCP wants to:
    ✓ See, edit, create, and delete all of your Google Drive files
    ✓ See, edit, create, and delete your spreadsheets in Google Drive
    ✓ See, edit, create, and delete your documents in Google Drive
@@ -145,18 +145,11 @@ node ./dist/index.js health
 
 ### 1.5 Test Basic Functionality
 
+Local stdio startup is no longer a supported MCP runtime path. Verify the deployed Worker setup state and then connect MCP clients to the Worker `/mcp` URL.
+
 ```bash
-# Test server startup (Ctrl+C to stop)
-node ./dist/index.js
-
-# Expected output:
-# "MCP Server for Google Drive initialized"
-# "AuthManager initialized successfully"
-# "Server running on stdio transport"
-
-# In another terminal, test a simple operation
-echo '{"method": "tools/list"}' | node ./dist/index.js
-# Should return list of available tools
+curl -H "Authorization: Bearer $MCP_SETUP_TOKEN" \
+  https://your-worker.workers.dev/setup/status
 ```
 
 ## Step 2: Understanding Token Management
@@ -526,7 +519,7 @@ node ./dist/index.js auth
 
 # Revoke access in Google Account settings
 # Go to myaccount.google.com/permissions
-# Find "Google Drive MCP Server" and remove access
+# Find "Google Workspace MCP" and remove access
 
 # Re-authenticate
 rm -f credentials/.gdrive-mcp-tokens.json
@@ -591,4 +584,4 @@ Once authentication is complete:
 
 **Authentication Complete!** ✅
 
-Your Google Drive MCP Server is now authenticated and ready to use. The server will automatically manage token refresh and maintain authentication status.
+Your Google Workspace MCP is now authenticated and ready to use. The server will automatically manage token refresh and maintain authentication status.
