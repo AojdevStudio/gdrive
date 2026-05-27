@@ -14,7 +14,7 @@
   ],
   "scripts": {
     "build": "tsc && shx chmod +x dist/*.js",
-    "prepare": "npm run build:worker",
+    "prepare": "npm run build && npm run build:worker",
     "watch": "tsc --watch",
     "test": "jest",
     "test:watch": "jest --watch",

@@ -111,12 +111,17 @@ jobs:
         run: |
           node -e "
             const pkg = require('./package.json');
+            const releaseVersion = '${{ steps.version.outputs.version }}';
             if (!pkg.name || !pkg.version || !Array.isArray(pkg.files) || !pkg.files.includes('worker.ts')) {
               console.error('package.json is missing required Worker package metadata');
               process.exit(1);
             }
             if (pkg.bin) {
               console.error('package.json must not expose a local MCP binary');
+              process.exit(1);
+            }
+            if (releaseVersion && pkg.version !== releaseVersion) {
+              console.error('package.json version (' + pkg.version + ') does not match release version (' + releaseVersion + ')');
               process.exit(1);
             }
           "
