@@ -7,15 +7,14 @@
   "homepage": "https://modelcontextprotocol.io",
   "bugs": "https://github.com/modelcontextprotocol/servers/issues",
   "type": "module",
-  "bin": {
-    "mcp-server-gdrive": "dist/index.js"
-  },
   "files": [
-    "dist"
+    "dist-worker",
+    "worker.ts",
+    "wrangler.toml"
   ],
   "scripts": {
     "build": "tsc && shx chmod +x dist/*.js",
-    "prepare": "npm run build",
+    "prepare": "npm run build && npm run build:worker",
     "watch": "tsc --watch",
     "test": "jest",
     "test:watch": "jest --watch",
@@ -32,11 +31,8 @@
     "deploy:worker": "wrangler deploy"
   },
   "dependencies": {
-    "@google-cloud/local-auth": "^3.0.1",
     "@modelcontextprotocol/sdk": "^1.25.1",
     "googleapis": "^144.0.0",
-    "isolated-vm": "^6.0.2",
-    "redis": "^5.6.1",
     "winston": "^3.17.0"
   },
   "overrides": {

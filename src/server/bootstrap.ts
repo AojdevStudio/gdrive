@@ -1,13 +1,11 @@
 /**
  * Infrastructure bootstrap factories.
- * Extracted from index.ts so both the Node stdio transport and future
- * transports share identical logger / cache / monitor setup.
+ * Shared logger / cache / monitor setup for server construction.
  */
 
 import winston from 'winston';
-import { createClient, RedisClientType } from 'redis';
 import type { Logger } from 'winston';
-import type { CacheManagerLike, PerformanceMonitorLike } from '../modules/types.js';
+import type { PerformanceMonitorLike } from '../modules/types.js';
 
 // ─── Logger ──────────────────────────────────────────────────────────────────
 
@@ -91,7 +89,7 @@ export function createLogger(): Logger {
       errorSerializer(),
       winston.format.json()
     ),
-    defaultMeta: { service: 'gdrive-mcp-server' },
+    defaultMeta: { service: 'google-workspace-mcp' },
     transports: [
       new winston.transports.File({
         filename: 'logs/error.log',
@@ -166,114 +164,4 @@ class PerformanceMonitor implements PerformanceMonitorLike {
 
 export function createPerformanceMonitor(): PerformanceMonitor {
   return new PerformanceMonitor();
-}
-
-// ─── Cache Manager ────────────────────────────────────────────────────────────
-
-class CacheManager implements CacheManagerLike {
-  private client: RedisClientType | null = null;
-  private connected = false;
-  private readonly ttl = 300;
-
-  constructor(private readonly logger: Logger) {}
-
-  async connect(): Promise<void> {
-    try {
-      this.client = createClient({
-        url: process.env.REDIS_URL ?? 'redis://localhost:6379',
-        socket: {
-          reconnectStrategy: (retries: number) => {
-            if (retries > 10) {
-              this.logger.error('Redis reconnection failed after 10 attempts');
-              return false;
-            }
-            return Math.min(retries * 50, 500);
-          },
-        },
-      }) as RedisClientType;
-
-      this.client.on('error', (err: Error) => {
-        this.logger.error('Redis client error', { error: err.message });
-        this.connected = false;
-      });
-      this.client.on('connect', () => {
-        this.logger.info('Redis connected');
-        this.connected = true;
-      });
-
-      await this.client.connect();
-    } catch (error) {
-      this.logger.warn('Redis connection failed, continuing without cache', { error });
-      this.connected = false;
-    }
-  }
-
-  async get(key: string): Promise<unknown | null> {
-    if (!this.connected || !this.client) {
-      return null;
-    }
-    try {
-      const data = await this.client.get(key);
-      return data ? JSON.parse(data) : null;
-    } catch (error) {
-      this.logger.error('Cache get error', { error, key });
-      return null;
-    }
-  }
-
-  async set(key: string, value: unknown): Promise<void> {
-    if (!this.connected || !this.client) {
-      return;
-    }
-    try {
-      await this.client.setEx(key, this.ttl, JSON.stringify(value));
-    } catch (error) {
-      this.logger.error('Cache set error', { error, key });
-    }
-  }
-
-  async invalidate(pattern: string): Promise<void> {
-    if (!this.connected || !this.client) {
-      return;
-    }
-    try {
-      const batchSize = 100;
-      const batch: string[] = [];
-      let deletedCount = 0;
-
-      for await (const keyOrKeys of this.client.scanIterator({
-        MATCH: pattern,
-        COUNT: batchSize,
-      })) {
-        if (typeof keyOrKeys === 'string') {
-          batch.push(keyOrKeys);
-        } else if (Array.isArray(keyOrKeys)) {
-          batch.push(...keyOrKeys.filter((key): key is string => typeof key === 'string'));
-        }
-
-        if (batch.length >= batchSize) {
-          await this.client.del(batch);
-          deletedCount += batch.length;
-          batch.length = 0;
-        }
-      }
-
-      if (batch.length > 0) {
-        await this.client.del(batch);
-        deletedCount += batch.length;
-      }
-
-      if (deletedCount > 0) {
-        this.logger.debug(`Invalidated ${deletedCount} cache entries`);
-      }
-    } catch (error) {
-      this.logger.error('Cache invalidation error', { error, pattern });
-    }
-  }
-}
-
-export async function createCacheManager(logger: Logger): Promise<CacheManagerLike> {
-  const mgr = new CacheManager(logger);
-  await mgr.connect();
-  return mgr;
 }

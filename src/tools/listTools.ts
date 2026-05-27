@@ -62,7 +62,7 @@ export interface ModuleStructure {
  */
 export async function generateToolStructure(): Promise<ModuleStructure> {
   // v3.0.0: Hardcoded API structure for reliability
-  // In production (Docker), we don't have access to TypeScript source files
+  // In remote Worker deployments, we don't have access to TypeScript source files.
   // This approach is simpler and guaranteed to work
   return {
     drive: [

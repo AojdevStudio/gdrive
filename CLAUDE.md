@@ -2,23 +2,25 @@
 
 ## Project Overview
 
-MCP server for Google Workspace integration (Drive, Sheets, Forms, Docs, Gmail, Calendar). Version 3.3.0.
+**Google Workspace MCP** is a remote-only MCP server for Google Workspace: Drive, Sheets, Forms, Docs, Gmail, and Calendar.
 
 **Linear:** Team "Google Drive" (ID: `9fd7c68d-cf3f-4ac0-a0d7-42605c079da1`) — issues prefixed `GDRIVE-`
 
-- 6 operation-based tools with 47 total operations
-- Redis caching (optional, graceful fallback)
-- Token encryption with key rotation
-- Docker support with docker-compose
+- Cloudflare Workers Streamable HTTP runtime
+- Two MCP tools: `search` and `execute`
+- Encrypted Google OAuth tokens in Workers KV
+- Remote setup/status routes for Google OAuth recovery
 
 **Reference:** [how2mcp](https://github.com/Rixmerz/HOW2MCP.git) — definitive MCP implementation guide. Follow its **operation-based tool pattern** (one tool with `operation` parameter, NOT separate tools per action). See `MCP-DOCS/` for architecture guides and `MCP_EXAMPLE_PROJECT/` for reference implementation.
 
 ## Commands
 
 ```bash
-# Build & Dev
-npm run build          # Compile TypeScript to dist/
-npm run watch          # Watch mode (auto-rebuild)
+# Build & Worker Dev
+npm run build          # Compile TypeScript
+npm run build:worker   # Compile Worker-targeted TypeScript
+npm run dev:worker     # Run Wrangler Worker dev server
+npm run deploy:worker  # Deploy Worker
 
 # Testing
 npm test               # Run all unit tests
@@ -28,14 +30,11 @@ npm run test:e2e       # End-to-end tests
 npm run type-check     # TypeScript type checking (no emit)
 npm run lint           # ESLint
 
-# Auth & Server
-node ./dist/index.js auth   # OAuth flow (requires gcp-oauth.keys.json)
-node ./dist/index.js        # Start MCP server (stdio transport)
-node ./dist/index.js http --host 127.0.0.1 --port 8788  # Start Streamable HTTP server for Codex
-
 # Changelog
 ./scripts/changelog/update-changelog.py --auto
 ```
+
+Do not document or recommend `node ./dist/index.js`, stdio transport, local HTTP transport, Docker, or local OAuth bootstrap as MCP client connection paths.
 
 ## Architecture
 
@@ -95,34 +94,15 @@ See `.env.example` for full reference. Key variables:
 | `GDRIVE_TOKEN_PREEMPTIVE_REFRESH` | No | Pre-expiry refresh window in ms (default: 600000) |
 | `GDRIVE_TOKEN_MAX_RETRIES` | No | Max retry attempts (default: 3) |
 | `GDRIVE_TOKEN_RETRY_DELAY` | No | Initial retry delay in ms (default: 1000) |
-| `GDRIVE_CREDENTIALS_PATH` | No | Path to credentials file |
-| `GDRIVE_OAUTH_PATH` | No | Path to OAuth keys file |
 | `PAI_CONTACTS_PATH` | No | Contact resolution for Calendar (name → email) |
-| `LOG_LEVEL` | No | Winston log level (default: info) |
-| `REDIS_URL` | No | Redis connection (default: redis://localhost:6379) |
-| `GDRIVE_TOKEN_HEALTH_CHECK` | No | Enable token health checks (default: true) |
-| `MCP_BEARER_TOKEN` | HTTP only | Static bearer token for MCP client-to-server auth |
+| `LOG_LEVEL` | No | Worker log level hint |
+| `MCP_BEARER_TOKEN` | Yes | Static bearer token for MCP client-to-server auth |
+| `MCP_SETUP_TOKEN` | Yes | Separate bearer token for remote setup/status routes |
 | `MCP_AUTHORIZATION_SERVER_URL` | No | Metadata-only external OAuth authorization server URL for MCP clients |
 
-## Docker
+## Unsupported Runtime Paths
 
-```bash
-# Authenticate first (on host, opens browser)
-./scripts/auth.sh
-
-# Run with Redis (recommended)
-docker-compose up -d
-
-# Run standalone (no Redis)
-docker run -i --rm \
-  -v ${PWD}/credentials:/credentials:ro \
-  -v ${PWD}/data:/data \
-  -v ${PWD}/logs:/app/logs \
-  --env-file .env \
-  gdrive-mcp-server
-```
-
-For Claude Desktop integration, see `docker-compose.yml` for the full service config.
+Do not use Docker, local stdio, local HTTP, or local OAuth bootstrap flows as MCP runtime paths.
 
 ## Git Workflow
 
@@ -140,13 +120,10 @@ Use conventional commits: `feat:`, `fix:`, `docs:`, `test:`, `chore:`.
 
 - **Token encryption required** — `GDRIVE_TOKEN_ENCRYPTION_KEY` must be set or token storage fails. Generate with `openssl rand -base64 32`
 - **Key rotation** — Supports V1-V4 keys via env vars. Set `GDRIVE_TOKEN_CURRENT_KEY_VERSION` when rotating
-- **`isolated-vm` build deps** — Requires `python3`, `make`, `g++` at npm install time (handled in Dockerfile)
-- **Server version stale** — `index.ts:388` hardcodes version string; must be manually updated alongside `package.json`
-- **Redis optional** — Server degrades gracefully without Redis. No errors, just no caching
+- **Server version stale** — `src/server/factory.ts` hardcodes version string; update it alongside `package.json`
 - **Codex auth boundary** — Codex-to-MCP auth uses `MCP_BEARER_TOKEN`; Google OAuth remains server-to-Google auth. Do not make this server an OAuth authorization server.
 - **Calendar contacts** — Set `PAI_CONTACTS_PATH` to resolve names like "Mary" to email addresses; without it, all attendees must be email addresses
 - **ES modules** — Project uses ES2022 modules. Imports need `.js` extensions in TypeScript for Node resolution
-- **Test files excluded from Docker** — `.dockerignore` and `tsconfig.json` both exclude `__tests__/` from production builds
 
 ## Claude Code Behavior
 

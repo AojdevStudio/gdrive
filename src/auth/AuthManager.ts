@@ -84,13 +84,11 @@ export class AuthManager {
       if (authError.isLegacyFormat || authError.message === 'LEGACY_TOKEN_FORMAT') {
         this.logger.error('Legacy token format detected during initialization');
         this.logger.error('\n❌ Legacy Token Format Detected\n');
-        this.logger.error('Your tokens are in the old format and need to be migrated.');
+        this.logger.error('Your tokens are in the old local format and cannot be used by the remote Worker runtime.');
         this.logger.error('\nTo fix this issue:');
-        this.logger.error('1. Run the migration tool:');
-        this.logger.error('   node dist/index.js migrate-tokens\n');
-        this.logger.error('2. After migration, run:');
-        this.logger.error('   node dist/index.js verify-keys\n');
-        this.logger.error('3. Then restart the server normally\n');
+        this.logger.error('1. Configure Worker secrets for Google OAuth and token encryption.');
+        this.logger.error('2. Open /setup/google/start with MCP_SETUP_TOKEN.');
+        this.logger.error('3. Check /setup/status with MCP_SETUP_TOKEN before connecting /mcp.\n');
         process.exit(1);
       }
       

@@ -64,21 +64,6 @@ jest.mock('googleapis', () => ({
   },
 }));
 
-// Mock Redis client to prevent real Redis connections during tests
-jest.mock('redis', () => ({
-  createClient: jest.fn(() => ({
-    connect: jest.fn(),
-    disconnect: jest.fn(),
-    get: jest.fn(),
-    set: jest.fn(),
-    del: jest.fn(),
-    exists: jest.fn(),
-    flushall: jest.fn(),
-    on: jest.fn(),
-    ping: jest.fn(),
-  })),
-}));
-
 // Global test timeout
 jest.setTimeout(10000);
 

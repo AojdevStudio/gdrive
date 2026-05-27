@@ -57,7 +57,7 @@ The [Model Context Protocol](https://modelcontextprotocol.io) gives AI agents a 
 
 ## What's New in v4.0.0
 
-> **This is a breaking change release.** v4 introduces a 2-tool SDK architecture and Cloudflare Workers deployment. The legacy 6-tool stdio server is preserved for local use.
+> **This is a breaking change release.** v4 introduces a 2-tool SDK architecture and remote Cloudflare Workers deployment. Local stdio, local HTTP, Docker, and local OAuth bootstrap runtimes are no longer supported MCP paths.
 
 ### Zero-Install Remote Deployment
 
@@ -177,13 +177,13 @@ A production-ready MCP server that gives AI agents complete, secure access to Go
 
 ## Quick Start
 
-### Option 1: Remote (Cloudflare Workers) — Recommended
+### Remote (Cloudflare Workers)
 
-Deploy once to Cloudflare's edge — connect from anywhere via a permanent URL. After the initial setup, no local process to manage.
+Deploy once to Cloudflare's edge and connect MCP clients to the Worker `/mcp` URL. Local stdio, local HTTP, Docker, and local OAuth bootstrap runtimes are not supported.
 
 **Prerequisites:**
 - [Cloudflare account](https://dash.cloudflare.com/sign-up) (free tier works)
-- [Node.js 18+](https://nodejs.org/en/download) (needed for the one-time local auth step)
+- [Node.js 22+](https://nodejs.org/en/download) for contributor build/deploy commands
 - [Wrangler CLI](https://developers.cloudflare.com/workers/wrangler/install-and-update/): `npm install -g wrangler` or use `npx wrangler`
 - [Google Cloud project](./docs/Guides/01-initial-setup.md) with OAuth credentials
 - [`just`](https://just.systems/man/en/packages.html) — `brew install just` (macOS) · `winget install just` (Windows) · `cargo install just` (cross-platform)
@@ -211,53 +211,53 @@ npx wrangler kv:namespace create GDRIVE_KV --preview false
 # Copy the `id` from the output, update [[kv_namespaces]] id in wrangler.toml
 ```
 
-#### 4. Complete Google OAuth locally
+#### 4. Configure Worker secrets
 
 ```bash
-# Generate encryption key
-echo "GDRIVE_TOKEN_ENCRYPTION_KEY=$(openssl rand -base64 32)" > .env
-
-# Place your gcp-oauth.keys.json in credentials/
-mkdir -p credentials
-cp /path/to/gcp-oauth.keys.json credentials/
-
-# Run auth — opens browser, saves tokens to .tokens.json
-node ./dist/index.js auth
+npx wrangler secret put GDRIVE_CLIENT_ID
+npx wrangler secret put GDRIVE_CLIENT_SECRET
+npx wrangler secret put GDRIVE_TOKEN_ENCRYPTION_KEY
+npx wrangler secret put MCP_BEARER_TOKEN
+npx wrangler secret put MCP_SETUP_TOKEN
 ```
 
 > **Don't have Google Cloud credentials?** Follow the [Google Cloud setup guide](./docs/Guides/01-initial-setup.md) — or run `just install` for a fully guided walkthrough.
 
-#### 5. Upload tokens and secrets to Cloudflare
-
-```bash
-# Upload OAuth tokens to KV
-npx wrangler kv:key put --namespace-id=<KV_NAMESPACE_ID> \
-  "gdrive:oauth:tokens" "$(cat .tokens.json)"
-
-# Set OAuth client credentials as Wrangler secrets
-npx wrangler secret put GDRIVE_CLIENT_ID
-npx wrangler secret put GDRIVE_CLIENT_SECRET
-```
-
-#### 6. Deploy
+#### 5. Deploy
 
 ```bash
 npx wrangler deploy
 # Note the URL printed: https://your-worker.workers.dev
 ```
 
-#### 7. Connect to Claude
+#### 6. Complete remote Google OAuth setup
+
+Open the setup route with setup bearer auth:
+
+```bash
+curl -i -H "Authorization: Bearer $MCP_SETUP_TOKEN" \
+  https://your-worker.workers.dev/setup/google/start
+```
+
+After Google redirects back to the Worker callback, verify state:
+
+```bash
+curl -H "Authorization: Bearer $MCP_SETUP_TOKEN" \
+  https://your-worker.workers.dev/setup/status
+```
+
+#### 7. Connect MCP clients
 
 **Claude Code CLI — User scope** (available in every project, stored in `~/.claude/settings.json`):
 
 ```bash
-claude mcp add --scope user --transport http gdrive https://your-worker.workers.dev/mcp
+claude mcp add --scope user --transport http google-workspace https://your-worker.workers.dev/mcp
 ```
 
 **Claude Code CLI — Project scope** (this project only, can be committed to the repo):
 
 ```bash
-claude mcp add --scope project --transport http gdrive https://your-worker.workers.dev/mcp
+claude mcp add --scope project --transport http google-workspace https://your-worker.workers.dev/mcp
 ```
 
 > **Why user scope?** An MCP server that connects to *your* Google account belongs at the user level — not locked to one project. Use `--scope project` only when the server is project-specific (different Google account, different permissions).
@@ -267,97 +267,8 @@ claude mcp add --scope project --transport http gdrive https://your-worker.worke
 ```json
 {
   "mcpServers": {
-    "gdrive": {
+    "google-workspace": {
       "url": "https://your-worker.workers.dev/mcp"
-    }
-  }
-}
-```
-
----
-
-### Option 2: Local (Node.js stdio)
-
-For local development or when you prefer to keep everything on-machine.
-
-#### Prerequisites
-
-- [Node.js 18+](https://nodejs.org/en/download)
-- [Google Cloud project](./docs/Guides/01-initial-setup.md) with OAuth credentials
-
-> **New to Google Cloud?** Follow the [detailed setup guide](./docs/Guides/01-initial-setup.md).
-
-#### Install & Authenticate
-
-```bash
-git clone https://github.com/AojdevStudio/gdrive.git
-cd gdrive
-npm install && npm run build
-
-# Copy your OAuth credentials
-mkdir -p credentials
-cp /path/to/gcp-oauth.keys.json credentials/
-
-# Generate encryption key and authenticate
-export GDRIVE_TOKEN_ENCRYPTION_KEY=$(openssl rand -base64 32)
-node ./dist/index.js auth
-```
-
-#### Connect to Claude
-
-**Claude Code CLI — User scope** (recommended — works across all your projects):
-
-```bash
-claude mcp add --scope user gdrive -- node /absolute/path/to/gdrive/dist/index.js
-```
-
-**Claude Code CLI — Project scope:**
-
-```bash
-claude mcp add --scope project gdrive -- node /absolute/path/to/gdrive/dist/index.js
-```
-
-**Claude Desktop:**
-
-```json
-{
-  "mcpServers": {
-    "gdrive": {
-      "command": "node",
-      "args": ["/absolute/path/to/gdrive/dist/index.js"],
-      "env": {
-        "GDRIVE_TOKEN_ENCRYPTION_KEY": "your-key-here"
-      }
-    }
-  }
-}
-```
-
----
-
-### Option 3: Docker (Self-Hosted Production)
-
-For teams that need a persistent, shared instance with Redis caching.
-
-```bash
-# Authenticate on host first (opens browser)
-./scripts/auth.sh
-
-# Start with Redis caching
-docker compose up -d --build
-
-# Verify
-docker compose ps
-```
-
-**Claude Desktop with Docker:**
-
-```json
-{
-  "mcpServers": {
-    "gdrive": {
-      "command": "docker",
-      "args": ["exec", "-i", "gdrive-mcp-server", "node", "dist/index.js"]
     }
   }
 }
@@ -398,8 +309,7 @@ This means **88% fewer tools** in your agent's context window — faster tool se
 - **AES-256-GCM encryption** for all stored tokens
 - **Automatic OAuth refresh** — authenticate once, works forever
 - **Key rotation** with V1-V4 versioned keys
-- **Redis caching** with intelligent invalidation (optional, graceful fallback)
-- **Sandboxed execution** via isolated-vm
+- **Structured operation execution** through the Google Workspace SDK
 - **Comprehensive audit trail** in structured logs
 
 ---

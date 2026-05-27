@@ -1,11 +1,11 @@
-# Google Drive MCP Server API (v4.0.0-alpha)
+# Google Workspace MCP API (v4.0.0-alpha)
 
 ## Overview
 
 The v4 server exposes a minimal MCP API with **two tools only**:
 
 - `search` - discover available SDK services and operations
-- `execute` - run JavaScript against `sdk.*` operations in a sandbox
+- `execute` - run a specific Google Workspace operation with structured arguments
 
 The runtime provides **47 operations** across:
 
@@ -26,7 +26,7 @@ v4 replaces both:
 with a single pattern:
 
 1. discover via `search`
-2. execute via `execute` using `sdk.<service>.<operation>(...)`
+2. execute via `execute` using `{ "service": "...", "operation": "...", "args": ... }`
 
 ## Tool Reference
 
@@ -63,13 +63,17 @@ Returns operation metadata from `src/sdk/spec.ts`.
 
 ## `execute`
 
-Executes JavaScript with `sdk` available in scope.
+Runs one Google Workspace operation through the Worker runtime.
 
 ### Input
 
 ```json
 {
-  "code": "const files = await sdk.drive.search({ query: 'budget' }); return files;"
+  "service": "drive",
+  "operation": "search",
+  "args": {
+    "query": "budget"
+  }
 }
 ```
 
@@ -78,18 +82,11 @@ Executes JavaScript with `sdk` available in scope.
 ```json
 {
   "result": {},
-  "logs": []
+  "result": {}
 }
 ```
 
-On failure, returns an error payload (`isError: true`) with message and captured logs.
-
-## Execution Environment
-
-- code runs in Node `vm` sandbox (`src/sdk/sandbox-node.ts`)
-- dangerous globals are blocked (`process`, `require`, timers, `fetch`, etc.)
-- `console.log/info/warn/error` output is captured and returned in `logs`
-- use `return` in code to produce structured `result`
+On failure, returns an error payload (`isError: true`) with a message.
 
 ## Recommended Usage Flow
 
@@ -110,7 +107,12 @@ On failure, returns an error payload (`isError: true`) with message and captured
 {
   "name": "execute",
   "arguments": {
-    "code": "const events = await sdk.calendar.listEvents({ calendarId: 'primary', maxResults: 10 }); return events;"
+    "service": "calendar",
+    "operation": "listEvents",
+    "args": {
+      "calendarId": "primary",
+      "maxResults": 10
+    }
   }
 }
 ```
@@ -212,7 +214,13 @@ On failure, returns an error payload (`isError: true`) with message and captured
 {
   "name": "execute",
   "arguments": {
-    "code": "return await sdk.gmail.sendMessage({ to: 'recipient@example.com', subject: 'Status update', body: 'All checks passed.' });"
+    "service": "gmail",
+    "operation": "sendMessage",
+    "args": {
+      "to": "recipient@example.com",
+      "subject": "Status update",
+      "body": "All checks passed."
+    }
   }
 }
 ```
@@ -223,14 +231,20 @@ On failure, returns an error payload (`isError: true`) with message and captured
 {
   "name": "execute",
   "arguments": {
-    "code": "const now = new Date().toISOString(); const tomorrow = new Date(Date.now() + 24*60*60*1000).toISOString(); return await sdk.calendar.checkFreeBusy({ timeMin: now, timeMax: tomorrow, items: [{ id: 'primary' }] });"
+    "service": "calendar",
+    "operation": "checkFreeBusy",
+    "args": {
+      "timeMin": "2026-05-27T09:00:00Z",
+      "timeMax": "2026-05-28T09:00:00Z",
+      "items": [{ "id": "primary" }]
+    }
   }
 }
 ```
 
 ## Authentication and Scopes
 
-Required OAuth scopes are configured in `src/server/transports/stdio.ts`:
+Required OAuth scopes are configured in the Worker remote OAuth setup handler:
 
 - Drive: `https://www.googleapis.com/auth/drive`
 - Sheets: `https://www.googleapis.com/auth/spreadsheets`
@@ -248,11 +262,11 @@ Required OAuth scopes are configured in `src/server/transports/stdio.ts`:
 
 ## Error Handling Guidance
 
-Inside `execute` code:
+When calling `execute`:
 
-- validate expected input before calling `sdk.*`
-- throw explicit `Error` messages for failed preconditions
-- return structured objects for expected no-result cases
+- validate the operation arguments before sending the MCP request
+- use `search` to inspect required parameters and examples
+- handle `isError: true` responses as operation failures
 - use `console.error(...)` for debugging context (captured in `logs`)
 
 Example:
@@ -270,7 +284,7 @@ return { status: "ok", files: result.files };
 - prefer one `execute` block for multi-step workflows instead of many small calls
 - filter/transform data inside execute code before returning
 - use `pageSize` intentionally on list/search operations
-- Redis caching is optional and configured via `REDIS_URL`
+- use operation-level filters and page sizes to keep Worker responses bounded
 
 ## Migration Notes
 
@@ -288,4 +302,3 @@ When migrating legacy prompts or integrations:
 - `docs/Deployment/DOCKER.md`
 - `docs/Examples/README.md`
 - `docs/Guides/README.md`
-

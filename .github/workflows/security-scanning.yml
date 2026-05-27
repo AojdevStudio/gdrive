@@ -21,7 +21,6 @@ on:
           - sast
           - dependencies
           - secrets
-          - docker
           - licenses
 
 permissions:
@@ -337,124 +336,7 @@ jobs:
             secret-scan-results.txt
           retention-days: 30
 
-  # Job 4: Docker security scanning
-  docker-security-scan:
-    name: Docker Security Scan
-    runs-on: ubuntu-latest
-    if: github.event.inputs.scan-type == 'all' || github.event.inputs.scan-type == 'docker' || github.event.inputs.scan-type == null
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Build Docker image for scanning
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          push: false
-          load: true
-          tags: gdrive-mcp:security-scan
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
-      - name: Run Trivy vulnerability scanner
-        uses: aquasecurity/trivy-action@master
-        with:
-          image-ref: 'gdrive-mcp:security-scan'
-          format: 'sarif'
-          output: 'trivy-results.sarif'
-
-      - name: Upload Trivy scan results to GitHub Security tab
-        uses: github/codeql-action/upload-sarif@v3
-        if: always()
-        with:
-          sarif_file: 'trivy-results.sarif'
-
-      - name: Run Trivy filesystem scan
-        uses: aquasecurity/trivy-action@master
-        with:
-          scan-type: 'fs'
-          scan-ref: '.'
-          format: 'json'
-          output: 'trivy-fs-results.mjson'
-
-      - name: Analyze Docker security best practices
-        run: |
-          echo "Analyzing Dockerfile for security best practices..."
-          
-          cat > docker-security-check.sh << 'EOF'
-          #!/bin/bash
-          
-          echo "## Docker Security Analysis" > docker-security-report.md
-          echo "" >> docker-security-report.md
-          
-          # Check Dockerfile best practices
-          if [ -f "Dockerfile" ]; then
-            echo "### Dockerfile Security Check" >> docker-security-report.md
-            echo "" >> docker-security-report.md
-            
-            # Check for non-root user
-            if grep -q "USER " Dockerfile; then
-              echo "✅ Non-root user configured" >> docker-security-report.md
-            else
-              echo "⚠️ Consider adding a non-root user" >> docker-security-report.md
-            fi
-            
-            # Check for COPY vs ADD
-            if grep -q "ADD " Dockerfile; then
-              echo "⚠️ ADD instruction found - consider using COPY instead" >> docker-security-report.md
-            else
-              echo "✅ Using COPY instead of ADD" >> docker-security-report.md
-            fi
-            
-            # Check for specific versions
-            if grep -q "FROM.*:latest" Dockerfile; then
-              echo "⚠️ Using 'latest' tag - consider pinning to specific version" >> docker-security-report.md
-            else
-              echo "✅ Base image version is pinned" >> docker-security-report.md
-            fi
-            
-            # Check for health check
-            if grep -q "HEALTHCHECK" Dockerfile; then
-              echo "✅ Health check configured" >> docker-security-report.md
-            else
-              echo "⚠️ Consider adding a health check" >> docker-security-report.md
-            fi
-            
-            # Check for secrets in build context
-            echo "" >> docker-security-report.md
-            echo "### Build Context Security" >> docker-security-report.md
-            
-            if [ -f ".dockerignore" ]; then
-              echo "✅ .dockerignore file present" >> docker-security-report.md
-              if grep -q "credentials" .dockerignore && grep -q "\.env" .dockerignore; then
-                echo "✅ Common secret files are ignored" >> docker-security-report.md
-              else
-                echo "⚠️ Consider adding common secret patterns to .dockerignore" >> docker-security-report.md
-              fi
-            else
-              echo "⚠️ .dockerignore file missing" >> docker-security-report.md
-            fi
-          fi
-          EOF
-          
-          chmod +x docker-security-check.sh
-          ./docker-security-check.sh
-
-      - name: Upload Docker security scan results
-        uses: actions/upload-artifact@v4
-        with:
-          name: docker-security-scan-results-${{ github.run_id }}
-          path: |
-            trivy-results.sarif
-            trivy-fs-results.mjson
-            docker-security-report.md
-          retention-days: 30
-
-  # Job 5: License compliance scanning
+  # Job 4: License compliance scanning
   license-scan:
     name: License Compliance Scan
     runs-on: ubuntu-latest
@@ -583,11 +465,11 @@ jobs:
             license-compliance-summary.md
           retention-days: 30
 
-  # Job 6: Security summary and reporting
+  # Job 5: Security summary and reporting
   security-summary:
     name: Security Summary
     runs-on: ubuntu-latest
-    needs: [sast-analysis, dependency-scan, secret-scan, docker-security-scan, license-scan]
+    needs: [sast-analysis, dependency-scan, secret-scan, license-scan]
     if: always()
 
     steps:
@@ -610,7 +492,6 @@ jobs:
           echo "- **SAST Analysis:** ${{ needs.sast-analysis.result }}" >> security-summary.md
           echo "- **Dependency Scan:** ${{ needs.dependency-scan.result }}" >> security-summary.md
           echo "- **Secret Scan:** ${{ needs.secret-scan.result }}" >> security-summary.md
-          echo "- **Docker Security Scan:** ${{ needs.docker-security-scan.result }}" >> security-summary.md
           echo "- **License Scan:** ${{ needs.license-scan.result }}" >> security-summary.md
           echo "" >> security-summary.md
           
@@ -631,7 +512,7 @@ jobs:
           fi
           
           echo "## Summary" >> security-summary.md
-          echo "- **Total scans:** 5" >> security-summary.md
+          echo "- **Total scans:** 4" >> security-summary.md
           echo "- **Critical issues:** $critical_issues" >> security-summary.md
           echo "- **Overall status:** $([ $critical_issues -eq 0 ] && echo "✅ PASS" || echo "❌ ISSUES FOUND")" >> security-summary.md
           echo "" >> security-summary.md
@@ -640,8 +521,7 @@ jobs:
           echo "1. Review all failed scans and address critical issues" >> security-summary.md
           echo "2. Update dependencies with known vulnerabilities" >> security-summary.md
           echo "3. Ensure no secrets are committed to the repository" >> security-summary.md
-          echo "4. Follow Docker security best practices" >> security-summary.md
-          echo "5. Review license compliance for all dependencies" >> security-summary.md
+          echo "4. Review license compliance for all dependencies" >> security-summary.md
           echo "" >> security-summary.md
           
           echo "📋 Detailed reports available in workflow artifacts."
