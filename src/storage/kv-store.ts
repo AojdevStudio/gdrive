@@ -1,7 +1,6 @@
 /**
  * Cloudflare Workers KV cache implementation.
- * Implements CacheManagerLike so it can drop-in replace the Redis CacheManager
- * for the Workers runtime.
+ * Implements CacheManagerLike for the Workers runtime.
  *
  * Token encryption uses the Web Crypto API (crypto.subtle) — available in both
  * Workers and modern Node.js (18+). No Node crypto module required.

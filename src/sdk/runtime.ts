@@ -1,6 +1,6 @@
 /**
  * SDK Runtime factory.
- * Creates the full typed sdk object injected into execute() sandbox.
+ * Creates the full typed sdk object used by execute operations.
  * Each operation is wrapped with per-service rate limiting.
  *
  * Uses dynamic imports so individual module code is not bundled into worker.ts

@@ -274,14 +274,13 @@ jobs:
           - [x] Basic tests pass
           - [ ] Manual testing of core functionality
           - [ ] Integration tests with Google Drive API
-          - [ ] Docker image builds successfully
           
           ### Review Notes
           Please review the following before merging:
           1. Check the specific package changes for any breaking changes
           2. Run the full test suite locally
           3. Test with actual Google Drive credentials
-          4. Verify Docker functionality
+          4. Verify the Worker build and remote setup flow
           
           Generated with [Claude Code](https://claude.ai/code)
           EOF

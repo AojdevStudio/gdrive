@@ -9,9 +9,13 @@ default:
 
 # --- Development ---
 
-# Compile TypeScript to dist/
+# Compile TypeScript
 build:
   npm run build
+
+# Compile Worker-targeted TypeScript
+build-worker:
+  npm run build:worker
 
 # Watch mode (auto-rebuild on change)
 watch:
@@ -47,8 +51,8 @@ type-check:
 
 # --- CI ---
 
-# Run full pre-push check suite (lint + type-check + test)
-ci: lint type-check test
+# Run full pre-push check suite
+ci: lint type-check build-worker test
 
 # --- BMAD ---
 
@@ -64,64 +68,21 @@ bmad-list:
 bmad-validate:
   npm run bmad:validate
 
-# --- Server ---
+# --- Worker ---
 
-# Run OAuth authentication flow (opens browser)
-auth:
-  node ./dist/index.js auth
+# Run Wrangler Worker dev server
+dev-worker:
+  npm run dev:worker
 
-# Start MCP server (stdio transport)
-serve:
-  node ./dist/index.js
-
-# --- Docker ---
-
-# Build Docker image
-docker-build:
-  docker build -t gdrive-mcp-server .
-
-# Start server with Redis via docker-compose
-docker-up:
-  docker-compose up -d
-
-# Stop docker-compose services
-docker-down:
-  docker-compose down
-
-# View docker-compose logs (follow)
-docker-logs:
-  docker-compose logs -f
-
-# Run standalone container (no Redis)
-docker-run:
-  docker run -i --rm \
-    -v ${PWD}/credentials:/credentials:ro \
-    -v ${PWD}/data:/data \
-    -v ${PWD}/logs:/app/logs \
-    --env-file .env \
-    gdrive-mcp-server
+# Deploy Cloudflare Worker
+deploy-worker:
+  npm run deploy:worker
 
 # --- Scripts ---
-
-# Rotate token encryption keys
-rotate-keys:
-  ./scripts/rotate-keys.sh
-
-# Test server connectivity
-test-server:
-  ./scripts/test-server.sh
 
 # Update changelog (auto-detect changes)
 changelog:
   ./scripts/changelog/update-changelog.py --auto
-
-# Run OAuth via auth script
-auth-script:
-  ./scripts/auth.sh
-
-# Migrate encrypted tokens to new format
-migrate-tokens:
-  npx tsx ./scripts/migrate-tokens.ts
 
 # --- Git ---
 

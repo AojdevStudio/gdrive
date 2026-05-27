@@ -1,13 +1,12 @@
 /**
  * Core types for the Code Mode SDK layer.
- * Shared between Node (Phase 1) and Workers (Phase 2) implementations.
+ * Shared by the Cloudflare Worker runtime.
  */
 
 import type { Logger } from 'winston';
 import type { drive_v3, sheets_v4, forms_v1, docs_v1, gmail_v1, calendar_v3 } from 'googleapis';
 import type { CacheManagerLike, PerformanceMonitorLike } from '../modules/types.js';
 import type { KVLike } from '../server/tracking.js';
-export type { ExecuteResult, Executor } from './executor.js';
 
 /**
  * Full context passed to all SDK runtime operations.
@@ -29,7 +28,7 @@ export interface FullContext {
 }
 
 /**
- * The full typed SDK object available in execute() sandbox.
+ * The full typed SDK object used by execute operations.
  * Each method accepts typed options and returns the operation result.
  */
 export interface SDKRuntime {

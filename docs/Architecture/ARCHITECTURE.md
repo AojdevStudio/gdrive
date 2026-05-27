@@ -1,54 +1,48 @@
-# Google Drive MCP Server Architecture
+# Google Workspace MCP Architecture
 
 ## Overview
 
-This repository implements a v4 MCP server for Google Workspace with a **Code Mode** runtime:
+This repository implements a v4 remote MCP server for Google Workspace on Cloudflare Workers:
 
 - The server exposes exactly **2 MCP tools**: `search` and `execute`
-- Workspace operations are executed through `sdk.*` in sandboxed JavaScript
+- Workspace operations are executed through structured `service`, `operation`, and `args` inputs
 - The SDK surface includes **47 operations** across 6 services:
   - `drive` (7), `sheets` (12), `forms` (4), `docs` (5), `gmail` (10), `calendar` (9)
 
 The architecture is intentionally split between:
 
 1. **Discovery** (`search`) to find operation signatures and examples
-2. **Execution** (`execute`) to run agent-authored code with `sdk` access
+2. **Execution** (`execute`) to call a specific operation through the Worker runtime
 
 ## High-Level Runtime
 
 ```text
 MCP Client
+  -> Cloudflare Worker /mcp
   -> tools/list
      -> [search, execute]
   -> tools/call(search)
      -> SDK spec subset from src/sdk/spec.ts
   -> tools/call(execute)
-     -> NodeSandbox (vm context)
-     -> sdk.<service>.<operation>(...)
+     -> service.operation(args)
      -> Google APIs
-     -> { result, logs }
+     -> { result }
 ```
 
 ## Core Components
 
-### Entry and CLI
+### Worker Entry
 
-- `index.ts` is the CLI entry point
-- Supported commands:
-  - `node ./dist/index.js` (start stdio MCP server)
-  - `node ./dist/index.js auth`
-  - `node ./dist/index.js health`
-  - `node ./dist/index.js rotate-key`
-  - `node ./dist/index.js verify-keys`
-  - `node ./dist/index.js migrate-tokens`
+- `worker.ts` is the supported runtime entry point.
+- `index.ts` intentionally fails local runtime attempts and points operators to the deployed Worker.
+- MCP clients must connect to the deployed Worker `/mcp` URL.
 
 ### Transport and Server Wiring
 
-- `src/server/transports/stdio.ts`
-  - loads OAuth config
-  - initializes `AuthManager`
-  - creates logger/cache/perf monitor
-  - connects `StdioServerTransport`
+- `worker.ts`
+  - handles Streamable HTTP MCP requests at `/mcp`
+  - validates MCP bearer auth
+  - resolves and refreshes encrypted Google OAuth tokens from Workers KV
 - `src/server/factory.ts`
   - registers `search` and `execute`
   - creates Google API clients (Drive, Sheets, Forms, Docs, Gmail, Calendar)
@@ -58,9 +52,6 @@ MCP Client
 
 - `src/sdk/spec.ts` contains static operation metadata used by `search`
 - `src/sdk/runtime.ts` maps runtime context to `sdk.*` methods
-- `src/sdk/sandbox-node.ts` runs user code in a Node `vm` context
-  - blocked globals include `process`, `require`, timers, and `fetch`
-  - `console.*` output is captured and returned as `logs`
 
 ### Service Modules
 
@@ -96,13 +87,17 @@ Behavior:
 
 ### `execute`
 
-Purpose: run JavaScript with `sdk` in the sandbox.
+Purpose: run a specific Google Workspace operation.
 
 Input shape:
 
 ```json
 {
-  "code": "JavaScript string"
+  "service": "drive",
+  "operation": "search",
+  "args": {
+    "query": "budget"
+  }
 }
 ```
 
@@ -110,8 +105,7 @@ Output shape:
 
 ```json
 {
-  "result": "any returned value",
-  "logs": ["captured console output"]
+  "result": "operation return value"
 }
 ```
 
@@ -147,24 +141,28 @@ If execution fails, tool returns an error payload with captured logs.
 
 Auth stack:
 
-- `src/auth/AuthManager.ts`
-- `src/auth/TokenManager.ts`
-- `src/auth/KeyRotationManager.ts`
+- `src/auth/workers-oauth.ts`
+- `src/auth/workers-auth.ts`
+- `src/storage/kv-store.ts`
 
 Key characteristics:
 
 - OAuth tokens are encrypted at rest
-- key rotation supports versioned keys (`v1`..`v4` patterns via env vars)
-- health command validates token state and refresh readiness
-- auth flow stores tokens for non-interactive server startup
+- `/setup/google/start` begins Google OAuth with one-time state in Workers KV
+- `/setup/google/callback` exchanges the code and stores encrypted tokens in Workers KV
+- `/setup/status` reports token state and remote recovery hints
 
 Required env:
 
+- `GDRIVE_CLIENT_ID`
+- `GDRIVE_CLIENT_SECRET`
 - `GDRIVE_TOKEN_ENCRYPTION_KEY`
+- `MCP_BEARER_TOKEN`
+- `MCP_SETUP_TOKEN`
 
 ## OAuth Scopes
 
-The stdio transport requests these scopes:
+The remote OAuth setup handler requests these scopes:
 
 - `https://www.googleapis.com/auth/drive`
 - `https://www.googleapis.com/auth/spreadsheets`
@@ -182,44 +180,33 @@ Note: Apps Script scope is requested, but there is no exposed `sdk.script` servi
 
 ## Caching, Logging, and Health
 
-### Redis Cache
-
-- optional cache via `REDIS_URL`
-- graceful fallback when Redis is unavailable
-- default TTL: 300 seconds
-
 ### Logging
 
-- Winston structured logging
-- file logs and console transport
+- Worker logging goes through `console.*`
 - configurable via `LOG_LEVEL`
 
 ### Health Check
 
-- `node ./dist/index.js health`
-- Dockerfile health check uses `node dist/health-check.js`
-- docker-compose health check uses `node dist/index.js health`
+- Use `GET /setup/status` with `MCP_SETUP_TOKEN` to inspect remote Google OAuth state.
+- Use `POST /mcp` with `MCP_BEARER_TOKEN` for MCP requests.
 
 ## Deployment Architecture
 
 ### Runtime Requirements
 
-- Node.js `>=22.0.0`
-- TypeScript build output in `dist/`
+- Cloudflare Workers
+- Workers KV binding `GDRIVE_KV`
+- TypeScript Worker build output in `dist-worker/`
 
-### Container Runtime
+### Unsupported Runtime Paths
 
-- `Dockerfile` base image: `node:22-slim`
-- build installs native deps needed by dependencies
-- credentials mounted at `/credentials`
-- logs mounted at `/app/logs`
-
-See `docs/Deployment/DOCKER.md` for complete deployment steps.
+- Local stdio, local HTTP, Docker, and local OAuth bootstrap are not supported MCP runtime paths.
 
 ## Project Structure (Relevant Paths)
 
 ```text
 index.ts
+worker.ts
 src/
   auth/
   modules/
@@ -232,14 +219,9 @@ src/
   sdk/
     spec.ts
     runtime.ts
-    sandbox-node.ts
   server/
     factory.ts
     bootstrap.ts
-    transports/stdio.ts
-  health-check.ts
-Dockerfile
-docker-compose.yml
 ```
 
 ## Design Principles
@@ -249,4 +231,3 @@ docker-compose.yml
 - Make operation discovery deterministic via static spec metadata
 - Prefer explicit, typed operation signatures and stable error messages
 - Keep deployment paths and env vars aligned across docs and runtime
-

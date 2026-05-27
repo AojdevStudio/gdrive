@@ -1,7 +1,6 @@
 import { describe, it, expect, jest } from '@jest/globals';
 import { createConfiguredServer } from '../../server/factory.js';
 import type { ServerConfig } from '../../server/factory.js';
-import type { Executor } from '../../sdk/types.js';
 
 function makeDeps(overrides: Partial<ServerConfig> = {}): ServerConfig {
   return {
@@ -36,14 +35,6 @@ describe('createConfiguredServer', () => {
     const server = createConfiguredServer(makeDeps());
     expect(server).toBeDefined();
     expect(typeof server.connect).toBe('function');
-  });
-
-  it('accepts an optional sandbox parameter', () => {
-    const mockSandbox: Executor = {
-      execute: jest.fn<Executor['execute']>().mockResolvedValue({ result: null, logs: [] }),
-    };
-    const server = createConfiguredServer(makeDeps({ sandbox: mockSandbox }));
-    expect(server).toBeDefined();
   });
 
   it('marks search as read-only for clients', async () => {
@@ -82,17 +73,14 @@ describe('createConfiguredServer', () => {
 
     const execute = result.tools.find((tool) => tool.name === 'execute');
     const schema = execute?.inputSchema as {
-      anyOf?: unknown;
+      required?: unknown;
       properties?: Record<string, { description?: string }>;
     };
 
-    expect(schema.anyOf).toEqual([
-      { required: ['service', 'operation'] },
-      { required: ['code'] },
-    ]);
+    expect(schema.required).toEqual(['service', 'operation']);
     expect(schema.properties?.service?.description).toBeTruthy();
     expect(schema.properties?.operation?.description).toBeTruthy();
     expect(schema.properties?.args?.description).toBeTruthy();
-    expect(schema.properties?.code?.description).toBeTruthy();
+    expect(schema.properties?.code).toBeUndefined();
   });
 });
