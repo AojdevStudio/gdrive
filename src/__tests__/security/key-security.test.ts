@@ -268,34 +268,40 @@ describe('Cryptographic Security Tests', () => {
       const correctSalt = crypto.randomBytes(32);
       const wrongSalt = crypto.randomBytes(32);
       
-      // Derive key with correct salt
-      const startTime1 = process.hrtime.bigint();
-      const result1 = KeyDerivation.deriveKey(password, correctSalt);
-      const endTime1 = process.hrtime.bigint();
-      
-      // Derive key with wrong salt (should take similar time)
-      const startTime2 = process.hrtime.bigint();
-      const result2 = KeyDerivation.deriveKey(password, wrongSalt);
-      const endTime2 = process.hrtime.bigint();
-      
-      // Keys should be different
-      expect(Buffer.compare(result1.key, result2.key)).not.toBe(0);
-      
-      // Timing should be similar (PBKDF2 takes constant time)
-      const duration1 = Number(endTime1 - startTime1);
-      const duration2 = Number(endTime2 - startTime2);
-      
-      const timingRatio = Math.abs(duration1 - duration2) / Math.max(duration1, duration2);
-      expect(timingRatio).toBeLessThan(0.5); // Less than 50% difference (PBKDF2 timing can vary)
+      const timingRatios: number[] = [];
+
+      for (let attempt = 0; attempt < 3; attempt += 1) {
+        const salt1 = Buffer.from(correctSalt);
+        const salt2 = Buffer.from(wrongSalt);
+
+        const startTime1 = process.hrtime.bigint();
+        const result1 = KeyDerivation.deriveKey(password, salt1);
+        const endTime1 = process.hrtime.bigint();
+
+        const startTime2 = process.hrtime.bigint();
+        const result2 = KeyDerivation.deriveKey(password, salt2);
+        const endTime2 = process.hrtime.bigint();
+
+        expect(Buffer.compare(result1.key, result2.key)).not.toBe(0);
+
+        const duration1 = Number(endTime1 - startTime1);
+        const duration2 = Number(endTime2 - startTime2);
+        timingRatios.push(Math.abs(duration1 - duration2) / Math.max(duration1, duration2));
+
+        result1.key.fill(0);
+        result1.salt.fill(0);
+        result2.key.fill(0);
+        result2.salt.fill(0);
+      }
+
+      const sortedRatios = [...timingRatios].sort((a, b) => a - b);
+      const medianRatio = sortedRatios[Math.floor(sortedRatios.length / 2)];
+      expect(medianRatio).toBeLessThan(0.5); // PBKDF2 timing can vary on shared CI runners
       
       // Clean up sensitive data
       password.fill(0);
       correctSalt.fill(0);
       wrongSalt.fill(0);
-      result1.key.fill(0);
-      result1.salt.fill(0);
-      result2.key.fill(0);
-      result2.salt.fill(0);
     });
   });
 

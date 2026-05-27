@@ -28,7 +28,8 @@
     "bmad:validate": "bmad-method validate",
     "build:worker": "tsc -p tsconfig.worker.json",
     "dev:worker": "wrangler dev",
-    "deploy:worker": "wrangler deploy"
+    "deploy:worker": "wrangler deploy",
+    "smoke:worker": "node scripts/smoke/remote-worker-smoke.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.25.1",
