@@ -21,6 +21,12 @@ import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/
 import { WorkersKVCache, NullCache } from './src/storage/kv-store.js';
 import { getValidAccessToken, type KVNamespace } from './src/auth/workers-auth.js';
 import { createConfiguredServer } from './src/server/factory.js';
+import { jsonError, validateBearerRequest } from './src/server/http-auth.js';
+import {
+  jsonMetadata,
+  oauthAuthorizationServerNotImplemented,
+  protectedResourceMetadata,
+} from './src/server/http-metadata.js';
 
 export interface Env {
   GDRIVE_KV: KVNamespace;
@@ -29,54 +35,16 @@ export interface Env {
   GDRIVE_TOKEN_ENCRYPTION_KEY: string;
   MCP_BEARER_TOKEN?: string;
   MCP_ALLOWED_ORIGINS?: string;
+  MCP_AUTHORIZATION_SERVER_URL?: string;
   LOG_LEVEL?: string;
 }
 
-function jsonError(status: number, error: string, detail?: string): Response {
-  return new Response(
-    JSON.stringify({
-      error,
-      ...(detail ? { detail } : {}),
-    }),
-    {
-      status,
-      headers: { 'Content-Type': 'application/json' },
-    }
-  );
-}
-
-function parseAllowedOrigins(raw?: string): Set<string> {
-  if (!raw) {
-    return new Set();
-  }
-  return new Set(
-    raw
-      .split(',')
-      .map((origin) => origin.trim())
-      .filter((origin) => origin.length > 0)
-  );
-}
-
 export function validateWorkerRequestAuth(request: Request, env: Env): Response | null {
-  if (!env.MCP_BEARER_TOKEN) {
-    return jsonError(500, 'Worker misconfiguration', 'MCP_BEARER_TOKEN is not configured');
-  }
-
-  const authHeader = request.headers.get('authorization');
-  const expected = `Bearer ${env.MCP_BEARER_TOKEN}`;
-  if (!authHeader || authHeader !== expected) {
-    return jsonError(401, 'Unauthorized', 'Missing or invalid bearer token');
-  }
-
-  const allowedOrigins = parseAllowedOrigins(env.MCP_ALLOWED_ORIGINS);
-  if (allowedOrigins.size > 0) {
-    const origin = request.headers.get('origin');
-    if (origin && !allowedOrigins.has(origin)) {
-      return jsonError(403, 'Forbidden', 'Origin not allowed');
-    }
-  }
-
-  return null;
+  return validateBearerRequest(request, {
+    requiredToken: env.MCP_BEARER_TOKEN,
+    allowedOrigins: env.MCP_ALLOWED_ORIGINS,
+    runtimeName: 'Cloudflare Worker',
+  });
 }
 
 // Auth adapter that satisfies googleapis' OAuth2Client contract on Workers.
@@ -166,6 +134,18 @@ export default {
       return handleTrackingRequest(request, env.GDRIVE_KV);
     }
 
+    if (request.method === 'GET' && url.pathname === '/.well-known/oauth-protected-resource') {
+      return jsonMetadata(
+        protectedResourceMetadata(request.url, {
+          authorizationServerUrl: env.MCP_AUTHORIZATION_SERVER_URL,
+        })
+      );
+    }
+
+    if (request.method === 'GET' && url.pathname === '/.well-known/oauth-authorization-server') {
+      return jsonMetadata(oauthAuthorizationServerNotImplemented(), 501);
+    }
+
     // Only handle POST requests to /mcp (or root)
     if (request.method !== 'POST' || (url.pathname !== '/' && url.pathname !== '/mcp')) {
       return new Response('gdrive-mcp Worker v4.0.0-alpha\nPOST /mcp to connect.', {
@@ -191,7 +171,7 @@ export default {
       );
     } catch (err) {
       logger.error('Auth failed', err);
-      return jsonError(401, 'Authentication failed', String(err));
+      return jsonError(401, 'Authentication failed', 'Google OAuth token resolution failed');
     }
 
     const auth = makeAuth(accessToken);

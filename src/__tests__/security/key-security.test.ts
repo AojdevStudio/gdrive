@@ -607,39 +607,57 @@ describe('Cryptographic Security Tests', () => {
       const key1 = crypto.randomBytes(32);
       const key2 = crypto.randomBytes(32);
       const testData = 'constant-test-data';
+      const ivs = Array.from({ length: 200 }, () => crypto.randomBytes(16));
       
-      // Perform same operation with different keys multiple times
-      const measurements: number[] = [];
-      
-      for (let i = 0; i < 10; i++) {
+      // Perform the same operation count with different keys and compare the
+      // median batch duration. Median comparison avoids CI/coverage outliers
+      // while still catching key-dependent timing paths.
+      const measureBatch = (keyToUse: Buffer): number => {
         const startTime = process.hrtime.bigint();
-        
-        // Simulate key lookup operation
-        const keyToUse = i % 2 === 0 ? key1 : key2;
-        const iv = crypto.randomBytes(16);
-        const cipher = crypto.createCipheriv('aes-256-gcm', keyToUse, iv);
-        cipher.update(testData, 'utf8', 'hex');
-        cipher.final('hex');
-        
+
+        for (const iv of ivs) {
+          const cipher = crypto.createCipheriv('aes-256-gcm', keyToUse, iv);
+          cipher.update(testData, 'utf8', 'hex');
+          cipher.final('hex');
+        }
+
         const endTime = process.hrtime.bigint();
-        measurements.push(Number(endTime - startTime));
-        
-        // Clean up IV
-        iv.fill(0);
+        return Number(endTime - startTime);
+      };
+
+      const median = (values: number[]): number => {
+        const sorted = [...values].sort((a, b) => a - b);
+        const middle = sorted[Math.floor(sorted.length / 2)];
+        if (middle === undefined) {
+          throw new Error('Cannot calculate median without measurements');
+        }
+        return middle;
+      };
+
+      // Warm up crypto/JIT paths so the first measured iteration does not dominate
+      // variance on slower or busy development machines.
+      measureBatch(key1);
+      measureBatch(key2);
+
+      const key1Measurements: number[] = [];
+      const key2Measurements: number[] = [];
+      
+      for (let i = 0; i < 8; i++) {
+        key1Measurements.push(measureBatch(key1));
+        key2Measurements.push(measureBatch(key2));
       }
       
-      // Calculate coefficient of variation (should be low for consistent timing)
-      const mean = measurements.reduce((a, b) => a + b) / measurements.length;
-      const variance = measurements.reduce((acc, val) => acc + Math.pow(val - mean, 2), 0) / measurements.length;
-      const stdDev = Math.sqrt(variance);
-      const coefficientOfVariation = stdDev / mean;
+      const key1Median = median(key1Measurements);
+      const key2Median = median(key2Measurements);
+      const timingRatio = Math.max(key1Median, key2Median) / Math.min(key1Median, key2Median);
       
-      // Timing should be relatively consistent (low CV) - allow for variance in test environment
-      expect(coefficientOfVariation).toBeLessThan(1.0);
+      // Timing should not vary materially based on which key is used.
+      expect(timingRatio).toBeLessThan(3.0);
       
       // Clean up
       key1.fill(0);
       key2.fill(0);
+      ivs.forEach((iv) => iv.fill(0));
     });
 
     it('should use constant-time operations for sensitive comparisons', () => {

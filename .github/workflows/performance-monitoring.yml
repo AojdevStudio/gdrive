@@ -97,6 +97,7 @@ jobs:
           import fs from 'fs';
           
           // Mock Google Drive operations for baseline testing
+          let cacheOperationCount = 0;
           const mockOperations = {
             listFiles: async () => {
               const start = performance.now();
@@ -118,8 +119,8 @@ jobs:
             
             cacheOperation: async () => {
               const start = performance.now();
-              // Simulate cache hit/miss
-              const isHit = Math.random() > 0.3;
+              // Simulate a deterministic 75/25 cache hit/miss mix.
+              const isHit = cacheOperationCount++ % 4 !== 0;
               await new Promise(resolve => setTimeout(resolve, isHit ? 10 : 150));
               return { duration: performance.now() - start, operation: 'cache', hit: isHit };
             }

@@ -75,7 +75,10 @@ export function createConfiguredServer(deps: ServerConfig): Server {
       {
         name: 'search',
         description:
-          'Query the SDK operation spec. Use this before execute() to discover available operations, their signatures, parameters, and examples. Returns the full spec or a filtered subset.',
+          'Use this first to discover Google Workspace operations, signatures, parameters, and examples before calling execute. Without filters, returns a service-to-operation summary; with a service filter and optional operation, returns the matching detailed spec subset.',
+        annotations: {
+          readOnlyHint: true,
+        },
         inputSchema: {
           type: 'object' as const,
           properties: {
@@ -97,9 +100,13 @@ export function createConfiguredServer(deps: ServerConfig): Server {
       {
         name: 'execute',
         description:
-          'Call Google Workspace SDK operations. Preferred: use service + operation + args for direct calls. Alternative (Node.js only): pass JavaScript code string.',
+          'Use this to run a specific Google Workspace operation that can read and write Google Workspace data. Some operations modify files, send email, or update calendar events. Preferred: use service + operation + args for direct calls. Alternative (Node.js only): pass JavaScript code string.',
         inputSchema: {
           type: 'object' as const,
+          anyOf: [
+            { required: ['service', 'operation'] },
+            { required: ['code'] },
+          ],
           properties: {
             service: {
               type: 'string',
