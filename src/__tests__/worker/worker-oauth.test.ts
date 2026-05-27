@@ -102,6 +102,43 @@ describe('remote Google OAuth setup routes', () => {
     });
   });
 
+  it('names MCP_SETUP_TOKEN when setup auth is not configured', async () => {
+    const env = makeEnv();
+    delete env.MCP_SETUP_TOKEN;
+
+    const response = await worker.fetch(
+      new Request('https://worker.example.com/setup/google/start', { method: 'GET' }),
+      env,
+      {}
+    );
+
+    expect(response.status).toBe(500);
+    expect(await response.json()).toEqual({
+      error: 'Server misconfiguration',
+      detail: 'MCP_SETUP_TOKEN is not configured for remote Google OAuth setup',
+    });
+  });
+
+  it('does not expose config inventory on public callback misconfiguration', async () => {
+    const env = makeEnv();
+    env.GDRIVE_CLIENT_SECRET = '';
+
+    const response = await worker.fetch(
+      new Request('https://worker.example.com/setup/google/callback?state=state&code=code', {
+        method: 'GET',
+      }),
+      env,
+      {}
+    );
+
+    expect(response.status).toBe(500);
+    const text = await response.text();
+    expect(text).toContain('Server misconfiguration');
+    expect(text).not.toContain('GDRIVE_CLIENT_SECRET');
+    expect(text).not.toContain('"configuration"');
+    expect(text).not.toContain('"missing"');
+  });
+
   it('validates callback state once and stores encrypted refresh-capable tokens', async () => {
     const kv = new MemoryKV();
     await worker.fetch(setupRequest('/setup/google/start'), makeEnv(kv), {});

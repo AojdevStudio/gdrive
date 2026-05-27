@@ -61,6 +61,7 @@ function setupAuthError(request: Request, env: WorkerOAuthEnv): Response | null 
     requiredToken: env.MCP_SETUP_TOKEN,
     allowedOrigins: env.MCP_ALLOWED_ORIGINS,
     runtimeName: 'remote Google OAuth setup',
+    tokenName: 'MCP_SETUP_TOKEN',
   });
 }
 
@@ -83,10 +84,17 @@ function requiredConfig(env: WorkerOAuthEnv): {
   return { ok: missing.length === 0, missing, present };
 }
 
-function setupConfigError(env: WorkerOAuthEnv): Response | null {
+function setupConfigError(env: WorkerOAuthEnv, exposeDetails = true): Response | null {
   const config = requiredConfig(env);
   if (config.ok) {
     return null;
+  }
+
+  if (!exposeDetails) {
+    return jsonResponse(500, {
+      error: 'Server misconfiguration',
+      detail: 'Remote Google OAuth setup is not fully configured.',
+    });
   }
 
   return jsonResponse(500, {
@@ -269,7 +277,7 @@ export async function handleGoogleOAuthCallback(
   request: Request,
   env: WorkerOAuthEnv
 ): Promise<Response> {
-  const configError = setupConfigError(env);
+  const configError = setupConfigError(env, false);
   if (configError) {
     return configError;
   }
