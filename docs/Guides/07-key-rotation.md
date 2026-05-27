@@ -1,369 +1,61 @@
-# Key Rotation Operations Runbook
+# Key Rotation
 
-## Overview
+Google Workspace MCP v4 stores encrypted Google OAuth token state in Workers KV.
 
-This runbook provides procedures for managing encryption key rotation in the Google Workspace MCP server. Key rotation is critical for maintaining security compliance and protecting OAuth tokens.
+## Rotate MCP Bearer Tokens
 
-**Supported CLI commands:** `auth`, `health`, `rotate-key`, `verify-keys`, `migrate-tokens`
+Rotate client access by updating the Worker secret:
 
-## 🔄 Routine Key Rotation (Quarterly)
-
-### Schedule
-- **Frequency**: Every 90 days (quarterly)
-- **Timing**: During maintenance window (low usage periods)
-- **Duration**: < 30 seconds for typical deployments
-
-### Pre-Rotation Checklist
-- [ ] Verify system health: `node dist/index.js health`
-- [ ] Confirm backup retention policy is active
-- [ ] Check available disk space (minimum 100MB free)
-- [ ] Ensure Redis cache is operational (if configured)
-- [ ] Notify users of brief service interruption
-
-### Rotation Procedure
-
-1. **Backup Current State**
-   ```bash
-   # Create manual backup (adjust path if GDRIVE_TOKEN_STORAGE_PATH is set)
-   cp credentials/.gdrive-mcp-tokens.json credentials/.gdrive-mcp-tokens.manual-backup.$(date +%Y%m%d-%H%M%S).json
-   
-   # Verify backup integrity
-   node dist/index.js verify-keys
-   ```
-
-2. **Execute Key Rotation**
-   ```bash
-   # Rotate encryption key
-   node dist/index.js rotate-key
-   
-   # Expected output:
-   # ✅ Generated new encryption key (v2)
-   # ✅ Re-encrypted 5 tokens with new key
-   # ✅ Verified all tokens decrypt correctly
-   # ✅ Updated key metadata
-   # ✅ Key rotation completed successfully
-   ```
-
-3. **Post-Rotation Verification**
-   ```bash
-   # Verify all tokens work with new key
-   node dist/index.js verify-keys
-   
-   # Test server functionality
-   node dist/index.js health
-   ```
-
-4. **Cleanup Old Backups**
-   ```bash
-   # Keep only last 5 backups
-   find credentials -name ".gdrive-mcp-tokens.backup.*.json" -type f 2>/dev/null | sort -r | tail -n +6 | xargs rm -f
-   ```
-
-### Success Criteria
-- ✅ All tokens decrypt successfully with new key
-- ✅ Server health check passes
-- ✅ No authentication errors in logs
-- ✅ Backup files created and verified
-- ✅ Old backups cleaned up
-
-## 🚨 Emergency Key Rotation
-
-### Triggers for Emergency Rotation
-- Suspected key compromise
-- Security incident involving token exposure
-- Compliance requirement (audit finding)
-- Key exposure in logs or error messages
-
-### Emergency Procedure
-
-1. **Immediate Actions**
-   ```bash
-   # Stop server immediately
-   pkill -f "gdrive-mcp"
-   
-   # Rotate key immediately
-   node dist/index.js rotate-key
-   
-   # Restart server
-   node dist/index.js &
-   ```
-
-2. **Incident Documentation**
-   - Log incident details in security incident tracking system
-   - Document timeline of compromise and response
-   - Record which tokens were potentially exposed
-   - Note remediation steps taken
-
-3. **Additional Security Measures**
-   ```bash
-   # Revoke access in Google Account settings (myaccount.google.com/permissions)
-   # then re-authenticate:
-   rm -f credentials/.gdrive-mcp-tokens.json
-   node dist/index.js auth
-   
-   # Rotate again if compromise was recent
-   node dist/index.js rotate-key
-   ```
-
-## 📊 Monitoring and Alerting
-
-### Key Performance Indicators (KPIs)
-- **Rotation Duration**: < 30 seconds (target)
-- **Success Rate**: 100% (no failed rotations)
-- **Token Validation**: 100% success post-rotation
-- **System Availability**: > 99.9% during rotation
-
-### Monitoring Setup
-
-#### Health Check Script
 ```bash
-#!/bin/bash
-# /usr/local/bin/check-gdrive-health.sh
-
-# Check token validity
-TOKEN_CHECK=$(node /path/to/gdrive/dist/index.js verify-keys 2>&1)
-if [ $? -ne 0 ]; then
-    echo "CRITICAL: Token verification failed - $TOKEN_CHECK"
-    exit 2
-fi
-
-# Check token health
-HEALTH=$(node /path/to/gdrive/dist/index.js health 2>&1)
-if [ $? -ne 0 ]; then
-    echo "CRITICAL: Health check failed - $HEALTH"
-    exit 2
-fi
-
-echo "OK: All systems healthy"
-exit 0
+npx wrangler secret put MCP_BEARER_TOKEN
+npx wrangler deploy
 ```
 
-#### Cron Job Setup
+Update MCP client configuration to send the new bearer token.
+
+## Rotate Setup Bearer Token
+
+Rotate setup route access with:
+
 ```bash
-# Add to crontab for regular monitoring
-# Check health every 15 minutes
-*/15 * * * * /usr/local/bin/check-gdrive-health.sh
+npx wrangler secret put MCP_SETUP_TOKEN
+npx wrangler deploy
 ```
 
-### Alert Conditions
-- Key rotation failure
-- Token decryption failure
-- Health check failure > 2 consecutive attempts
-- Key age > 100 days (warning)
-- Unusual authentication patterns
+Use the new setup token for `/setup/status` and `/setup/google/start`.
 
-## 🔧 Troubleshooting Common Issues
+## Rotate Google OAuth Client Secret
 
-### Issue: Key Rotation Fails
+Update the Worker secret:
 
-**Symptoms:**
-```
-ERROR: Failed to rotate key - backup creation failed
-ERROR: Insufficient disk space for backup
-```
-
-**Resolution:**
 ```bash
-# Check disk space
-df -h .
-
-# Clean up old logs and temporary files
-find . -name "*.log.*" -type f -mtime +30 -delete
-find /tmp -name "gdrive-*" -type f -mtime +1 -delete
-
-# Retry rotation
-node dist/index.js rotate-key
+npx wrangler secret put GDRIVE_CLIENT_SECRET
+npx wrangler deploy
 ```
 
-### Issue: Token Decryption Fails After Rotation
+If Google invalidates existing token state, recover through:
 
-**Symptoms:**
-```
-ERROR: Failed to decrypt token with current key
-ERROR: Invalid authentication - token appears corrupted
-```
-
-**Resolution:**
 ```bash
-# Check token verification
-node dist/index.js verify-keys
-
-# Restore from most recent backup
-cp credentials/.gdrive-mcp-tokens.backup.$(ls -t credentials/.gdrive-mcp-tokens.backup.*.json 2>/dev/null | head -1) credentials/.gdrive-mcp-tokens.json
-
-# Verify restoration
-node dist/index.js verify-keys
-
-# Re-authenticate if backup is also corrupted
-node dist/index.js auth
+curl -i -H "Authorization: Bearer $MCP_SETUP_TOKEN" \
+  https://your-worker.workers.dev/setup/google/start
 ```
 
-### Issue: Performance Degradation During Rotation
+## Rotate Token Encryption Key
 
-**Symptoms:**
-- Rotation takes > 30 seconds
-- High CPU usage during rotation
-- Memory warnings in logs
+Changing `GDRIVE_TOKEN_ENCRYPTION_KEY` makes existing encrypted token state unreadable. Plan a maintenance window:
 
-**Resolution:**
+1. Set the new key.
+2. Deploy the Worker.
+3. Re-run `/setup/google/start` to store token state encrypted with the new key.
+4. Verify with `/setup/status`.
+
 ```bash
-# Check PBKDF2 iteration count (should be 100,000)
-echo $GDRIVE_KEY_DERIVATION_ITERATIONS
+npx wrangler secret put GDRIVE_TOKEN_ENCRYPTION_KEY
+npx wrangler deploy
 
-# Monitor system resources
-top -p $(pgrep -f gdrive-mcp)
+curl -i -H "Authorization: Bearer $MCP_SETUP_TOKEN" \
+  https://your-worker.workers.dev/setup/google/start
 
-# Consider reducing iterations temporarily (minimum 100,000)
-export GDRIVE_KEY_DERIVATION_ITERATIONS=100000
-node dist/index.js rotate-key
+curl -H "Authorization: Bearer $MCP_SETUP_TOKEN" \
+  https://your-worker.workers.dev/setup/status
 ```
-
-## 📋 Security Incident Response
-
-### Security Event Classification
-
-#### Level 1 (Low) - Informational
-- Routine key rotation completed
-- Scheduled maintenance completed
-- Non-critical authentication warnings
-
-#### Level 2 (Medium) - Warning  
-- Key age exceeds 90 days
-- Multiple authentication failures
-- Performance degradation during rotation
-
-#### Level 3 (High) - Critical
-- Key rotation failure
-- Token decryption failure
-- Suspected unauthorized access attempts
-
-#### Level 4 (Critical) - Emergency
-- Confirmed key compromise
-- Tokens exposed in logs or external systems
-- Active security breach detected
-
-### Incident Response Procedures
-
-#### Level 3-4 Response Steps
-
-1. **Immediate Containment** (0-15 minutes)
-   ```bash
-   # Stop server
-   systemctl stop gdrive-mcp
-   
-   # Emergency key rotation
-   node dist/index.js rotate-key
-   
-   # Revoke access in Google Account settings, then re-authenticate:
-   rm -f credentials/.gdrive-mcp-tokens.json
-   node dist/index.js auth
-   ```
-
-2. **Assessment** (15-30 minutes)
-   - Determine scope of potential exposure
-   - Review logs for unauthorized access patterns
-   - Identify affected user accounts
-   - Document timeline of events
-
-3. **Recovery** (30-60 minutes)
-   ```bash
-   # Re-authenticate with fresh tokens
-   node dist/index.js auth
-   
-   # Verify system integrity
-   node dist/index.js health
-   
-   # Restart server
-   systemctl start gdrive-mcp
-   ```
-
-4. **Communication** (Within 1 hour)
-   - Notify security team
-   - Update incident tracking system
-   - Prepare user communication if needed
-
-## 📈 Rollback Procedures
-
-### When to Rollback
-- New key version causes authentication failures
-- Performance significantly degraded after rotation
-- Compatibility issues with existing integrations
-
-### Rollback Process
-
-1. **Stop Current Operations**
-   ```bash
-   systemctl stop gdrive-mcp
-   ```
-
-2. **Restore Previous State**
-   ```bash
-   # Find most recent working backup
-   ls -t credentials/.gdrive-mcp-tokens.backup.*.json 2>/dev/null | head -1
-   
-   # Restore backup
-   cp credentials/.gdrive-mcp-tokens.backup.YYYYMMDD-HHMMSS.json credentials/.gdrive-mcp-tokens.json
-   
-   # Verify restoration
-   node dist/index.js verify-keys
-   ```
-
-3. **Restart and Verify**
-   ```bash
-   systemctl start gdrive-mcp
-   node dist/index.js health
-   ```
-
-4. **Document Rollback**
-   - Record reason for rollback
-   - Note any data loss or service impact
-   - Plan corrective actions for next rotation attempt
-
-## 🔍 Audit and Compliance
-
-### Audit Trail Requirements
-- All key rotations logged with timestamps
-- Backup creation and verification logged
-- Authentication events tracked
-- Security incidents documented
-
-### Compliance Reporting
-```bash
-# Generate monthly key rotation report
-node dist/index.js audit-report --month=$(date +%Y-%m)
-
-# Export authentication logs
-grep "KEY_ROTATION\|TOKEN_" .gdrive-mcp-audit.log | tail -100
-```
-
-### Documentation Requirements
-- Maintain rotation schedule documentation
-- Update security policies annually
-- Review procedures after incidents
-- Train personnel on emergency procedures
-
-## 📞 Emergency Contacts
-
-### Internal Contacts
-- **Security Team**: security@company.com
-- **System Administrator**: sysadmin@company.com  
-- **On-Call Engineer**: +1-555-0123
-
-### External Contacts
-- **Google Workspace Support**: [Google Support](https://support.google.com/a/contact/)
-- **Cloud Security Vendor**: security-vendor@company.com
-
----
-
-## 📚 Related Documentation
-
-- [Authentication Flow Guide](./02-authentication-flow.md)
-- [Environment Variables Guide](./06-environment-variables.md)
-- [Architecture Documentation](../Architecture/ARCHITECTURE.md)
-- [Security Documentation](../Architecture/ARCHITECTURE.md#security-model)
-
----
-
-*Last Updated: 2025-01-05*  
-*Version: 1.0*  
-*Owner: Security Team*
