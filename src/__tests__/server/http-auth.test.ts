@@ -1,4 +1,5 @@
 import { describe, expect, it } from '@jest/globals';
+import * as fs from 'node:fs';
 import { timingSafeEqualString, validateBearerRequest } from '../../server/http-auth.js';
 
 describe('validateBearerRequest', () => {
@@ -53,6 +54,13 @@ describe('validateBearerRequest', () => {
     expect(timingSafeEqualString('Bearer secret-token', 'Bearer secret-token')).toBe(true);
     expect(timingSafeEqualString('Bearer secret-tokem', 'Bearer secret-token')).toBe(false);
     expect(timingSafeEqualString('Bearer short', 'Bearer secret-token')).toBe(false);
+  });
+
+  it('computes timingSafeEqual before checking lengths', () => {
+    const source = fs.readFileSync('src/server/http-auth.ts', 'utf8');
+
+    expect(source).toContain('const matches = crypto.timingSafeEqual');
+    expect(source).toContain('actualBuffer.length === expectedBuffer.length && matches');
   });
 
   it('returns 403 for a disallowed origin', async () => {

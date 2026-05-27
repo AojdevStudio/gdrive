@@ -49,11 +49,9 @@ export function timingSafeEqualString(actual: string, expected: string): boolean
 
   actualBuffer.copy(paddedActual);
   expectedBuffer.copy(paddedExpected);
+  const matches = crypto.timingSafeEqual(paddedActual, paddedExpected);
 
-  return (
-    actualBuffer.length === expectedBuffer.length &&
-    crypto.timingSafeEqual(paddedActual, paddedExpected)
-  );
+  return actualBuffer.length === expectedBuffer.length && matches;
 }
 
 export function validateBearerRequest(
