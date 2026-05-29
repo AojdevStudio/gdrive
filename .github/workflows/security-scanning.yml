@@ -264,12 +264,29 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Run TruffleHog secret scanner
+      - name: Run TruffleHog secret scanner for push
+        if: github.event_name == 'push' && github.event.before != '0000000000000000000000000000000000000000'
         uses: trufflesecurity/trufflehog@main
         with:
           path: ./
-          base: main
-          head: HEAD
+          base: ${{ github.event.before }}
+          head: ${{ github.sha }}
+          extra_args: --debug --only-verified
+
+      - name: Run TruffleHog secret scanner for pull request
+        if: github.event_name == 'pull_request'
+        uses: trufflesecurity/trufflehog@main
+        with:
+          path: ./
+          base: ${{ github.event.pull_request.base.sha }}
+          head: ${{ github.event.pull_request.head.sha }}
+          extra_args: --debug --only-verified
+
+      - name: Run TruffleHog secret scanner for full scan events
+        if: github.event_name != 'push' && github.event_name != 'pull_request'
+        uses: trufflesecurity/trufflehog@main
+        with:
+          path: ./
           extra_args: --debug --only-verified
 
       - name: Run custom secret patterns
