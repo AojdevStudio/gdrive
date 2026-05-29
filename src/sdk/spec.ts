@@ -389,7 +389,7 @@ export const SDK_SPEC: SDKSpec = {
   },
 
   // ─────────────────────────────────────────
-  // Gmail (10 operations)
+  // Gmail
   // ─────────────────────────────────────────
   gmail: {
     listMessages: {
@@ -492,9 +492,21 @@ export const SDK_SPEC: SDKSpec = {
       params: {},
       returns: "{ labels: Label[] } — Label = { id, name, type: 'system' | 'user', messagesTotal, messagesUnread }",
     },
+    createLabel: {
+      signature: "createLabel(options: { name: string, messageListVisibility?: 'show' | 'hide', labelListVisibility?: 'labelShow' | 'labelShowIfUnread' | 'labelHide', color?: { textColor?: string, backgroundColor?: string } }): Promise<{ id, name, type, message }>",
+      description: "Create a custom Gmail label in the user's mailbox. Use listLabels() after creation to retrieve the full label inventory.",
+      example: "const label = await sdk.gmail.createLabel({ name: 'Codex Smoke Test' });\nreturn { id: label.id, name: label.name };",
+      params: {
+        name: "string (required) — label name to create",
+        messageListVisibility: "string (optional) — 'show' | 'hide'",
+        labelListVisibility: "string (optional) — 'labelShow' | 'labelShowIfUnread' | 'labelHide'",
+        color: "object (optional) — { textColor?: string, backgroundColor?: string }",
+      },
+      returns: "{ id, name, type: 'user', message } plus optional visibility/color/count fields returned by Gmail",
+    },
     modifyLabels: {
       signature: "modifyLabels(options: { messageId: string, addLabelIds?: string[], removeLabelIds?: string[] }): Promise<{ messageId, labelIds: string[] }>",
-      description: "Add or remove labels from a message. Use to archive (remove INBOX), mark read (remove UNREAD), star, etc.",
+      description: "Add or remove labels from a message. Use messageId; id remains accepted as a legacy alias.",
       example: "// Archive a message (remove from INBOX)\nawait sdk.gmail.modifyLabels({ messageId: 'msg123', removeLabelIds: ['INBOX'] });\n// Mark as read\nawait sdk.gmail.modifyLabels({ messageId: 'msg123', removeLabelIds: ['UNREAD'] });",
       params: {
         messageId: "string (required) — message ID",

@@ -1,6 +1,7 @@
 import { describe, it, expect, jest } from '@jest/globals';
 import { createConfiguredServer } from '../../server/factory.js';
 import type { ServerConfig } from '../../server/factory.js';
+import { assertAnthropicCompatibleToolList } from '../../server/schema-compat.js';
 
 function makeDeps(overrides: Partial<ServerConfig> = {}): ServerConfig {
   return {
@@ -37,6 +38,14 @@ describe('createConfiguredServer', () => {
     expect(typeof server.connect).toBe('function');
   });
 
+  it('uses the Google Workspace MCP server identity', () => {
+    const server = createConfiguredServer(makeDeps()) as unknown as {
+      _serverInfo: { name: string };
+    };
+
+    expect(server._serverInfo.name).toBe('google-workspace');
+  });
+
   it('marks search as read-only for clients', async () => {
     const server = createConfiguredServer(makeDeps());
     const result = await listTools(server);
@@ -53,8 +62,7 @@ describe('createConfiguredServer', () => {
     const search = result.tools.find((tool) => tool.name === 'search');
 
     expect(search?.description).toContain('Without filters, returns a service-to-operation summary');
-    expect(search?.description).toContain('with a service filter');
-    expect(search?.description).toContain('optional operation');
+    expect(search?.description).toContain('returns the matching detailed spec subset');
   });
 
   it('describes execute as a read/write Google Workspace operation runner', async () => {
@@ -67,20 +75,27 @@ describe('createConfiguredServer', () => {
     expect(execute?.description).toContain('Some operations modify files, send email, or update calendar events');
   });
 
-  it('documents execute input alternatives and parameter descriptions', async () => {
+  it('documents execute structured operation parameters', async () => {
     const server = createConfiguredServer(makeDeps());
     const result = await listTools(server);
 
     const execute = result.tools.find((tool) => tool.name === 'execute');
     const schema = execute?.inputSchema as {
-      required?: unknown;
+      anyOf?: unknown;
       properties?: Record<string, { description?: string }>;
     };
 
-    expect(schema.required).toEqual(['service', 'operation']);
+    expect(schema.anyOf).toBeUndefined();
     expect(schema.properties?.service?.description).toBeTruthy();
     expect(schema.properties?.operation?.description).toBeTruthy();
     expect(schema.properties?.args?.description).toBeTruthy();
     expect(schema.properties?.code).toBeUndefined();
+  });
+
+  it('advertises Anthropic-compatible top-level input schemas', async () => {
+    const server = createConfiguredServer(makeDeps());
+    const result = await listTools(server);
+
+    expect(() => assertAnthropicCompatibleToolList(result.tools)).not.toThrow();
   });
 });

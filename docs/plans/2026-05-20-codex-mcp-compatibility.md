@@ -1,10 +1,12 @@
 # Codex MCP Compatibility Implementation Plan
 
+> **Status:** Superseded by the remote-only Cloudflare Workers `/mcp` architecture. Do not use local stdio or local HTTP commands in this older plan as current setup guidance.
+
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
-**Goal:** Make the gdrive MCP server work reliably from Codex over remote Streamable HTTP, with static bearer auth first and a clean path to standards-based OAuth metadata next.
+**Goal:** Make Google Workspace MCP work reliably from Codex over the deployed remote Streamable HTTP Worker endpoint, with static bearer auth first and a clean path to standards-based OAuth metadata next.
 
-**Architecture:** Keep the Google Workspace tool logic unchanged behind `src/server/factory.ts`. Add client compatibility at the transport/auth boundary: a Node HTTP `/mcp` transport for local Codex use, shared bearer/auth error helpers, explicit health/discovery endpoints, and docs/verification for Codex CLI. Treat Cloudflare Worker support as an existing deployment target, not the only HTTP surface.
+**Current architecture:** Keep the Google Workspace tool logic unchanged behind `src/server/factory.ts`. Codex connects to the deployed Cloudflare Worker `/mcp` endpoint. Local stdio, local HTTP, Docker, and local bootstrap flows are not supported MCP client connection paths.
 
 **Tech Stack:** TypeScript ES modules, Node 22 HTTP server, `@modelcontextprotocol/sdk`, Google OAuth via existing `AuthManager`, Jest, Codex CLI MCP commands.
 
@@ -19,12 +21,12 @@
 
 ### In Scope
 
-- Node-hosted Streamable HTTP transport at `POST /mcp`.
+- Remote Cloudflare Workers Streamable HTTP transport at `POST /mcp`.
 - Static bearer auth using `Authorization: Bearer <token>`.
 - Optional unauthenticated `GET /healthz`, `GET /`, and `GET /.well-known/oauth-protected-resource`/metadata stubs that clearly state the current auth mode.
 - MCP-shaped and HTTP-shaped errors that make Codex failures diagnosable.
 - Codex CLI verification flow.
-- Documentation for local Node HTTP and Cloudflare Worker HTTP paths.
+- Documentation for the remote Cloudflare Worker HTTP path.
 
 ### Out of Scope For First Slice
 
@@ -48,10 +50,10 @@
 
 ## Compatibility Targets
 
-1. `node ./dist/index.js http --port 8788` starts a local Streamable HTTP MCP server.
-2. `POST http://127.0.0.1:8788/mcp` is the only MCP endpoint.
+1. The deployed Cloudflare Worker exposes the Streamable HTTP MCP server.
+2. `POST https://<worker-host>/mcp` is the only supported MCP endpoint.
 3. Missing/invalid bearer token returns `401` with `WWW-Authenticate: Bearer` and a short JSON error.
-4. Missing Google OAuth tokens returns a clear `401` or `503` explaining to run `node ./dist/index.js auth`.
+4. Missing Google OAuth tokens returns a clear `401` or `503` explaining how to start the remote Google setup flow.
 5. `GET /healthz` returns operational state without exposing secrets.
 6. Codex can add/list/connect to the server with configured bearer/env auth.
 7. A fresh Codex session can list and call `search` and `execute`.
@@ -187,21 +189,20 @@ Implementation requirements:
 - Require `MCP_BEARER_TOKEN` for first slice.
 - Load OAuth credentials exactly like stdio path.
 - If unauthenticated, return startup failure with: `Authentication required. Run node ./dist/index.js auth first.`
-- Start Node HTTP server on `127.0.0.1:8788` by default.
+- Do not add or document a local HTTP MCP server mode.
 - Handle only `POST /mcp` as MCP traffic.
 - Use a new server/transport per request unless SDK docs require session persistence.
 - Keep logs on stderr/file, never stdout for MCP responses.
 
-**Step 5: Add CLI dispatch**
+**Step 5: Do not add local CLI dispatch**
 
-In `index.ts`, support:
+This older local server task is superseded. Current MCP clients connect to:
 
 ```bash
-node ./dist/index.js http
-node ./dist/index.js http --host 127.0.0.1 --port 8788
+https://<worker-host>/mcp
 ```
 
-Use a small parser, not a new CLI framework.
+Do not add local HTTP CLI commands back to `index.ts`.
 
 **Step 6: Run tests**
 
@@ -327,19 +328,19 @@ git commit -m "chore: clarify MCP tool metadata"
 **Step 1: Write the guide**
 
 Include:
-- Prereqs: Node 22, built project, `GDRIVE_TOKEN_ENCRYPTION_KEY`, Google OAuth keys, successful `node ./dist/index.js auth`, `MCP_BEARER_TOKEN`.
-- Local server command:
+- Prereqs: deployed Worker `/mcp` URL, Worker `MCP_BEARER_TOKEN` secret, and a matching local `GOOGLE_WORKSPACE_MCP_TOKEN` for Codex bearer auth.
+- Remote Worker command:
 
 ```bash
-GDRIVE_TOKEN_ENCRYPTION_KEY="$GDRIVE_TOKEN_ENCRYPTION_KEY" \
-MCP_BEARER_TOKEN="$GDRIVE_MCP_TOKEN" \
-node ./dist/index.js http --host 127.0.0.1 --port 8788
+export GOOGLE_WORKSPACE_MCP_TOKEN="replace-with-the-worker-token"
+codex mcp add google-workspace \
+  --url https://<worker-host>/mcp \
+  --bearer-token-env-var GOOGLE_WORKSPACE_MCP_TOKEN
 ```
 
 - Codex command shape:
 
 ```bash
-codex mcp add google-workspace --url http://127.0.0.1:8788/mcp
 codex mcp get google-workspace
 ```
 
@@ -347,13 +348,13 @@ codex mcp get google-workspace
 - Cloudflare Worker URL shape:
 
 ```bash
-codex mcp add google-workspace --url https://<worker-host>/mcp
+codex mcp add google-workspace --url https://<worker-host>/mcp --bearer-token-env-var GOOGLE_WORKSPACE_MCP_TOKEN
 ```
 
 - Troubleshooting:
   - `Auth unsupported`: server metadata/auth mode mismatch.
   - `401 Unauthorized`: bearer mismatch or missing header.
-  - `Authentication required`: run `node ./dist/index.js auth`.
+  - `Authentication required`: start the remote Google setup flow and verify Worker setup status.
   - tools missing: run `codex mcp get google-workspace`, restart Codex session.
 
 **Step 2: Link docs**
@@ -391,21 +392,22 @@ node ./dist/index.js health
 
 Expected: healthy token state, or actionable auth error.
 
-**Step 3: Start local HTTP server**
+**Step 3: Configure remote Worker MCP server**
 
 ```bash
-GDRIVE_TOKEN_ENCRYPTION_KEY="$GDRIVE_TOKEN_ENCRYPTION_KEY" \
-MCP_BEARER_TOKEN="$GDRIVE_MCP_TOKEN" \
-node ./dist/index.js http --host 127.0.0.1 --port 8788
+export GOOGLE_WORKSPACE_MCP_TOKEN="replace-with-the-worker-token"
+codex mcp add google-workspace \
+  --url https://<worker-host>/mcp \
+  --bearer-token-env-var GOOGLE_WORKSPACE_MCP_TOKEN
 ```
 
-Expected: server listening message on stderr/logs.
+Expected: `codex mcp get google-workspace` shows the deployed Worker `/mcp` URL.
 
 **Step 4: Probe unauthenticated error**
 
 ```bash
-curl -i http://127.0.0.1:8788/mcp
-curl -i -X POST http://127.0.0.1:8788/mcp
+curl -i https://<worker-host>/mcp
+curl -i -X POST https://<worker-host>/mcp
 ```
 
 Expected:
@@ -431,7 +433,6 @@ Fix before Codex verification by reinstalling/updating the Codex CLI through the
 Run:
 
 ```bash
-codex mcp add google-workspace --url http://127.0.0.1:8788/mcp
 codex mcp get google-workspace
 ```
 
@@ -471,7 +472,7 @@ Static bearer auth remains the supported MCP client-to-server auth mode. This ta
 - Add `MCP_AUTHORIZATION_SERVER_URL` as metadata-only config.
 - When configured, protected-resource metadata includes the external authorization server URL.
 - Do not accept or validate external OAuth bearer tokens in this PR.
-- Document that `codex mcp login google-workspace` requires a real external/dedicated authorization server.
+- Document that `codex mcp login gdrive` requires a real external/dedicated authorization server.
 
 **Non-negotiable:** Do not add fake OAuth metadata just to make clients stop saying `Auth unsupported`; that creates a worse failure mode. Advertising an external server and validating its tokens are separate commitments.
 

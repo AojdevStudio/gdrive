@@ -1,51 +1,56 @@
-# Claude Client Integration
+# Claude Integration Guide
 
-Use a Claude client that supports remote Streamable HTTP MCP servers. The server URL is the deployed Worker `/mcp` endpoint.
+This guide connects Claude to **Google Workspace MCP** through the remote Cloudflare Workers HTTP endpoint.
+
+## Supported Runtime
+
+Use the deployed Worker endpoint:
 
 ```text
 https://your-worker.workers.dev/mcp
 ```
 
-Local stdio, local HTTP, Docker, and local bootstrap flows are not supported MCP client connection paths.
+Local stdio, local HTTP, Docker, and local bootstrap flows are not supported MCP server modes.
 
 ## Claude Code
 
-Add the Worker at user scope:
+Use a descriptive server name:
 
 ```bash
 claude mcp add --scope user --transport http google-workspace https://your-worker.workers.dev/mcp
 ```
 
-Use project scope only when that Worker is specific to this repository:
+Project scope is only appropriate when the Workspace account or Worker endpoint is project-specific:
 
 ```bash
 claude mcp add --scope project --transport http google-workspace https://your-worker.workers.dev/mcp
 ```
 
-If you previously registered the server as `gdrive`, remove the stale entry first:
+## Claude Desktop
 
-```bash
-claude mcp remove gdrive
-claude mcp add --scope user --transport http google-workspace https://your-worker.workers.dev/mcp
+Configure Claude Desktop with the remote URL:
+
+```json
+{
+  "mcpServers": {
+    "google-workspace": {
+      "url": "https://your-worker.workers.dev/mcp"
+    }
+  }
+}
 ```
 
-## Bearer Auth
+If the Worker requires bearer auth, configure the token using the auth mechanism supported by your Claude Desktop version.
 
-The Worker validates `MCP_BEARER_TOKEN` for `/mcp`. Configure the client bearer token using the mechanism supported by your Claude client.
+## Expected Tools
 
-## Verify
-
-After connecting, start a fresh Claude session and confirm the MCP tools are:
+Claude should see:
 
 - `search`
 - `execute`
 
-If Google OAuth state is missing, use:
+Use `search` to discover operations across Drive, Sheets, Forms, Docs, Gmail, and Calendar.
 
-```bash
-curl -H "Authorization: Bearer $MCP_SETUP_TOKEN" \
-  https://your-worker.workers.dev/setup/status
+## Naming
 
-curl -i -H "Authorization: Bearer $MCP_SETUP_TOKEN" \
-  https://your-worker.workers.dev/setup/google/start
-```
+Use `google-workspace` as the MCP server name in client config. Avoid `gdrive` because this server is not Drive-only.

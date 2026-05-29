@@ -80,6 +80,7 @@ export interface SDKRuntime {
     sendMessage(options: unknown): Promise<unknown>;
     sendDraft(options: unknown): Promise<unknown>;
     listLabels(options: unknown): Promise<unknown>;
+    createLabel(options: unknown): Promise<unknown>;
     modifyLabels(options: unknown): Promise<unknown>;
     replyToMessage(options: unknown): Promise<unknown>;
     replyAllToMessage(options: unknown): Promise<unknown>;

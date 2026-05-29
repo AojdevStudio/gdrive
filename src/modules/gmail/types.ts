@@ -294,11 +294,37 @@ export interface ListLabelsResult {
 }
 
 /**
+ * Options for creating a Gmail label
+ */
+export interface CreateLabelOptions {
+  /** User-visible label name */
+  name: string;
+  /** Whether the label is shown in the message list */
+  messageListVisibility?: 'show' | 'hide';
+  /** Whether the label is shown in the label list */
+  labelListVisibility?: 'labelShow' | 'labelShowIfUnread' | 'labelHide';
+  /** Optional label colors */
+  color?: {
+    textColor?: string;
+    backgroundColor?: string;
+  };
+}
+
+/**
+ * Result of creating a Gmail label
+ */
+export interface CreateLabelResult extends LabelInfo {
+  message: string;
+}
+
+/**
  * Options for modifying labels on a message
  */
 export interface ModifyLabelsOptions {
   /** The message ID */
-  id: string;
+  messageId?: string;
+  /** Legacy alias for messageId */
+  id?: string;
   /** Label IDs to add */
   addLabelIds?: string[];
   /** Label IDs to remove */
@@ -309,6 +335,7 @@ export interface ModifyLabelsOptions {
  * Result of modifying labels
  */
 export interface ModifyLabelsResult {
+  messageId: string;
   id: string;
   labelIds: string[];
   message: string;

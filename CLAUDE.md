@@ -10,35 +10,27 @@ Use the canonical name **Google Workspace MCP** in docs, issues, prompts, and cl
 
 **Linear:** Team "Google Drive" (ID: `9fd7c68d-cf3f-4ac0-a0d7-42605c079da1`) — issues prefixed `GDRIVE-`
 
-- Cloudflare Workers Streamable HTTP runtime
-- Two MCP tools: `search` and `execute`
-- Encrypted Google OAuth tokens in Workers KV
-- Remote setup/status routes for Google OAuth recovery
-
-**Reference:** [how2mcp](https://github.com/Rixmerz/HOW2MCP.git) — definitive MCP implementation guide. Follow its **operation-based tool pattern** (one tool with `operation` parameter, NOT separate tools per action). See `MCP-DOCS/` for architecture guides and `MCP_EXAMPLE_PROJECT/` for reference implementation.
-
 ## Commands
 
 ```bash
-# Build & Worker Dev
-npm run build          # Compile TypeScript
-npm run build:worker   # Compile Worker-targeted TypeScript
-npm run dev:worker     # Run Wrangler Worker dev server
-npm run deploy:worker  # Deploy Worker
+# Contributor checks
+npm test
+npm run test:coverage
+npm run test:integration
+npm run test:e2e
+npm run type-check
+npm run lint
 
-# Testing
-npm test               # Run all unit tests
-npm run test:coverage  # Tests with coverage report
-npm run test:integration  # Integration tests
-npm run test:e2e       # End-to-end tests
-npm run type-check     # TypeScript type checking (no emit)
-npm run lint           # ESLint
+# Worker development/deployment
+npm run build:worker
+npm run dev:worker
+npm run deploy:worker
 
 # Changelog
 ./scripts/changelog/update-changelog.py --auto
 ```
 
-Do not document or recommend `node ./dist/index.js`, stdio transport, local HTTP transport, Docker, or local OAuth bootstrap as MCP client connection paths.
+Do not document or recommend `node ./dist/index.js`, stdio transport, local HTTP transport, or Docker as MCP client connection paths.
 
 ## Architecture
 
@@ -67,87 +59,42 @@ v4 exposes exactly two MCP tools:
 | `search` | Discover Google Workspace services, operations, signatures, parameters, and examples |
 | `execute` | Run a specific Google Workspace operation through the SDK-style runtime |
 
-### Module Structure
+The Workspace surface includes:
 
-```
-src/
-  modules/
-    calendar/  (13 files) - Google Calendar v3 API (v3.3.0)
-    docs/      (2 files)  - Google Docs v1 API
-    drive/     (9 files)  - Google Drive v3 API
-    forms/     (7 files)  - Google Forms v1 API
-    gmail/     (12 files) - Gmail v1 API (v3.2.0)
-    sheets/    (9 files)  - Google Sheets v4 API
-    index.ts              - Module exports
-    types.ts              - Shared types
-  __tests__/              - 24+ test files (unit, integration, performance)
-index.ts                  - Main server (37KB, tool registration, cache, auth)
-```
-
-### File Type Handling
-
-| Google Type | Export Format |
-|-------------|-------------|
-| Docs | Markdown |
-| Sheets | CSV |
-| Presentations | Plain text |
-| Drawings | PNG |
-| Text files | Direct content |
-| Binary | Base64 blob |
+| Service | Operations |
+|---------|------------|
+| Drive | search, enhancedSearch, read, createFile, createFolder, updateFile, batchOperations |
+| Sheets | listSheets, readSheet, createSheet, renameSheet, deleteSheet, updateCells, updateFormula, formatCells, addConditionalFormat, freezeRowsColumns, setColumnWidth, appendRows |
+| Forms | createForm, readForm, addQuestion, listResponses |
+| Docs | createDocument, insertText, replaceText, applyTextStyle, insertTable |
+| Gmail | listMessages, listThreads, getMessage, getThread, searchMessages, createDraft, sendMessage, sendDraft, listLabels, createLabel, modifyLabels |
+| Calendar | listCalendars, getCalendar, listEvents, getEvent, createEvent, updateEvent, deleteEvent, quickAdd, checkFreeBusy |
 
 ## Environment Variables
 
-See `.env.example` for full reference. Key variables:
+Worker-facing variables:
 
-| Variable | Required | Purpose |
-|----------|----------|---------|
-| `GDRIVE_TOKEN_ENCRYPTION_KEY` | **Yes** | 32-byte base64 key for token storage. Generate: `openssl rand -base64 32` |
-| `GDRIVE_TOKEN_ENCRYPTION_KEY_V2/V3/V4` | No | Additional keys for key rotation |
-| `GDRIVE_TOKEN_CURRENT_KEY_VERSION` | No | Active key version (default: v1) |
-| `GDRIVE_TOKEN_REFRESH_INTERVAL` | No | Token refresh interval in ms (default: 1800000) |
-| `GDRIVE_TOKEN_PREEMPTIVE_REFRESH` | No | Pre-expiry refresh window in ms (default: 600000) |
-| `GDRIVE_TOKEN_MAX_RETRIES` | No | Max retry attempts (default: 3) |
-| `GDRIVE_TOKEN_RETRY_DELAY` | No | Initial retry delay in ms (default: 1000) |
-| `PAI_CONTACTS_PATH` | No | Contact resolution for Calendar (name → email) |
-| `LOG_LEVEL` | No | Worker log level hint |
-| `MCP_BEARER_TOKEN` | Yes | Static bearer token for MCP client-to-server auth |
-| `MCP_SETUP_TOKEN` | Yes | Separate bearer token for remote setup/status routes |
-| `MCP_AUTHORIZATION_SERVER_URL` | No | Metadata-only external OAuth authorization server URL for MCP clients |
-
-## Unsupported Runtime Paths
-
-Do not use Docker, local stdio, local HTTP, or local OAuth bootstrap flows as MCP runtime paths.
-
-## Git Workflow
-
-Main branch is protected. All changes go through PRs.
-
-```bash
-git checkout -b feature/your-feature-name
-git push -u origin feature/your-feature-name
-gh pr create --title "feat: description" --body "Details"
-```
-
-Use conventional commits: `feat:`, `fix:`, `docs:`, `test:`, `chore:`.
+| Variable | Purpose |
+|----------|---------|
+| `GDRIVE_KV` | Cloudflare KV binding for token/cache state |
+| `GDRIVE_CLIENT_ID` | Google OAuth client ID |
+| `GDRIVE_CLIENT_SECRET` | Google OAuth client secret |
+| `GDRIVE_TOKEN_ENCRYPTION_KEY` | Token encryption key |
+| `MCP_BEARER_TOKEN` | Static bearer token for MCP client-to-server auth |
+| `MCP_ALLOWED_ORIGINS` | Optional origin allowlist |
+| `MCP_AUTHORIZATION_SERVER_URL` | Metadata-only external OAuth authorization server URL for MCP clients |
+| `LOG_LEVEL` | Worker log level hint |
 
 ## Gotchas
 
-- **Token encryption required** — `GDRIVE_TOKEN_ENCRYPTION_KEY` must be set or token storage fails. Generate with `openssl rand -base64 32`
-- **Key rotation** — Supports V1-V4 keys via env vars. Set `GDRIVE_TOKEN_CURRENT_KEY_VERSION` when rotating
-- **Server version stale** — `src/server/factory.ts` hardcodes version string; update it alongside `package.json`
-- **Codex auth boundary** — Codex-to-MCP auth uses `MCP_BEARER_TOKEN`; Google OAuth remains server-to-Google auth. Do not make this server an OAuth authorization server.
-- **Calendar contacts** — Set `PAI_CONTACTS_PATH` to resolve names like "Mary" to email addresses; without it, all attendees must be email addresses
-- **ES modules** — Project uses ES2022 modules. Imports need `.js` extensions in TypeScript for Node resolution
+- **Remote only** — MCP clients must use the deployed Worker URL. Do not reintroduce stdio, local HTTP, or Docker connection docs.
+- **Name clarity** — use **Google Workspace MCP** so agents know Gmail, Docs, Sheets, Drive, Forms, and Calendar are available.
+- **Auth boundary** — MCP client auth uses `MCP_BEARER_TOKEN`; Google OAuth remains server-to-Google authorization. This server is not an OAuth authorization server.
+- **Tool schema compatibility** — advertised top-level tool input schemas must be plain `type: "object"` schemas with no root `oneOf`, `anyOf`, or `allOf`.
+- **Cloudflare state** — persistent runtime state belongs in Cloudflare services such as Workers KV, not local files.
 
 ## Claude Code Behavior
 
-**Run commands directly.** Do not ask the user to run builds, tests, or verification commands.
+Run inspection, tests, and verification commands directly. Do not ask the user to run local commands.
 
 When issues are completed, mark them DONE using the Linear MCP.
-
-## Development Notes
-
-- TypeScript ES2022, compiled to `dist/` with shx chmod for shebang
-- Node.js 18+ required
-- 10+ GitHub Actions workflows (CI, security scanning, performance, deployment)
-- Jest for testing with coverage thresholds

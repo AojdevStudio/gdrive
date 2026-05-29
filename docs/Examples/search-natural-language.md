@@ -1,6 +1,6 @@
 # Natural Language Search Examples
 
-The Google Workspace MCP supports intuitive natural language queries for finding files and folders. In v4, you use the `execute` tool with `sdk.drive.search()` to run searches. Optionally, discover the operation first via `search`.
+Google Workspace MCP supports intuitive natural language queries for finding Drive files and folders. In v4, use the remote `execute` tool with the `drive.search` operation. Optionally, discover the operation first via `search`.
 
 ## Overview
 
