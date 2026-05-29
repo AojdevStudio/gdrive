@@ -1,7 +1,6 @@
 import { describe, it, expect, jest } from '@jest/globals';
 import { createConfiguredServer } from '../../server/factory.js';
 import type { ServerConfig } from '../../server/factory.js';
-import type { Executor } from '../../sdk/types.js';
 import { assertAnthropicCompatibleToolList } from '../../server/schema-compat.js';
 
 function makeDeps(overrides: Partial<ServerConfig> = {}): ServerConfig {
@@ -47,14 +46,6 @@ describe('createConfiguredServer', () => {
     expect(server._serverInfo.name).toBe('google-workspace');
   });
 
-  it('accepts an optional sandbox parameter', () => {
-    const mockSandbox: Executor = {
-      execute: jest.fn<Executor['execute']>().mockResolvedValue({ result: null, logs: [] }),
-    };
-    const server = createConfiguredServer(makeDeps({ sandbox: mockSandbox }));
-    expect(server).toBeDefined();
-  });
-
   it('marks search as read-only for clients', async () => {
     const server = createConfiguredServer(makeDeps());
     const result = await listTools(server);
@@ -84,7 +75,7 @@ describe('createConfiguredServer', () => {
     expect(execute?.description).toContain('Some operations modify files, send email, or update calendar events');
   });
 
-  it('documents execute input alternatives and parameter descriptions', async () => {
+  it('documents execute structured operation parameters', async () => {
     const server = createConfiguredServer(makeDeps());
     const result = await listTools(server);
 
@@ -98,7 +89,7 @@ describe('createConfiguredServer', () => {
     expect(schema.properties?.service?.description).toBeTruthy();
     expect(schema.properties?.operation?.description).toBeTruthy();
     expect(schema.properties?.args?.description).toBeTruthy();
-    expect(schema.properties?.code?.description).toBeTruthy();
+    expect(schema.properties?.code).toBeUndefined();
   });
 
   it('advertises Anthropic-compatible top-level input schemas', async () => {

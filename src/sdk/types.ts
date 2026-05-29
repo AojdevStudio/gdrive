@@ -8,19 +8,6 @@ import type { drive_v3, sheets_v4, forms_v1, docs_v1, gmail_v1, calendar_v3 } fr
 import type { CacheManagerLike, PerformanceMonitorLike } from '../modules/types.js';
 import type { KVLike } from '../server/tracking.js';
 
-export interface ExecuteResult {
-  result: unknown;
-  logs: string[];
-  error?: {
-    message: string;
-    stack?: string;
-  };
-}
-
-export interface Executor {
-  execute(code: string, globals: Record<string, unknown>): Promise<ExecuteResult>;
-}
-
 /**
  * Full context passed to all SDK runtime operations.
  * Combines googleapis API clients with shared infrastructure.

@@ -3,14 +3,10 @@
  *
  * Registers exactly 2 tools:
  *   - search: Query the SDK spec to discover available operations
- *   - execute: Call SDK operations directly or run agent code in sandbox
- *
- * Supports two execution modes:
- *   - Structured: service + operation + args → direct SDK call (works everywhere)
- *   - Code: JavaScript string → NodeSandbox (Node.js only, not available on Workers)
+ *   - execute: Call SDK operations directly through service + operation + args
  *
  * The 6 legacy operation-based tools (drive, sheets, forms, docs, gmail, calendar)
- * are intentionally NOT registered here. Agents use the sdk object instead.
+ * are intentionally NOT registered here. Agents use execute to call SDK operations.
  */
 
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
@@ -24,7 +20,7 @@ import type { CacheManagerLike, PerformanceMonitorLike } from '../modules/types.
 import { SDK_SPEC } from '../sdk/spec.js';
 import { createSDKRuntime } from '../sdk/runtime.js';
 import { RateLimiter } from '../sdk/rate-limiter.js';
-import type { FullContext, Executor } from '../sdk/types.js';
+import type { FullContext } from '../sdk/types.js';
 import { assertAnthropicCompatibleToolList } from './schema-compat.js';
 
 // Auth object accepted by googleapis — OAuth2Client or similar credential
@@ -42,8 +38,6 @@ export interface ServerConfig {
   cacheManager: CacheManagerLike;
   performanceMonitor: PerformanceMonitorLike;
   auth: GoogleAuth;
-  /** Optional sandbox for code execution. Omit on Workers where eval is unavailable. */
-  sandbox?: Executor;
 }
 
 export function createConfiguredServer(deps: ServerConfig): Server {
@@ -52,7 +46,6 @@ export function createConfiguredServer(deps: ServerConfig): Server {
     { capabilities: { tools: {} } }
   );
 
-  const sandbox = deps.sandbox;
   const sharedRateLimiter = new RateLimiter();
 
   function buildContext(): FullContext {
@@ -100,7 +93,7 @@ export function createConfiguredServer(deps: ServerConfig): Server {
     {
       name: 'execute',
       description:
-        'Use this to run a specific Google Workspace operation that can read and write Google Workspace data. Some operations modify files, send email, or update calendar events. Preferred: use service + operation + args for direct calls. Alternative (Node.js only): pass JavaScript code string.',
+        'Use this to run a specific Google Workspace operation that can read and write Google Workspace data. Some operations modify files, send email, or update calendar events. Use service + operation + args.',
       inputSchema: {
         type: 'object' as const,
         properties: {
@@ -119,11 +112,6 @@ export function createConfiguredServer(deps: ServerConfig): Server {
             type: 'object',
             description:
               'Arguments object to pass to the operation. Structure depends on the operation — use search tool to see parameter details.',
-          },
-          code: {
-            type: 'string',
-            description:
-              'JavaScript code to execute in sandbox (Node.js only, not available on remote Workers). Use service + operation + args instead for universal compatibility.',
           },
         },
         additionalProperties: false,
@@ -193,11 +181,10 @@ export function createConfiguredServer(deps: ServerConfig): Server {
     }
 
     if (name === 'execute') {
-      const { service, operation, args: opArgs, code } = (args ?? {}) as {
+      const { service, operation, args: opArgs } = (args ?? {}) as {
         service?: string;
         operation?: string;
         args?: Record<string, unknown>;
-        code?: string;
       };
 
       const context = buildContext();
@@ -262,63 +249,13 @@ export function createConfiguredServer(deps: ServerConfig): Server {
         }
       }
 
-      // Code execution: requires sandbox (Node.js only)
-      if (code && typeof code === 'string') {
-        if (!sandbox) {
-          return {
-            content: [{
-              type: 'text' as const,
-              text: JSON.stringify({
-                error: 'Code execution is not available on this server. Use service + operation + args instead.',
-                hint: 'Call search tool to discover available operations, then use execute with service, operation, and args parameters.',
-              }),
-            }],
-            isError: true,
-          };
-        }
-
-        try {
-          const result = await sandbox.execute(code, { sdk });
-
-          if (result.error) {
-            return {
-              content: [{
-                type: 'text' as const,
-                text: JSON.stringify({
-                  error: result.error.message,
-                  logs: result.logs,
-                }),
-              }],
-              isError: true,
-            };
-          }
-
-          return {
-            content: [{
-              type: 'text' as const,
-              text: JSON.stringify({ result: result.result, logs: result.logs }),
-            }],
-          };
-        } catch (err) {
-          const message = err instanceof Error ? err.message : String(err);
-          return {
-            content: [{
-              type: 'text' as const,
-              text: JSON.stringify({ error: message }),
-            }],
-            isError: true,
-          };
-        }
-      }
-
       return {
         content: [{
           type: 'text' as const,
           text: JSON.stringify({
-            error: 'Either provide service + operation (+ optional args), or code.',
+            error: 'Provide service + operation (+ optional args).',
             usage: {
-              structured: '{ service: "drive", operation: "search", args: { query: "..." } }',
-              code: '{ code: "return await sdk.drive.search({ query: \\"...\\" })" }',
+              execute: '{ service: "drive", operation: "search", args: { query: "..." } }',
             },
           }),
         }],
