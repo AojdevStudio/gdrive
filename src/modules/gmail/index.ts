@@ -44,6 +44,8 @@ export type {
   ListLabelsOptions,
   ListLabelsResult,
   LabelInfo,
+  CreateLabelOptions,
+  CreateLabelResult,
   ModifyLabelsOptions,
   ModifyLabelsResult,
   // Reply types
@@ -104,7 +106,7 @@ export { createDraft, dryRunMessage } from './compose.js';
 export { sendMessage, sendDraft, sendFromTemplate, sendBatch } from './send.js';
 
 // Label operations
-export { listLabels, modifyLabels } from './labels.js';
+export { listLabels, createLabel, modifyLabels } from './labels.js';
 
 // Reply operations
 export { replyToMessage, replyAllToMessage } from './reply.js';

@@ -238,10 +238,16 @@ export async function generateToolStructure(): Promise<ModuleStructure> {
         example: 'gmail.listLabels({})',
       },
       {
+        name: 'createLabel',
+        signature: 'createLabel({ name: string, messageListVisibility?: "show" | "hide", labelListVisibility?: "labelShow" | "labelShowIfUnread" | "labelHide" })',
+        description: 'Create a custom Gmail label in the user\'s mailbox',
+        example: 'gmail.createLabel({ name: "Follow Up" })',
+      },
+      {
         name: 'modifyLabels',
-        signature: 'modifyLabels({ id: string, addLabelIds?: string[], removeLabelIds?: string[] })',
+        signature: 'modifyLabels({ messageId: string, addLabelIds?: string[], removeLabelIds?: string[] })',
         description: 'Add or remove labels from a message',
-        example: 'gmail.modifyLabels({ id: "18c123abc", removeLabelIds: ["UNREAD", "INBOX"] })',
+        example: 'gmail.modifyLabels({ messageId: "18c123abc", removeLabelIds: ["UNREAD", "INBOX"] })',
       },
       {
         name: 'dryRun',
@@ -404,7 +410,7 @@ export function formatToolStructure(structure: ModuleStructure): string {
  */
 export async function getModuleTools(moduleName: string): Promise<ToolDefinition[]> {
   const structure = await generateToolStructure();
-  return structure[moduleName] || [];
+  return structure[moduleName] ?? [];
 }
 
 /**

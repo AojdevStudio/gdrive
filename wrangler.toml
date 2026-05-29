@@ -3,6 +3,18 @@ main = "worker.ts"
 compatibility_date = "2026-02-01"
 compatibility_flags = ["nodejs_compat"]
 
+[observability.logs]
+enabled = true
+invocation_logs = true
+destinations = ["proxmox-grafana-logs"]
+persist = true
+
+[observability.traces]
+enabled = true
+destinations = ["proxmox-grafana-traces"]
+head_sampling_rate = 1.0
+persist = true
+
 [[kv_namespaces]]
 binding = "GDRIVE_KV"
 id = "a9f903f9b96e4e49917dac53fbeb4007"

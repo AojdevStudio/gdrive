@@ -1,61 +1,56 @@
 # Codex MCP Integration Guide
 
-This guide configures Codex to use Google Workspace MCP through the deployed Cloudflare Workers `/mcp` endpoint. Local stdio and local HTTP server modes are not supported.
+This guide connects Codex to **Google Workspace MCP** over the remote Cloudflare Workers HTTP endpoint.
+
+## Supported Runtime
+
+Use the deployed Worker endpoint:
+
+```text
+https://your-worker.workers.dev/mcp
+```
+
+Local stdio, local HTTP, Docker, and local bootstrap flows are not supported MCP server modes.
 
 ## Auth Boundary
 
 There are two separate auth surfaces:
 
-- Codex authenticates to this MCP server with static bearer auth.
-- This MCP server authenticates to Google Workspace through the remote Worker setup flow.
+- Codex authenticates to Google Workspace MCP with static bearer auth when the Worker requires it.
+- Google Workspace MCP authenticates to Google Workspace APIs with Google OAuth.
 
 This server is not an OAuth authorization server. `MCP_AUTHORIZATION_SERVER_URL` only advertises an external authorization server in protected-resource metadata; it does not make this server validate external OAuth tokens.
 
-## Prerequisites
+## Add The Remote Server To Codex
 
-- Deployed Worker URL, for example `https://your-worker.workers.dev`.
-- Worker secret `MCP_BEARER_TOKEN` configured.
-- Worker secret `MCP_SETUP_TOKEN` configured.
-- Remote Google OAuth setup completed through `/setup/google/start`.
-- Codex CLI installed and working.
-
-Verify remote Google OAuth state:
+Use the server name `google-workspace` so agents understand this is not Drive-only:
 
 ```bash
-curl -H "Authorization: Bearer $MCP_SETUP_TOKEN" \
-  https://your-worker.workers.dev/setup/status
-```
-
-## Add The Server To Codex
-
-Codex supports bearer tokens for Streamable HTTP MCP servers through an environment variable:
-
-```bash
-export GDRIVE_MCP_TOKEN="replace-with-the-worker-mcp-token"
+export GOOGLE_WORKSPACE_MCP_TOKEN="replace-with-the-worker-token"
 
 codex mcp add google-workspace \
   --url https://your-worker.workers.dev/mcp \
-  --bearer-token-env-var GDRIVE_MCP_TOKEN
+  --bearer-token-env-var GOOGLE_WORKSPACE_MCP_TOKEN
 
 codex mcp get google-workspace
 ```
 
-Start a fresh Codex session after adding or changing MCP server config. The expected tools are `search` and `execute`.
+Start a fresh Codex session after adding or changing MCP server config.
 
-## Replacing Legacy Names
+If the Worker does not require bearer auth, omit `--bearer-token-env-var`.
 
-If Codex still has this Worker registered as `gdrive`, remove that stale entry and re-add the same deployed `/mcp` URL as `google-workspace`:
+## Expected Tools
 
-```bash
-codex mcp remove gdrive
-codex mcp add google-workspace \
-  --url https://your-worker.workers.dev/mcp \
-  --bearer-token-env-var GDRIVE_MCP_TOKEN
-```
+The expected MCP tools are:
+
+- `search`
+- `execute`
+
+Use `search` to discover Drive, Sheets, Forms, Docs, Gmail, and Calendar operations before calling `execute`.
 
 ## External Authorization Server Metadata
 
-Set this only when a real external OAuth authorization server exists for MCP client authentication:
+Set `MCP_AUTHORIZATION_SERVER_URL` only when a real external OAuth authorization server exists for MCP client authentication:
 
 ```bash
 MCP_AUTHORIZATION_SERVER_URL=https://auth.example.com
@@ -67,29 +62,27 @@ Do not set this variable to a Google OAuth URL. Google OAuth authorizes this ser
 
 ## Troubleshooting
 
-## `Auth unsupported`
+### `Auth unsupported`
 
-Codex could not match the server's advertised auth shape to a supported login flow. For this server, use `--bearer-token-env-var` unless an external authorization server has been designed and configured.
+Codex could not match the server's advertised auth shape to a supported login flow. Use `--bearer-token-env-var` unless an external authorization server has been designed and configured.
 
-## `401 Unauthorized`
+### `401 Unauthorized`
 
 The bearer token is missing or wrong. Confirm:
 
 ```bash
-echo "$GDRIVE_MCP_TOKEN"
+test -n "$GOOGLE_WORKSPACE_MCP_TOKEN" && echo "GOOGLE_WORKSPACE_MCP_TOKEN is set" || echo "GOOGLE_WORKSPACE_MCP_TOKEN is missing"
 codex mcp get google-workspace
 ```
 
 The Codex token env var value must match the Worker's `MCP_BEARER_TOKEN`.
 
-## Missing Google OAuth State
+### Tools Do Not Appear
 
-Use the remote setup and status routes:
+Check the configured MCP server:
 
 ```bash
-curl -H "Authorization: Bearer $MCP_SETUP_TOKEN" \
-  https://your-worker.workers.dev/setup/status
-
-curl -i -H "Authorization: Bearer $MCP_SETUP_TOKEN" \
-  https://your-worker.workers.dev/setup/google/start
+codex mcp get google-workspace
 ```
+
+Then start a fresh Codex session.

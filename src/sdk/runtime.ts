@@ -184,6 +184,10 @@ export function createSDKRuntime(
         const { listLabels } = await import('../modules/gmail/index.js');
         return listLabels(opts as Parameters<typeof listLabels>[0], context);
       }),
+      createLabel: limiter.wrap('gmail', async (opts: unknown) => {
+        const { createLabel } = await import('../modules/gmail/index.js');
+        return createLabel(opts as Parameters<typeof createLabel>[0], context);
+      }),
       modifyLabels: limiter.wrap('gmail', async (opts: unknown) => {
         const { modifyLabels } = await import('../modules/gmail/index.js');
         return modifyLabels(opts as Parameters<typeof modifyLabels>[0], context);

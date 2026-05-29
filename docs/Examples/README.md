@@ -1,47 +1,43 @@
 # Google Workspace MCP Examples
 
-These examples assume the supported v4 runtime: a deployed Cloudflare Worker with MCP clients connected to `https://your-worker.workers.dev/mcp`.
+These examples use the v4 remote MCP architecture: one Cloudflare Workers HTTP endpoint with two tools, `search` and `execute`.
 
-Google Workspace MCP exposes two tools:
+## Workflow
 
-| Tool | Purpose |
-|------|---------|
-| `search` | Discover services, operations, parameters, and examples |
-| `execute` | Run a specific Google Workspace operation with `service`, `operation`, and `args` |
+1. Call `search` to discover the service operation you need.
+2. Call `execute` with `service`, `operation`, and `args`.
 
-## Before Running Examples
+## Available Examples
 
-1. Deploy the Worker and configure its secrets.
-2. Complete remote Google OAuth setup at `/setup/google/start`.
-3. Confirm setup state:
+### Search Operations
 
-```bash
-curl -H "Authorization: Bearer $MCP_SETUP_TOKEN" \
-  https://your-worker.workers.dev/setup/status
-```
+- [Natural Language Search](./search-natural-language.md) — Drive search via `drive.search`
+- [Enhanced Search](./search-enhanced.md) — advanced Drive filtering via `drive.enhancedSearch`
 
-4. Connect your MCP client to the Worker `/mcp` URL using bearer auth.
+### Spreadsheet Management
 
-## Example Tool Calls
+- [Conditional Formatting](./sheets-conditional-formatting.md) — apply conditional formatting via `sheets.addConditionalFormat`
 
-Discover an operation:
+## Example: Discover And Run
+
+Discover Drive search:
 
 ```json
 {
-  "name": "search",
-  "arguments": {
+  "tool": "search",
+  "args": {
     "service": "drive",
     "operation": "search"
   }
 }
 ```
 
-Run an operation:
+Run Drive search:
 
 ```json
 {
-  "name": "execute",
-  "arguments": {
+  "tool": "execute",
+  "args": {
     "service": "drive",
     "operation": "search",
     "args": {
@@ -52,10 +48,12 @@ Run an operation:
 }
 ```
 
-## Available Examples
+## Runtime Boundary
 
-- [Natural Language Search](./search-natural-language.md)
-- [Enhanced Search](./search-enhanced.md)
-- [Conditional Formatting](./sheets-conditional-formatting.md)
+These examples assume an MCP client is already connected to the remote Google Workspace MCP Worker URL:
 
-When adding examples, use the `search` -> `execute` flow and avoid local stdio, Docker, Redis, or local OAuth bootstrap instructions.
+```text
+https://your-worker.workers.dev/mcp
+```
+
+Do not use local stdio, local HTTP, Docker, or local bootstrap setup for these examples.

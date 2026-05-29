@@ -61,7 +61,6 @@ function setupAuthError(request: Request, env: WorkerOAuthEnv): Response | null 
     requiredToken: env.MCP_SETUP_TOKEN,
     allowedOrigins: env.MCP_ALLOWED_ORIGINS,
     runtimeName: 'remote Google OAuth setup',
-    tokenName: 'MCP_SETUP_TOKEN',
   });
 }
 
@@ -84,17 +83,10 @@ function requiredConfig(env: WorkerOAuthEnv): {
   return { ok: missing.length === 0, missing, present };
 }
 
-function setupConfigError(env: WorkerOAuthEnv, exposeDetails = true): Response | null {
+function setupConfigError(env: WorkerOAuthEnv): Response | null {
   const config = requiredConfig(env);
   if (config.ok) {
     return null;
-  }
-
-  if (!exposeDetails) {
-    return jsonResponse(500, {
-      error: 'Server misconfiguration',
-      detail: 'Remote Google OAuth setup is not fully configured.',
-    });
   }
 
   return jsonResponse(500, {
@@ -148,25 +140,6 @@ async function readStoredState(kv: KVNamespace, state: string): Promise<StoredOA
   }
 
   return null;
-}
-
-async function validateCallbackStateGuard(
-  request: Request,
-  kv: KVNamespace,
-  state: string
-): Promise<StoredOAuthState | Response> {
-  const storedState = await readStoredState(kv, state);
-  if (!storedState) {
-    return jsonError(400, 'Invalid OAuth state', 'OAuth state is missing, expired, reused, or mismatched. Restart remote setup at /setup/google/start.');
-  }
-
-  await kv.delete(stateKey(state));
-
-  if (Date.now() > storedState.expiresAt || storedState.redirectUri !== callbackUrl(request)) {
-    return jsonError(400, 'Invalid OAuth state', 'OAuth state is missing, expired, reused, or mismatched. Restart remote setup at /setup/google/start.');
-  }
-
-  return storedState;
 }
 
 export async function handleGoogleOAuthStart(
@@ -277,7 +250,7 @@ export async function handleGoogleOAuthCallback(
   request: Request,
   env: WorkerOAuthEnv
 ): Promise<Response> {
-  const configError = setupConfigError(env, false);
+  const configError = setupConfigError(env);
   if (configError) {
     return configError;
   }
@@ -295,15 +268,19 @@ export async function handleGoogleOAuthCallback(
     return jsonError(400, 'Invalid OAuth callback', 'Missing authorization code or OAuth state.');
   }
 
-  // Google redirects cannot attach Authorization headers. The one-time, expiring
-  // state value is the setup guard for this callback and is consumed before code exchange.
-  const callbackStateGuard = await validateCallbackStateGuard(request, env.GDRIVE_KV, state);
-  if (callbackStateGuard instanceof Response) {
-    return callbackStateGuard;
+  const storedState = await readStoredState(env.GDRIVE_KV, state);
+  if (!storedState) {
+    return jsonError(400, 'Invalid OAuth state', 'OAuth state is missing, expired, reused, or mismatched. Restart remote setup at /setup/google/start.');
+  }
+
+  await env.GDRIVE_KV.delete(stateKey(state));
+
+  if (Date.now() > storedState.expiresAt || storedState.redirectUri !== callbackUrl(request)) {
+    return jsonError(400, 'Invalid OAuth state', 'OAuth state is missing, expired, reused, or mismatched. Restart remote setup at /setup/google/start.');
   }
 
   try {
-    const tokens = await exchangeCodeForTokens(code, callbackStateGuard.redirectUri, env);
+    const tokens = await exchangeCodeForTokens(code, storedState.redirectUri, env);
     await persistEncryptedTokens(
       env.GDRIVE_KV,
       tokens,

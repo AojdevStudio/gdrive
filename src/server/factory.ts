@@ -3,10 +3,11 @@
  *
  * Registers exactly 2 tools:
  *   - search: Query the SDK spec to discover available operations
- *   - execute: Call SDK operations directly
+ *   - execute: Call SDK operations directly or run agent code in sandbox
  *
- * Supports structured service + operation + args execution for the Worker
- * runtime. Local Node.js code execution is not part of the supported surface.
+ * Supports two execution modes:
+ *   - Structured: service + operation + args → direct SDK call (works everywhere)
+ *   - Code: JavaScript string → NodeSandbox (Node.js only, not available on Workers)
  *
  * The 6 legacy operation-based tools (drive, sheets, forms, docs, gmail, calendar)
  * are intentionally NOT registered here. Agents use the sdk object instead.
@@ -23,7 +24,8 @@ import type { CacheManagerLike, PerformanceMonitorLike } from '../modules/types.
 import { SDK_SPEC } from '../sdk/spec.js';
 import { createSDKRuntime } from '../sdk/runtime.js';
 import { RateLimiter } from '../sdk/rate-limiter.js';
-import type { FullContext } from '../sdk/types.js';
+import type { FullContext, Executor } from '../sdk/types.js';
+import { assertAnthropicCompatibleToolList } from './schema-compat.js';
 
 // Auth object accepted by googleapis — OAuth2Client or similar credential
 // We use a broad type here since the factory accepts both OAuth2Client (Node) and
@@ -40,6 +42,8 @@ export interface ServerConfig {
   cacheManager: CacheManagerLike;
   performanceMonitor: PerformanceMonitorLike;
   auth: GoogleAuth;
+  /** Optional sandbox for code execution. Omit on Workers where eval is unavailable. */
+  sandbox?: Executor;
 }
 
 export function createConfiguredServer(deps: ServerConfig): Server {
@@ -48,6 +52,7 @@ export function createConfiguredServer(deps: ServerConfig): Server {
     { capabilities: { tools: {} } }
   );
 
+  const sandbox = deps.sandbox;
   const sharedRateLimiter = new RateLimiter();
 
   function buildContext(): FullContext {
@@ -66,63 +71,69 @@ export function createConfiguredServer(deps: ServerConfig): Server {
     };
   }
 
-  server.setRequestHandler(ListToolsRequestSchema, async () => ({
-    tools: [
-      {
-        name: 'search',
-        description:
-          'Use this first to discover Google Workspace operations, signatures, parameters, and examples before calling execute. Without filters, returns a service-to-operation summary; with a service filter and optional operation, returns the matching detailed spec subset.',
-        annotations: {
-          readOnlyHint: true,
-        },
-        inputSchema: {
-          type: 'object' as const,
-          properties: {
-            service: {
-              type: 'string',
-              description:
-                'Optional service name to filter (drive | sheets | forms | docs | gmail | calendar). Omit to get all services.',
-              enum: ['drive', 'sheets', 'forms', 'docs', 'gmail', 'calendar'],
-            },
-            operation: {
-              type: 'string',
-              description:
-                'Optional operation name to get details for a single operation (e.g. "search", "readSheet").',
-            },
-          },
-          additionalProperties: false,
-        },
+  const tools = [
+    {
+      name: 'search',
+      description:
+        'Use this first to discover Google Workspace operations, signatures, parameters, and examples before calling execute. Without filters, returns a service-to-operation summary; with service or operation filters, returns the matching detailed spec subset.',
+      annotations: {
+        readOnlyHint: true,
       },
-      {
-        name: 'execute',
-        description:
-          'Use this to run a specific Google Workspace operation that can read and write Google Workspace data. Some operations modify files, send email, or update calendar events. Use service + operation + args for direct calls.',
-        inputSchema: {
-          type: 'object' as const,
-          required: ['service', 'operation'],
-          properties: {
-            service: {
-              type: 'string',
-              description:
-                'Service to call (drive | sheets | forms | docs | gmail | calendar). Use with operation and args.',
-              enum: ['drive', 'sheets', 'forms', 'docs', 'gmail', 'calendar'],
-            },
-            operation: {
-              type: 'string',
-              description:
-                'Operation name to call (e.g. "search", "readSheet", "sendMessage"). Use search tool to discover available operations.',
-            },
-            args: {
-              type: 'object',
-              description:
-                'Arguments object to pass to the operation. Structure depends on the operation — use search tool to see parameter details.',
-            },
+      inputSchema: {
+        type: 'object' as const,
+        properties: {
+          service: {
+            type: 'string',
+            description:
+              'Optional service name to filter (drive | sheets | forms | docs | gmail | calendar). Omit to get all services.',
+            enum: ['drive', 'sheets', 'forms', 'docs', 'gmail', 'calendar'],
           },
-          additionalProperties: false,
+          operation: {
+            type: 'string',
+            description:
+              'Optional operation name to get details for a single operation (e.g. "search", "readSheet").',
+          },
         },
+        additionalProperties: false,
       },
-    ],
-  }));
+    },
+    {
+      name: 'execute',
+      description:
+        'Use this to run a specific Google Workspace operation that can read and write Google Workspace data. Some operations modify files, send email, or update calendar events. Preferred: use service + operation + args for direct calls. Alternative (Node.js only): pass JavaScript code string.',
+      inputSchema: {
+        type: 'object' as const,
+        properties: {
+          service: {
+            type: 'string',
+            description:
+              'Service to call (drive | sheets | forms | docs | gmail | calendar). Use with operation and args.',
+            enum: ['drive', 'sheets', 'forms', 'docs', 'gmail', 'calendar'],
+          },
+          operation: {
+            type: 'string',
+            description:
+              'Operation name to call (e.g. "search", "readSheet", "sendMessage"). Use search tool to discover available operations.',
+          },
+          args: {
+            type: 'object',
+            description:
+              'Arguments object to pass to the operation. Structure depends on the operation — use search tool to see parameter details.',
+          },
+          code: {
+            type: 'string',
+            description:
+              'JavaScript code to execute in sandbox (Node.js only, not available on remote Workers). Use service + operation + args instead for universal compatibility.',
+          },
+        },
+        additionalProperties: false,
+      },
+    },
+  ];
+
+  assertAnthropicCompatibleToolList(tools);
+
+  server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools }));
 
   server.setRequestHandler(CallToolRequestSchema, async (request) => {
     const { name, arguments: args } = request.params;
@@ -182,10 +193,11 @@ export function createConfiguredServer(deps: ServerConfig): Server {
     }
 
     if (name === 'execute') {
-      const { service, operation, args: opArgs } = (args ?? {}) as {
+      const { service, operation, args: opArgs, code } = (args ?? {}) as {
         service?: string;
         operation?: string;
         args?: Record<string, unknown>;
+        code?: string;
       };
 
       const context = buildContext();
@@ -250,13 +262,63 @@ export function createConfiguredServer(deps: ServerConfig): Server {
         }
       }
 
+      // Code execution: requires sandbox (Node.js only)
+      if (code && typeof code === 'string') {
+        if (!sandbox) {
+          return {
+            content: [{
+              type: 'text' as const,
+              text: JSON.stringify({
+                error: 'Code execution is not available on this server. Use service + operation + args instead.',
+                hint: 'Call search tool to discover available operations, then use execute with service, operation, and args parameters.',
+              }),
+            }],
+            isError: true,
+          };
+        }
+
+        try {
+          const result = await sandbox.execute(code, { sdk });
+
+          if (result.error) {
+            return {
+              content: [{
+                type: 'text' as const,
+                text: JSON.stringify({
+                  error: result.error.message,
+                  logs: result.logs,
+                }),
+              }],
+              isError: true,
+            };
+          }
+
+          return {
+            content: [{
+              type: 'text' as const,
+              text: JSON.stringify({ result: result.result, logs: result.logs }),
+            }],
+          };
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
+          return {
+            content: [{
+              type: 'text' as const,
+              text: JSON.stringify({ error: message }),
+            }],
+            isError: true,
+          };
+        }
+      }
+
       return {
         content: [{
           type: 'text' as const,
           text: JSON.stringify({
-            error: 'Provide service + operation (+ optional args).',
+            error: 'Either provide service + operation (+ optional args), or code.',
             usage: {
-              execute: '{ service: "drive", operation: "search", args: { query: "..." } }',
+              structured: '{ service: "drive", operation: "search", args: { query: "..." } }',
+              code: '{ code: "return await sdk.drive.search({ query: \\"...\\" })" }',
             },
           }),
         }],

@@ -1,37 +1,33 @@
-# Troubleshooting
+# Google Workspace MCP Troubleshooting
 
-Use these checks for the supported Worker runtime.
+Google Workspace MCP is remote-only. Current MCP clients must connect to the Cloudflare Workers `/mcp` endpoint.
 
-## Setup Status
-
-```bash
-curl -H "Authorization: Bearer $MCP_SETUP_TOKEN" \
-  https://your-worker.workers.dev/setup/status
+```text
+https://your-worker.workers.dev/mcp
 ```
 
-If the response reports missing or malformed token state, restart setup:
+## Current Checks
 
-```bash
-curl -i -H "Authorization: Bearer $MCP_SETUP_TOKEN" \
-  https://your-worker.workers.dev/setup/google/start
-```
+- Confirm the MCP client is configured with the remote Worker URL.
+- Confirm the client server name is `google-workspace`, not `gdrive`, unless you intentionally kept a legacy alias.
+- Confirm the bearer token configured in the MCP client matches the Worker's `MCP_BEARER_TOKEN`.
+- Start a fresh MCP client session after changing MCP config.
+- Confirm the expected tools are `search` and `execute`.
 
-## MCP Auth
+## Common Issues
 
-Unauthenticated `/mcp` requests should return `401 Unauthorized` when `MCP_BEARER_TOKEN` is configured. Confirm your MCP client sends the bearer token that matches the Worker secret.
+### `401 Unauthorized`
 
-## Expected Tools
+The bearer token is missing or wrong. Update the client token environment variable and restart the MCP client session.
 
-Authenticated `tools/list` should expose:
+### Tools Do Not Appear
 
-- `search`
-- `execute`
+Check the configured URL and restart the client session. The endpoint must end with `/mcp`.
 
-## References
+### Agent Thinks This Is Drive-Only
 
-- [Authentication Problems](./authentication-problems.md)
-- [Error Messages](./error-messages.md)
-- [Permission Errors](./permission-errors.md)
-- [API Rate Limits](./api-rate-limits.md)
+Rename the MCP server entry to `google-workspace`. The server covers Drive, Sheets, Forms, Docs, Gmail, and Calendar.
 
-Historical Docker and Redis troubleshooting files remain only to redirect older links.
+## Legacy Pages
+
+Older troubleshooting pages in this directory may describe local stdio, Docker, Redis, or local auth flows. Those are retained only as historical references and are not supported MCP runtime guidance.
