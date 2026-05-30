@@ -62,6 +62,9 @@ export type {
   ListAttachmentsResult,
   DownloadAttachmentOptions,
   DownloadAttachmentResult,
+  ReadAttachmentTextOptions,
+  ReadAttachmentTextResult,
+  ReadAttachmentTextStatus,
   OutboundAttachment,
   SendWithAttachmentsOptions,
   SendWithAttachmentsResult,
@@ -115,7 +118,7 @@ export { replyToMessage, replyAllToMessage } from './reply.js';
 export { forwardMessage } from './forward.js';
 
 // Attachment operations
-export { listAttachments, downloadAttachment, sendWithAttachments } from './attachments.js';
+export { listAttachments, downloadAttachment, readAttachmentText, sendWithAttachments } from './attachments.js';
 
 // Message management operations
 export { trashMessage, untrashMessage, deleteMessage, markAsRead, markAsUnread, archiveMessage } from './manage.js';
