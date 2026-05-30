@@ -2,9 +2,9 @@
 
 ## Project Overview
 
-**Google Workspace MCP** is a remote-only MCP server for Google Workspace: Drive, Sheets, Forms, Docs, Gmail, and Calendar.
+**AOJ Workbench** is a remote-only MCP server for Google Workspace APIs: Drive, Sheets, Forms, Docs, Gmail, and Calendar.
 
-Use the canonical name **Google Workspace MCP** in docs, issues, prompts, and client configuration examples. Avoid “gdrive MCP” or “Google Drive MCP” unless referring to legacy package/repo names.
+Use the canonical product name **AOJ Workbench** in docs, issues, prompts, and client-facing prose. Google Workspace is the upstream API surface, not the product name. Keep legacy names only for existing package, repo, worker, environment, or migration-sensitive identifiers.
 
 **Runtime boundary:** Cloudflare Workers Streamable HTTP only. MCP clients connect to the deployed `/mcp` URL. Local stdio, local HTTP, Docker, and local bootstrap flows are not supported MCP server modes.
 
@@ -67,7 +67,7 @@ The Workspace surface includes:
 | Sheets | listSheets, readSheet, createSheet, renameSheet, deleteSheet, updateCells, updateFormula, formatCells, addConditionalFormat, freezeRowsColumns, setColumnWidth, appendRows |
 | Forms | createForm, readForm, addQuestion, listResponses |
 | Docs | createDocument, insertText, replaceText, applyTextStyle, insertTable |
-| Gmail | listMessages, listThreads, getMessage, getThread, searchMessages, createDraft, sendMessage, sendDraft, listLabels, createLabel, modifyLabels |
+| Gmail | listMessages, listThreads, getMessage, getThread, searchMessages, createDraft, sendMessage, sendDraft, listLabels, createLabel, modifyLabels, listAttachments, downloadAttachment, readAttachmentText |
 | Calendar | listCalendars, getCalendar, listEvents, getEvent, createEvent, updateEvent, deleteEvent, quickAdd, checkFreeBusy |
 
 ## Environment Variables
@@ -88,7 +88,7 @@ Worker-facing variables:
 ## Gotchas
 
 - **Remote only** — MCP clients must use the deployed Worker URL. Do not reintroduce stdio, local HTTP, or Docker connection docs.
-- **Name clarity** — use **Google Workspace MCP** so agents know Gmail, Docs, Sheets, Drive, Forms, and Calendar are available.
+- **Name clarity** — use **AOJ Workbench** for the product and Google Workspace API surface for the upstream provider capabilities.
 - **Auth boundary** — MCP client auth uses `MCP_BEARER_TOKEN`; Google OAuth remains server-to-Google authorization. This server is not an OAuth authorization server.
 - **Tool schema compatibility** — advertised top-level tool input schemas must be plain `type: "object"` schemas with no root `oneOf`, `anyOf`, or `allOf`.
 - **Cloudflare state** — persistent runtime state belongs in Cloudflare services such as Workers KV, not local files.

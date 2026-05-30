@@ -441,7 +441,7 @@ export interface ForwardMessageResult {
  * Metadata about a single attachment
  */
 export interface AttachmentInfo {
-  /** Gmail attachment ID (use with downloadAttachment) */
+  /** Opaque attachment ID from listAttachments (use with downloadAttachment/readAttachmentText) */
   attachmentId: string;
   /** Filename of the attachment */
   filename: string;
@@ -475,6 +475,8 @@ export interface DownloadAttachmentOptions {
   messageId: string;
   /** The attachment ID from listAttachments */
   attachmentId: string;
+  /** Maximum allowed attachment size in bytes (default: 10 MiB) */
+  maxBytes?: number;
 }
 
 /**
@@ -488,7 +490,74 @@ export interface DownloadAttachmentResult {
   size: number;
   /** Base64url-encoded attachment data */
   data: string;
+  /** Encoding used by Gmail attachment payloads */
+  dataEncoding: 'base64url';
+  /** Size guardrail used for this download */
+  maxBytes: number;
 }
+
+/**
+ * Options for reading decoded attachment text
+ */
+export interface ReadAttachmentTextOptions {
+  /** The Gmail message ID */
+  messageId: string;
+  /** The attachment ID from listAttachments */
+  attachmentId: string;
+  /** Maximum allowed attachment size in bytes (default: 10 MiB) */
+  maxBytes?: number;
+  /** Maximum decoded text characters to return (default: 200,000) */
+  maxCharacters?: number;
+  /** Maximum PDF pages to inspect (default: 50) */
+  pdfMaxPages?: number;
+  /** Maximum uncompressed DOCX document.xml bytes to parse (default: 2 MiB) */
+  docxMaxXmlBytes?: number;
+}
+
+export type ReadAttachmentTextStatus =
+  | 'decoded'
+  | 'unsupported'
+  | 'oversize'
+  | 'extraction_failed';
+
+export interface ReadAttachmentTextLimits {
+  maxBytes: number;
+  maxCharacters: number;
+  pdfMaxPages: number;
+  docxMaxXmlBytes: number;
+}
+
+interface ReadAttachmentTextBase {
+  messageId: string;
+  attachmentId: string;
+  filename: string;
+  mimeType: string;
+  size: number;
+  limits: ReadAttachmentTextLimits;
+}
+
+/**
+ * Decoded attachment text or a typed refusal/result for unsupported content
+ */
+export type ReadAttachmentTextResult =
+  | (ReadAttachmentTextBase & {
+      status: 'decoded';
+      /** UTF-8 text when status is decoded */
+      text: string;
+      /** Encoding used for decoded text */
+      textEncoding: 'utf-8';
+      /** Whether text was truncated to maxCharacters */
+      truncated: boolean;
+      reason?: never;
+    })
+  | (ReadAttachmentTextBase & {
+      status: Exclude<ReadAttachmentTextStatus, 'decoded'>;
+      truncated: false;
+      /** Human-readable reason when status is not decoded */
+      reason: string;
+      text?: never;
+      textEncoding?: never;
+    });
 
 /**
  * An attachment to include when sending a message

@@ -1,6 +1,6 @@
 /**
  * Static SDK spec for the search() tool.
- * Contains metadata for all 47 Google Workspace operations across 6 services.
+ * Contains metadata for AOJ Workbench operations across 6 Google Workspace services.
  * Agent code queries this object to discover available operations before calling execute().
  *
  * Usage in search() tool:
@@ -417,14 +417,14 @@ export const SDK_SPEC: SDKSpec = {
       returns: "{ threads: ThreadSummary[], nextPageToken?, resultSizeEstimate } — ThreadSummary = { id, snippet, historyId }",
     },
     getMessage: {
-      signature: "getMessage(options: { id: string, format?: string }): Promise<MessageDetail>",
-      description: "Get the full content of a specific email message by ID.",
-      example: "const msg = await sdk.gmail.getMessage({ id: 'abc123' });\nreturn { subject: msg.subject, from: msg.from, body: msg.body };",
+      signature: "getMessage(options: { id: string, format?: string }): Promise<MessageResult>",
+      description: "Get a specific email message by ID. Returns headers, snippet, body when available, labels, and size estimate. Attachment metadata is not embedded; use listAttachments({ messageId }) after getMessage/searchMessages.",
+      example: "const msg = await sdk.gmail.getMessage({ id: 'abc123' });\nconst attachments = await sdk.gmail.listAttachments({ messageId: msg.id });\nreturn { subject: msg.headers.subject, body: msg.body, attachments: attachments.attachments };",
       params: {
         id: "string (required) — message ID from listMessages()",
         format: "string (optional, default 'full') — 'full' | 'metadata' | 'minimal'",
       },
-      returns: "MessageDetail — { id, threadId, subject, from, to, date, body, snippet, labelIds, attachments? }",
+      returns: "MessageResult — { id, threadId, labelIds, snippet, historyId, internalDate, headers, body?, sizeEstimate }",
     },
     getThread: {
       signature: "getThread(options: { id: string }): Promise<{ threadId, messages: MessageDetail[], messageCount }>",
@@ -436,15 +436,16 @@ export const SDK_SPEC: SDKSpec = {
       returns: "{ threadId, messages: MessageDetail[], messageCount }",
     },
     searchMessages: {
-      signature: "searchMessages(options: { query: string, maxResults?: number, pageToken?: string }): Promise<{ messages: MessageDetail[], nextPageToken?, totalResults }>",
-      description: "Search Gmail using Gmail search syntax. Returns full message details (not just IDs).",
-      example: "const results = await sdk.gmail.searchMessages({ query: 'from:boss@company.com subject:urgent', maxResults: 5 });\nreturn results.messages.map(m => ({ subject: m.subject, from: m.from }));",
+      signature: "searchMessages(options: { query: string, maxResults?: number, pageToken?: string, includeSpamTrash?: boolean }): Promise<{ messages: MessageSummary[], nextPageToken?, resultSizeEstimate }>",
+      description: "Search Gmail using Gmail search syntax. Returns message IDs and thread IDs only; call getMessage() for message content and listAttachments() for attachment metadata.",
+      example: "const results = await sdk.gmail.searchMessages({ query: 'has:attachment subject:report', maxResults: 5 });\nconst first = results.messages[0];\nreturn first ? sdk.gmail.listAttachments({ messageId: first.id }) : { attachments: [] };",
       params: {
         query: "string (required) — Gmail search query, e.g. 'from:user@example.com has:attachment after:2024/1/1'",
         maxResults: "number (optional, default 10)",
         pageToken: "string (optional)",
+        includeSpamTrash: "boolean (optional, default false)",
       },
-      returns: "{ messages: MessageDetail[], nextPageToken?, totalResults }",
+      returns: "{ messages: MessageSummary[], nextPageToken?, resultSizeEstimate } — MessageSummary = { id, threadId }",
     },
     createDraft: {
       signature: "createDraft(options: { to: string | string[], subject: string, body: string, isHtml?: boolean, cc?: string | string[], bcc?: string | string[], inReplyTo?: string }): Promise<{ draftId, messageId, threadId }>",
@@ -559,7 +560,7 @@ export const SDK_SPEC: SDKSpec = {
     },
     listAttachments: {
       signature: "listAttachments(options: { messageId: string }): Promise<{ messageId, attachments: AttachmentInfo[] }>",
-      description: "List all attachments for a message. Returns metadata (filename, mimeType, size, attachmentId). Use downloadAttachment() to get file content.",
+      description: "List all attachments for a message. Returns metadata (opaque attachmentId, filename, mimeType, size). Use downloadAttachment() to get file content.",
       example: "const result = await sdk.gmail.listAttachments({ messageId: '18c123abc' });\nresult.attachments.forEach(att => {\n  console.log(`${att.filename} (${att.size} bytes)`);\n});",
       params: {
         messageId: "string (required) — Gmail message ID",
@@ -567,14 +568,29 @@ export const SDK_SPEC: SDKSpec = {
       returns: "{ messageId, attachments: AttachmentInfo[] } — AttachmentInfo = { attachmentId, filename, mimeType, size }",
     },
     downloadAttachment: {
-      signature: "downloadAttachment(options: { messageId: string, attachmentId: string }): Promise<{ messageId, attachmentId, filename, mimeType, size, data }>",
-      description: "Download a specific attachment from a message. Returns base64url-encoded file content.",
+      signature: "downloadAttachment(options: { messageId: string, attachmentId: string, maxBytes?: number }): Promise<{ messageId, attachmentId, filename, mimeType, size, data, dataEncoding, maxBytes }>",
+      description: "Download a specific attachment from a message. Returns raw Gmail attachment content as base64url with explicit size guardrails. Existing messageId + attachmentId callers continue to receive data.",
       example: "const att = await sdk.gmail.downloadAttachment({\n  messageId: '18c123abc',\n  attachmentId: 'ANGjdJ...',\n});\n// Decode: Buffer.from(att.data, 'base64url')\nconsole.log(`Downloaded: ${att.filename}`);",
       params: {
         messageId: "string (required) — Gmail message ID",
         attachmentId: "string (required) — attachment ID from listAttachments()",
+        maxBytes: "number (optional, default 10 MiB) — maximum raw attachment size allowed in the MCP response",
       },
-      returns: "{ messageId, attachmentId, filename, mimeType, size, data: string } — data is base64url-encoded",
+      returns: "{ messageId, attachmentId, filename, mimeType, size, data: string, dataEncoding: 'base64url', maxBytes }",
+    },
+    readAttachmentText: {
+      signature: "readAttachmentText(options: { messageId: string, attachmentId: string, maxBytes?: number, maxCharacters?: number, pdfMaxPages?: number, docxMaxXmlBytes?: number }): Promise<ReadAttachmentTextResult>",
+      description: "Read supported Gmail attachments as decoded UTF-8 text. Supports text-like files, PDFs with extractable text, and Word .docx. Returns typed unsupported/oversize/extraction_failed results for images, scanned PDFs requiring OCR, legacy .doc, non-docx Office files, and unknown binaries.",
+      example: "const metadata = await sdk.gmail.listAttachments({ messageId: '18c123abc' });\nconst first = metadata.attachments[0];\nconst decoded = await sdk.gmail.readAttachmentText({ messageId: metadata.messageId, attachmentId: first.attachmentId });\nreturn decoded.status === 'decoded' ? decoded.text : decoded.reason;",
+      params: {
+        messageId: "string (required) — Gmail message ID",
+        attachmentId: "string (required) — attachment ID from listAttachments()",
+        maxBytes: "number (optional, default 10 MiB) — maximum raw attachment bytes to download",
+        maxCharacters: "number (optional, default 200000) — maximum decoded text characters returned",
+        pdfMaxPages: "number (optional, default 50) — maximum PDF pages inspected for extractable text",
+        docxMaxXmlBytes: "number (optional, default 2 MiB) — maximum uncompressed DOCX word/document.xml size",
+      },
+      returns: "{ messageId, attachmentId, filename, mimeType, size, status, text?, textEncoding?, truncated, reason?, limits }",
     },
     sendWithAttachments: {
       signature: "sendWithAttachments(options: { to: string[], subject: string, body: string, attachments: OutboundAttachment[], cc?: string[], bcc?: string[], isHtml?: boolean, from?: string }): Promise<{ messageId, threadId, labelIds, message }>",
