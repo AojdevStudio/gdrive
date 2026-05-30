@@ -212,6 +212,10 @@ export function createSDKRuntime(
         const { downloadAttachment } = await import('../modules/gmail/index.js');
         return downloadAttachment(opts as Parameters<typeof downloadAttachment>[0], context);
       }),
+      readAttachmentText: limiter.wrap('gmail', async (opts: unknown) => {
+        const { readAttachmentText } = await import('../modules/gmail/index.js');
+        return readAttachmentText(opts as Parameters<typeof readAttachmentText>[0], context);
+      }),
       sendWithAttachments: limiter.wrap('gmail', async (opts: unknown) => {
         const { sendWithAttachments } = await import('../modules/gmail/index.js');
         return sendWithAttachments(opts as Parameters<typeof sendWithAttachments>[0], context);

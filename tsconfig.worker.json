@@ -16,7 +16,8 @@
     "src/auth/workers-auth.ts",
     "src/auth/workers-oauth.ts",
     "src/storage/kv-store.ts",
-    "src/sdk/**/*.ts"
+    "src/sdk/**/*.ts",
+    "src/types/**/*.d.ts"
   ],
   "exclude": [
     "node_modules",

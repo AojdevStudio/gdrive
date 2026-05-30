@@ -1,12 +1,13 @@
-# Google Workspace MCP Guides
+# AOJ Workbench Guides
 
-Google Workspace MCP is remote-only. MCP clients connect to the Cloudflare Workers `/mcp` endpoint by URL.
+AOJ Workbench is remote-only. MCP clients connect to the Cloudflare Workers `/mcp` endpoint by URL. Google Workspace is the upstream API surface.
 
 ## Current Guides
 
 - [Codex MCP Integration](./08-codex-mcp.md)
 - [Claude Integration](./05-claude-desktop-integration.md)
 - [Environment Variables](./06-environment-variables.md)
+- [Gmail Attachment Workflow](./09-gmail-attachment-workflow.md)
 
 ## Unsupported Legacy Guides
 
