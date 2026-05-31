@@ -1,8 +1,8 @@
 <div align="center">
 
-![Google Workspace MCP](docs/images/hero-banner.png)
+![AOJ Workbench](docs/images/hero-banner.png)
 
-# Google Workspace MCP
+# AOJ Workbench
 
 ### One remote MCP endpoint for Drive, Sheets, Forms, Docs, Gmail, and Calendar.
 
@@ -12,7 +12,7 @@
 [![Cloudflare Workers](https://img.shields.io/badge/Cloudflare-Workers-F38020?logo=cloudflare&logoColor=white)](https://workers.cloudflare.com/)
 [![v4.0.0](https://img.shields.io/badge/version-4.0.0-green)](https://github.com/AojdevStudio/gdrive/releases)
 
-*Give an AI agent a URL and it can work across Google Workspace.*
+*Give an AI agent a URL and it can work across your Google Workspace API surface.*
 
 [**Quick Start**](#quick-start) . [**Services**](#services) . [**Docs**](./docs/README.md)
 
@@ -22,7 +22,7 @@
 
 ## Remote Only
 
-Google Workspace MCP is a **remote HTTP MCP server** hosted on Cloudflare Workers.
+AOJ Workbench is a **remote HTTP MCP server** hosted on Cloudflare Workers.
 
 The supported client experience is:
 
@@ -45,7 +45,7 @@ AI agents can draft plans, reason over code, and summarize documents, but work u
 - Create Forms and read responses
 - Check Calendar availability and create events
 
-Google Workspace MCP gives agents that working surface through one remote MCP endpoint.
+AOJ Workbench gives agents that working surface through one remote MCP endpoint.
 
 ## Quick Start
 
@@ -87,11 +87,11 @@ Start a fresh Codex session after changing MCP config.
 |:--------|:-----------|:-----------|
 | **Drive** | 7 | Search, enhanced search, read, create, update, batch operations |
 | **Sheets** | 12 | Read/write cells, formulas, formatting, conditional formatting, freeze, column width |
-| **Gmail** | 10 | List, search, read, draft, send emails, send drafts, manage labels |
+| **Gmail** | 30+ | List, search, read, draft, send emails, manage labels, and work with attachments |
 | **Calendar** | 9 | Full CRUD, natural language quickAdd, free/busy checks |
 | **Docs** | 5 | Create, insert text, replace, rich text styling, insert tables |
 | **Forms** | 4 | Create forms, add questions, read responses |
-| | **47 total** | |
+| | **70+ total** | |
 
 ## Tools
 
@@ -102,7 +102,7 @@ v4 exposes two MCP tools:
 | `search` | Discover available Google Workspace services, operations, signatures, parameters, and examples |
 | `execute` | Run a specific Google Workspace operation through the SDK-style runtime |
 
-This keeps the MCP tool list small while preserving the full Google Workspace API surface.
+This keeps the MCP tool list small while preserving the full Google Workspace API surface behind AOJ Workbench.
 
 Example direct operation call:
 
