@@ -232,6 +232,13 @@ const OPERATION_MAPS: Record<ComposioServiceName, OperationMap> = {
   calendar: CALENDAR,
 };
 
+/**
+ * Resolve a Composio operation definition for a given service and operation name.
+ *
+ * @param service - The service name (one of: 'drive', 'sheets', 'forms', 'docs', 'gmail', 'calendar')
+ * @param operation - The operation key to look up within the service's operation map
+ * @returns The composed `ComposioOperationDefinition` for the specified operation, or `undefined` if the service is unsupported or the operation/spec cannot be found
+ */
 export function getComposioOperation(
   service: string,
   operation: string
@@ -253,6 +260,14 @@ export function getComposioOperation(
   };
 }
 
+/**
+ * Return enabled Composio operation definitions for a specific service or for all supported services.
+ *
+ * If a single service name is provided, only operations for that service are returned; unrecognized service names yield an empty array.
+ *
+ * @param service - Optional Composio service name (e.g., "drive", "sheets"). When omitted, operations for all supported services are returned.
+ * @returns An array of `ComposioOperationDefinition` objects for the requested service(s); empty if the specified service is not supported.
+ */
 export function listComposioOperations(service?: string): ComposioOperationDefinition[] {
   const services = service ? [service] : COMPOSIO_SERVICES;
   return services.flatMap((svc) => {
@@ -265,6 +280,11 @@ export function listComposioOperations(service?: string): ComposioOperationDefin
   });
 }
 
+/**
+ * Return a deduplicated list of Composio toolkit identifiers enabled by the registered operations.
+ *
+ * @returns An array of unique toolkit identifier strings used by enabled Composio operations
+ */
 export function listEnabledComposioToolkits(): string[] {
   return [...new Set(listComposioOperations().map((operation) => operation.toolkit))];
 }

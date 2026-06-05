@@ -35,10 +35,22 @@ function fail(message, detail) {
   process.exitCode = 1;
 }
 
+/**
+ * Log a passing test message.
+ * @param {string} message - Description of the successful check.
+ */
 function pass(message) {
   console.log(`PASS ${message}`);
 }
 
+/**
+ * Send an authenticated JSON-RPC request to the worker's /mcp endpoint and return the parsed response.
+ *
+ * @param {string} method - The JSON-RPC method name to invoke.
+ * @param {Object} params - Parameters for the JSON-RPC call.
+ * @returns {any} The parsed response body (JSON object when JSON is returned, otherwise raw text).
+ * @throws {Error} If the HTTP response status is not 200; the error message includes a redacted response body.
+ */
 async function callMcp(method, params) {
   const response = await fetch(`${baseUrl}/mcp`, {
     method: 'POST',
@@ -56,6 +68,17 @@ async function callMcp(method, params) {
   return body;
 }
 
+/**
+ * Parse an HTTP Response body, handling JSON and Server-Sent Events payloads.
+ * 
+ * When the response has a `content-type` that includes `text/event-stream`, extracts
+ * the first line starting with `data: ` and returns its parsed JSON payload if present;
+ * otherwise returns the response text. For non-event-stream responses, attempts to
+ * parse the body as JSON and returns the parsed value on success or the raw text on failure.
+ * 
+ * @param {Response} response - The Fetch API Response to read.
+ * @returns {any} The parsed JSON value when present (from SSE `data: ` or plain JSON), otherwise the raw response text.
+ */
 async function readBody(response) {
   const text = await response.text();
   if (response.headers.get('content-type')?.includes('text/event-stream')) {

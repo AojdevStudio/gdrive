@@ -45,6 +45,14 @@ export interface ServerConfig {
   composioProvider?: ComposioProviderRuntime;
 }
 
+/**
+ * Create and configure an MCP Server that exposes two tools—`search` and `execute`—for discovering and running Composio-backed AOJ Workbench operations.
+ *
+ * The server registers handlers for listing tools and calling them; `search` returns operation discovery data or a service→operations summary, and `execute` runs a validated operation via the Composio provider runtime.
+ *
+ * @param deps - Server configuration options. May include an injected `composioProvider` runtime or `composio` credentials (`apiKey`, `userId`) used to create the provider; other optional fields (e.g., `auth`) are accepted but not required.
+ * @returns The configured `Server` instance with the `search` and `execute` tools registered.
+ */
 export function createConfiguredServer(deps: ServerConfig): Server {
   const server = new Server(
     MCP_SERVER_INFO,

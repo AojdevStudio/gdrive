@@ -48,6 +48,13 @@ export interface Env {
   LOG_LEVEL?: string;
 }
 
+/**
+ * Validate an incoming Cloudflare Worker request's bearer authentication using environment configuration.
+ *
+ * @param request - The incoming HTTP request to validate.
+ * @param env - Worker environment providing MCP authentication settings (e.g., `MCP_BEARER_TOKEN`, `MCP_ALLOWED_ORIGINS`).
+ * @returns An error `Response` when authentication fails, `null` when authentication succeeds.
+ */
 export function validateWorkerRequestAuth(request: Request, env: Env): Response | null {
   return validateBearerRequest(request, {
     requiredToken: env.MCP_BEARER_TOKEN,
@@ -56,7 +63,11 @@ export function validateWorkerRequestAuth(request: Request, env: Env): Response 
   });
 }
 
-// Minimal logger for Workers (no winston — uses console which routes to CF logs)
+/**
+ * Creates a minimal logger whose methods write prefixed messages to the console.
+ *
+ * @returns An object with methods `info`, `warn`, `error`, and `debug` that forward their arguments to the corresponding console method prefixed with `[INFO]`, `[WARN]`, `[ERROR]`, and `[DEBUG]` respectively.
+ */
 function makeLogger() {
   return {
     info: (...args: unknown[]) => console.log('[INFO]', ...args),

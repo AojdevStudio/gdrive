@@ -69,12 +69,28 @@ interface ComposioClientLike {
   create(userId: string, config?: unknown): Promise<ComposioSessionLike>;
 }
 
+/**
+ * Create an Error indicating the Composio provider runtime is not configured.
+ *
+ * @returns An Error whose message instructs to set `COMPOSIO_API_KEY` and `AOJ_WORKBENCH_USER_ID` on the deployed Worker.
+ */
 function missingRuntimeError(): Error {
   return new Error(
     'Composio provider runtime is not configured. Set COMPOSIO_API_KEY and AOJ_WORKBENCH_USER_ID on the deployed Worker.'
   );
 }
 
+/**
+ * Normalize an unknown error into a safe Error instance with credential-sensitive messages redacted.
+ *
+ * If the incoming error message begins with the runtime-not-configured text, that message is preserved.
+ * If the message appears to contain credential-related terms (api key, bearer, token, secret, connected account),
+ * the returned Error uses a generic redacted message.
+ * Otherwise the returned Error preserves the original message.
+ *
+ * @param error - The caught or received value to convert into an Error
+ * @returns An Error whose message is either preserved, redacted for credential-like content, or identical to the original message
+ */
 function toSafeError(error: unknown): Error {
   const message = error instanceof Error ? error.message : String(error);
   if (message.startsWith('Composio provider runtime is not configured')) {
@@ -86,10 +102,23 @@ function toSafeError(error: unknown): Error {
   return new Error(message);
 }
 
+/**
+ * Convert a camelCase or PascalCase identifier to snake_case.
+ *
+ * @param key - The input string in camelCase or PascalCase
+ * @returns The input converted to snake_case (underscores inserted before uppercase letters and all characters lowercased)
+ */
 function toSnakeCase(key: string): string {
   return key.replace(/[A-Z]/g, (match) => `_${match.toLowerCase()}`);
 }
 
+/**
+ * Map incoming arguments to the operation's expected parameter names and snake_case variants, with required normalization for `drive.search`.
+ *
+ * @param args - Incoming argument object supplied to the operation
+ * @param definition - Operation definition containing argument aliases and service/operation identifiers
+ * @returns A new object whose keys are the operation argument aliases (and their snake_case variants when different). For `drive.search`, the result always contains `q` (trimmed non-empty query) and `pageSize` clamped to the range 1–100.
+ */
 function mapArguments(
   args: Record<string, unknown> | undefined,
   definition: ComposioOperationDefinition
@@ -116,6 +145,16 @@ function mapArguments(
   return mapped;
 }
 
+/**
+ * Normalize various Composio/Drive search response shapes into a consistent search-result object.
+ *
+ * @param args - Optional request args; `query` (string) is echoed back as `query` in the result, and `pageSize` controls the maximum number of returned files (defaults to 10, clamped to a maximum of 100).
+ * @param response - The raw response from a Composio/Drive search call; may be the object itself or an object with a `data` wrapper and various file-list field names.
+ * @returns An object with:
+ *  - `query`: the original `args.query` string or an empty string,
+ *  - `totalResults`: the number of files found,
+ *  - `files`: an array (limited by `pageSize`) where each entry is either a normalized file object or `null` for non-object items. Each normalized file object contains `id`, `name`, `mimeType`, `createdTime`, `modifiedTime`, and `webViewLink` (each populated from multiple possible source field names when available).
+ */
 function normalizeDriveSearchResult(args: Record<string, unknown> | undefined, response: unknown): unknown {
   const query = typeof args?.query === 'string' ? args.query : '';
   const data = response && typeof response === 'object' && 'data' in response
@@ -148,6 +187,15 @@ function normalizeDriveSearchResult(args: Record<string, unknown> | undefined, r
   };
 }
 
+/**
+ * Normalize the raw result of executing a Composio operation, applying operation-specific post-processing.
+ *
+ * @param definition - The operation definition used to determine special-case normalization (e.g., `drive.search`).
+ * @param args - The original call arguments; used by special-case normalizers such as the Drive search normalizer.
+ * @param response - The raw response returned by the Composio session.
+ * @returns For `drive.search`, a normalized search result object containing `query`, `totalResults`, and `files`; otherwise returns `response.data` if present, or the original `response`.
+ * @throws Error if the response contains a non-empty `error` string; the thrown error's message is the `error` string.
+ */
 function normalizeExecutionResult(
   definition: ComposioOperationDefinition,
   args: Record<string, unknown> | undefined,
@@ -169,6 +217,13 @@ function normalizeExecutionResult(
     : response;
 }
 
+/**
+ * Builds a discovery payload for a Composio operation, combining the operation spec with toolkit auth and execution metadata.
+ *
+ * @param definition - The Composio operation definition containing the operation spec, service, operation name, and toolkit slug.
+ * @param toolkitStatus - Optional toolkit connection/authentication status to attach; when omitted, a default unauthenticated status is used.
+ * @returns A discovery record that includes the original `spec` fields plus `provider`, `service`, `operation`, `toolkit`, an `auth` object, and an `execute` descriptor suitable for provider discovery responses.
+ */
 function operationToDiscovery(
   definition: ComposioOperationDefinition,
   toolkitStatus?: ComposioToolkitStatus
@@ -301,6 +356,12 @@ export class SDKComposioProviderRuntime implements ComposioProviderRuntime {
   }
 }
 
+/**
+ * Create a Composio-backed provider runtime configured with the given settings.
+ *
+ * @param config - Provider configuration containing optional `apiKey` and `userId` used to determine whether the runtime is configured
+ * @returns A `ComposioProviderRuntime` instance that implements discovery and execution against Composio
+ */
 export function createComposioProviderRuntime(config: ComposioProviderConfig): ComposioProviderRuntime {
   return new SDKComposioProviderRuntime(config);
 }
