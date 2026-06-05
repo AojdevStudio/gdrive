@@ -68,6 +68,8 @@ Migrate vertically:
 
 Do not leave permanent dual provider paths. Dual paths are only temporary while a provider replacement slice is red or in progress.
 
+The first planned provider replacement slice is [Drive file search through Composio-backed `drive.search`](../plans/2026-06-05-first-provider-replacement-slice.md).
+
 ## Issue Backlog
 
 Use GitHub as the working tracker until Linear is reauthenticated.
