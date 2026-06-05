@@ -37,13 +37,14 @@ function makeRuntime() {
   }));
   const create = jest.fn(async () => ({
     sessionId: 'session-1',
-    execute,
+    execute: jest.fn(async () => ({})),
     toolkits,
   }));
+  const tools = { execute };
 
   const runtime = new SDKComposioProviderRuntime(
     { apiKey: 'test-key', userId: 'aoj-workbench-test' },
-    () => ({ create })
+    () => ({ create, tools })
   );
 
   return { runtime, create, execute, toolkits };
@@ -102,7 +103,7 @@ describe('SDKComposioProviderRuntime', () => {
     expect(execute).not.toHaveBeenCalled();
   });
 
-  it('executes drive.search through the session and normalizes bounded results', async () => {
+  it('executes drive.search through Composio tools and normalizes bounded results', async () => {
     const { runtime, create, execute } = makeRuntime();
 
     const result = await runtime.execute({
@@ -111,14 +112,15 @@ describe('SDKComposioProviderRuntime', () => {
       args: { query: 'smoke', pageSize: 5 },
     });
 
-    expect(create).toHaveBeenCalledWith('aoj-workbench-test', expect.objectContaining({
-      toolkits: { enable: expect.arrayContaining(['googledrive', 'gmail', 'googlecalendar']) },
-      workbench: { enable: false },
-    }));
+    expect(create).not.toHaveBeenCalled();
     expect(execute).toHaveBeenCalledWith('GOOGLEDRIVE_FIND_FILE', {
-      q: 'smoke',
-      pageSize: 5,
-      page_size: 5,
+      userId: 'aoj-workbench-test',
+      arguments: {
+        q: 'smoke',
+        pageSize: 5,
+        page_size: 5,
+      },
+      dangerouslySkipVersionCheck: true,
     });
     expect(result).toEqual({
       query: 'smoke',
@@ -148,8 +150,9 @@ describe('SDKComposioProviderRuntime', () => {
         create: jest.fn(async () => ({
           sessionId: 'session-1',
           toolkits: jest.fn(async () => ({ items: [] })),
-          execute,
+          execute: jest.fn(async () => ({})),
         })),
+        tools: { execute },
       })
     );
 

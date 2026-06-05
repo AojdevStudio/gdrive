@@ -67,6 +67,13 @@ interface ComposioSessionLike {
 
 interface ComposioClientLike {
   create(userId: string, config?: unknown): Promise<ComposioSessionLike>;
+  tools: {
+    execute(toolSlug: string, body: {
+      userId: string;
+      arguments?: Record<string, unknown>;
+      dangerouslySkipVersionCheck?: boolean;
+    }): Promise<unknown>;
+  };
 }
 
 function missingRuntimeError(): Error {
@@ -297,8 +304,14 @@ export class SDKComposioProviderRuntime implements ComposioProviderRuntime {
     }
 
     try {
-      const session = await this.session();
-      const response = await session.execute(definition.toolSlug, mappedArgs);
+      if (!this.configured || !this.userId) {
+        throw missingRuntimeError();
+      }
+      const response = await this.clientFactory().tools.execute(definition.toolSlug, {
+        userId: this.userId,
+        arguments: mappedArgs,
+        dangerouslySkipVersionCheck: true,
+      });
       return normalizeExecutionResult(definition, request.args, response);
     } catch (error) {
       throw toSafeError(error);
