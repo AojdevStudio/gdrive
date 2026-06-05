@@ -1,8 +1,8 @@
 # Redis Configuration Guide
 
-> Legacy reference: Redis/local cache setup is not part of the supported remote MCP runtime. Google Workspace MCP uses the Cloudflare Workers `/mcp` endpoint.
+> Legacy reference: Redis/local cache setup is not part of the supported remote MCP runtime. AOJ Workbench uses the Cloudflare Workers `/mcp` endpoint.
 
-This guide covers Redis cache configuration, optimization, monitoring, and troubleshooting for the Google Drive MCP Server.
+This guide covers Redis cache configuration, optimization, monitoring, and troubleshooting for the AOJ Workbench.
 
 ## Prerequisites
 
@@ -819,4 +819,4 @@ After Redis configuration:
 
 **Redis Configuration Complete!** ⚙️
 
-Your Google Drive MCP Server now has high-performance Redis caching configured with monitoring, security, and optimization features.
+Your AOJ Workbench now has high-performance Redis caching configured with monitoring, security, and optimization features.

@@ -1,5 +1,5 @@
 /**
- * Calendar module - Google Calendar operations for the Google Workspace MCP server
+ * Calendar module - Google Calendar operations for the AOJ Workbench server
  *
  * @module calendar
  * @version 3.3.0

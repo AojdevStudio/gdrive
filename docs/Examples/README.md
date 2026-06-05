@@ -1,4 +1,4 @@
-# Google Workspace MCP Examples
+# AOJ Workbench Examples
 
 These examples use the v4 remote MCP architecture: one Cloudflare Workers HTTP endpoint with two tools, `search` and `execute`.
 
@@ -50,7 +50,7 @@ Run Drive search:
 
 ## Runtime Boundary
 
-These examples assume an MCP client is already connected to the remote Google Workspace MCP Worker URL:
+These examples assume an MCP client is already connected to the remote AOJ Workbench Worker URL:
 
 ```text
 https://your-worker.workers.dev/mcp

@@ -28,6 +28,8 @@ permissions:
 
 env:
   NODE_VERSION: "22"
+  PRODUCT_NAME: "AOJ Workbench"
+  RELEASE_ARTIFACT_PREFIX: "aoj-workbench-mcp"
 
 jobs:
   validate-release:
@@ -153,7 +155,7 @@ jobs:
         run: |
           npm pack
           TARBALL=$(ls *.tgz)
-          mv "$TARBALL" "google-workspace-mcp-${{ needs.validate-release.outputs.version }}.tgz"
+          mv "$TARBALL" "${RELEASE_ARTIFACT_PREFIX}-${{ needs.validate-release.outputs.version }}.tgz"
 
       - name: Upload NPM package artifact
         uses: actions/upload-artifact@v4
@@ -196,7 +198,7 @@ jobs:
           fi
           echo "" >> CHANGELOG.md
           echo "## Runtime" >> CHANGELOG.md
-          echo "Google Workspace MCP is deployed as a Cloudflare Workers HTTP MCP server." >> CHANGELOG.md
+          echo "$PRODUCT_NAME is deployed as a Cloudflare Workers HTTP MCP server." >> CHANGELOG.md
           echo "changelog<<EOF" >> "$GITHUB_OUTPUT"
           cat CHANGELOG.md >> "$GITHUB_OUTPUT"
           echo "EOF" >> "$GITHUB_OUTPUT"

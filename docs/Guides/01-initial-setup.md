@@ -1,8 +1,8 @@
 # Initial Setup and Installation Guide
 
-> Legacy reference: this guide describes older local setup. Google Workspace MCP is now remote-only; MCP clients must use the Cloudflare Workers `/mcp` endpoint.
+> Legacy reference: this guide describes older local setup. AOJ Workbench is now remote-only; MCP clients must use the Cloudflare Workers `/mcp` endpoint.
 
-This guide walks you through the complete setup process for the Google Drive MCP Server, from Google Cloud configuration to local installation.
+This guide walks you through the complete setup process for the AOJ Workbench, from Google Cloud configuration to local installation.
 
 ## Prerequisites
 
@@ -88,7 +88,7 @@ Before starting, ensure you have:
 
 3. **Fill Required Information**
    ```
-   App name: Google Drive MCP Server
+   App name: AOJ Workbench
    User support email: your-email@example.com
    Developer contact information: your-email@example.com
    ```
@@ -126,7 +126,7 @@ Before starting, ensure you have:
 2. **Create OAuth Client ID**
    - Click "Create Credentials" → "OAuth client ID"
    - Application type: **Desktop application**
-   - Name: `Google Drive MCP Server`
+   - Name: `AOJ Workbench`
    - Click "Create"
 
 3. **Download Credentials**
@@ -452,4 +452,4 @@ Once setup is complete, proceed to:
 
 **Installation Complete!** ✅
 
-Your Google Drive MCP Server is now installed and configured. The next step is to complete the authentication flow to start using the server.
+Your AOJ Workbench is now installed and configured. The next step is to complete the authentication flow to start using the server.

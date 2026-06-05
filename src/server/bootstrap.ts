@@ -6,6 +6,7 @@
 import winston from 'winston';
 import type { Logger } from 'winston';
 import type { PerformanceMonitorLike } from '../modules/types.js';
+import { PROJECT_IDENTITY } from './identity.js';
 
 // ─── Logger ──────────────────────────────────────────────────────────────────
 
@@ -89,7 +90,7 @@ export function createLogger(): Logger {
       errorSerializer(),
       winston.format.json()
     ),
-    defaultMeta: { service: 'google-workspace-mcp' },
+    defaultMeta: { service: PROJECT_IDENTITY.logServiceName },
     transports: [
       new winston.transports.File({
         filename: 'logs/error.log',

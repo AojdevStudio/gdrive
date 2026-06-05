@@ -2,9 +2,9 @@
 
 ## Project Overview
 
-**Google Workspace MCP** is a remote-only MCP server for Google Workspace: Drive, Sheets, Forms, Docs, Gmail, and Calendar.
+**AOJ Workbench** is a private, remote-only knowledge-work MCP surface. The target provider model uses the Composio SDK as the native provider layer for external SaaS tools. The current direct Google Workspace implementation is legacy migration scaffolding.
 
-Use the canonical name **Google Workspace MCP** in docs, issues, prompts, and client configuration examples. Avoid “gdrive MCP” or “Google Drive MCP” unless referring to legacy package/repo names.
+Use the canonical name **AOJ Workbench** in docs, issues, prompts, and client configuration examples. Avoid “Google Workspace MCP,” “gdrive MCP,” or “Google Drive MCP” unless referring to legacy package/repo names.
 
 **Runtime boundary:** Cloudflare Workers Streamable HTTP only. MCP clients connect to the deployed `/mcp` URL. Local stdio, local HTTP, Docker, and local bootstrap flows are not supported MCP server modes.
 
@@ -43,9 +43,9 @@ MCP client
   v
 Cloudflare Worker /mcp
   |
-  | Google OAuth token resolution and refresh
+  | Composio SDK sessions and managed auth
   v
-Google Workspace APIs
+Provider toolkits
 ```
 
 `worker.ts` is the supported runtime entry point. It uses `WebStandardStreamableHTTPServerTransport` and creates the configured MCP server per request.
@@ -56,10 +56,10 @@ v4 exposes exactly two MCP tools:
 
 | Tool | Purpose |
 |------|---------|
-| `search` | Discover Google Workspace services, operations, signatures, parameters, and examples |
-| `execute` | Run a specific Google Workspace operation through the SDK-style runtime |
+| `search` | Discover provider/toolkit capabilities, schemas, auth status, and execution guidance |
+| `execute` | Run a selected provider toolkit operation through the provider runtime |
 
-The Workspace surface includes:
+Current legacy Workspace operations exist only while provider replacement slices migrate them to Composio-backed execution:
 
 | Service | Operations |
 |---------|------------|
@@ -67,7 +67,7 @@ The Workspace surface includes:
 | Sheets | listSheets, readSheet, createSheet, renameSheet, deleteSheet, updateCells, updateFormula, formatCells, addConditionalFormat, freezeRowsColumns, setColumnWidth, appendRows |
 | Forms | createForm, readForm, addQuestion, listResponses |
 | Docs | createDocument, insertText, replaceText, applyTextStyle, insertTable |
-| Gmail | listMessages, listThreads, getMessage, getThread, searchMessages, createDraft, sendMessage, sendDraft, listLabels, createLabel, modifyLabels |
+| Gmail | listMessages, listThreads, getMessage, getThread, searchMessages, createDraft, sendMessage, sendDraft, listLabels, createLabel, modifyLabels, listAttachments, downloadAttachment, sendWithAttachments |
 | Calendar | listCalendars, getCalendar, listEvents, getEvent, createEvent, updateEvent, deleteEvent, quickAdd, checkFreeBusy |
 
 ## Environment Variables
@@ -76,20 +76,20 @@ Worker-facing variables:
 
 | Variable | Purpose |
 |----------|---------|
-| `GDRIVE_KV` | Cloudflare KV binding for token/cache state |
-| `GDRIVE_CLIENT_ID` | Google OAuth client ID |
-| `GDRIVE_CLIENT_SECRET` | Google OAuth client secret |
-| `GDRIVE_TOKEN_ENCRYPTION_KEY` | Token encryption key |
+| `COMPOSIO_API_KEY` | Composio SDK/API key for the native provider layer |
+| `AOJ_WORKBENCH_USER_ID` | Stable Composio user ID for connected accounts |
 | `MCP_BEARER_TOKEN` | Static bearer token for MCP client-to-server auth |
 | `MCP_ALLOWED_ORIGINS` | Optional origin allowlist |
 | `MCP_AUTHORIZATION_SERVER_URL` | Metadata-only external OAuth authorization server URL for MCP clients |
 | `LOG_LEVEL` | Worker log level hint |
 
+Legacy direct-Google variables such as `GDRIVE_KV`, `GDRIVE_CLIENT_ID`, `GDRIVE_CLIENT_SECRET`, and `GDRIVE_TOKEN_ENCRYPTION_KEY` remain only until provider replacement slices remove the matching code.
+
 ## Gotchas
 
 - **Remote only** — MCP clients must use the deployed Worker URL. Do not reintroduce stdio, local HTTP, or Docker connection docs.
-- **Name clarity** — use **Google Workspace MCP** so agents know Gmail, Docs, Sheets, Drive, Forms, and Calendar are available.
-- **Auth boundary** — MCP client auth uses `MCP_BEARER_TOKEN`; Google OAuth remains server-to-Google authorization. This server is not an OAuth authorization server.
+- **Provider clarity** — Composio is the native provider layer; direct Google code is legacy migration scaffolding.
+- **Auth boundary** — MCP client auth uses `MCP_BEARER_TOKEN`; provider auth belongs to Composio managed auth. This server is not an OAuth authorization server.
 - **Tool schema compatibility** — advertised top-level tool input schemas must be plain `type: "object"` schemas with no root `oneOf`, `anyOf`, or `allOf`.
 - **Cloudflare state** — persistent runtime state belongs in Cloudflare services such as Workers KV, not local files.
 

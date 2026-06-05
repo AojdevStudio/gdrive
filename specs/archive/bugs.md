@@ -9,7 +9,7 @@
 
 ## Executive Summary
 
-This document captures all bugs, inconsistencies, and technical debt identified in the gdrive MCP server codebase. Issues are categorized by priority and include specific file locations, descriptions, and recommended fixes.
+This document captures all bugs, inconsistencies, and technical debt identified in the AOJ Workbench server codebase. Issues are categorized by priority and include specific file locations, descriptions, and recommended fixes.
 
 ### Issue Distribution
 

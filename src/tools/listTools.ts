@@ -1,3 +1,5 @@
+import { PROJECT_IDENTITY } from '../server/identity.js';
+
 /**
  * Tool Discovery Resource - Progressive discovery of available operations
  *
@@ -378,7 +380,7 @@ export async function generateToolStructure(): Promise<ModuleStructure> {
 export function formatToolStructure(structure: ModuleStructure): string {
   const sections: string[] = [];
 
-  sections.push('# Google Workspace MCP Operations\n');
+  sections.push(`# ${PROJECT_IDENTITY.productName} Operations\n`);
   sections.push('Available modules and operations for code execution.\n');
 
   for (const [moduleName, tools] of Object.entries(structure)) {

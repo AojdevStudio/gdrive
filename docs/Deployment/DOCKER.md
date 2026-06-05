@@ -1,6 +1,6 @@
 # Docker Deployment
 
-Docker deployment is unsupported for the current **Google Workspace MCP** runtime.
+Docker deployment is unsupported for the current **AOJ Workbench** runtime.
 
 The only supported MCP server mode is the remote Cloudflare Workers HTTP endpoint:
 

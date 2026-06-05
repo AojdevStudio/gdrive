@@ -1,6 +1,6 @@
-# Google Workspace MCP Architecture
+# AOJ Workbench Architecture
 
-Google Workspace MCP is a remote-only Cloudflare Workers MCP server for Drive, Sheets, Forms, Docs, Gmail, and Calendar.
+AOJ Workbench is a private, remote-only Cloudflare Workers MCP server for knowledge-work tools. Its target provider layer is the Composio SDK. The current direct Google Workspace implementation is legacy migration scaffolding.
 
 ## Runtime Boundary
 
@@ -13,9 +13,9 @@ MCP client
   v
 Cloudflare Worker /mcp
   |
-  | Google OAuth token resolution and refresh
+  | Composio SDK sessions and managed auth
   v
-Google Workspace APIs
+Provider toolkits
 ```
 
 Unsupported runtime modes:
@@ -31,7 +31,7 @@ Unsupported runtime modes:
 
 - handles `POST /mcp`
 - validates MCP bearer auth when configured
-- resolves Google OAuth access tokens through Worker-compatible auth
+- routes provider discovery and execution through the provider layer
 - creates the configured MCP server
 - serves requests through `WebStandardStreamableHTTPServerTransport`
 
@@ -41,17 +41,12 @@ The MCP surface is intentionally small:
 
 | Tool | Purpose |
 |------|---------|
-| `search` | Discover Google Workspace services, operations, signatures, parameters, and examples |
-| `execute` | Run a specific Google Workspace operation |
+| `search` | Discover provider/toolkit capabilities, schemas, auth status, and execution guidance |
+| `execute` | Run a selected provider toolkit operation |
 
-The service surface behind those tools covers:
+The Composio-native target wraps Composio session meta-tool behavior behind these two AOJ Workbench tools rather than exposing every provider action as a separate MCP tool.
 
-- Drive
-- Sheets
-- Forms
-- Docs
-- Gmail
-- Calendar
+The existing Drive, Sheets, Forms, Docs, Gmail, and Calendar operations are legacy direct-Google paths. Remove them slice-by-slice after equivalent Composio-backed behavior is green.
 
 ## State
 
@@ -60,7 +55,7 @@ Persistent runtime state belongs in Cloudflare services, primarily Workers KV. L
 ## Auth Boundaries
 
 - MCP client authentication protects access to the Worker endpoint.
-- Google OAuth authorizes the Worker to call Google Workspace APIs.
+- Provider authorization belongs to Composio managed auth.
 - This server is not an MCP OAuth authorization server.
 
 See [MCP Client Auth Boundary](../adr/0001-mcp-client-auth-boundary.md).

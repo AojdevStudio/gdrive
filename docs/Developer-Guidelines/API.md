@@ -1,6 +1,6 @@
-# Google Workspace MCP API
+# AOJ Workbench API
 
-Google Workspace MCP exposes a remote MCP endpoint for Drive, Sheets, Forms, Docs, Gmail, and Calendar.
+AOJ Workbench exposes a remote MCP endpoint for knowledge-work provider toolkits. The target provider layer is Composio SDK sessions with managed auth.
 
 ## MCP Endpoint
 
@@ -14,7 +14,7 @@ Clients connect over Streamable HTTP. Local stdio and local HTTP are not support
 
 ### `search`
 
-Discover services, operations, signatures, parameters, and examples.
+Discover provider/toolkit capabilities, schemas, auth status, and execution guidance.
 
 ```json
 {
@@ -28,7 +28,7 @@ Discover services, operations, signatures, parameters, and examples.
 
 ### `execute`
 
-Run a specific Workspace operation.
+Run a selected provider toolkit operation.
 
 ```json
 {
@@ -45,7 +45,9 @@ Run a specific Workspace operation.
 }
 ```
 
-## Services
+## Legacy Direct-Google Services
+
+The services below are the current direct-Google provider path. They are migration scaffolding and should be removed through provider replacement slices after equivalent Composio-backed behavior is green.
 
 | Service | Operations |
 |---------|------------|

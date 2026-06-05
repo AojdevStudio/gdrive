@@ -1,7 +1,7 @@
 {
   "name": "@modelcontextprotocol/server-gdrive",
   "version": "4.0.0-alpha",
-  "description": "Remote Google Workspace MCP server for Drive, Sheets, Forms, Docs, Gmail, and Calendar over Cloudflare Workers HTTP",
+  "description": "Private remote AOJ Workbench MCP server for Composio-backed knowledge-work toolkits over Cloudflare Workers HTTP",
   "license": "MIT",
   "author": "Anthropic, PBC (https://anthropic.com)",
   "homepage": "https://modelcontextprotocol.io",

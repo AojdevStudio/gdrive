@@ -1,6 +1,6 @@
 # Authentication Documentation
 
-> Legacy reference: this document describes older local token-management internals. Google Workspace MCP is now remote-only; MCP clients must use the Cloudflare Workers `/mcp` endpoint, not local auth/bootstrap commands.
+> Legacy reference: this document describes older local token-management internals. AOJ Workbench is now remote-only; MCP clients must use the Cloudflare Workers `/mcp` endpoint, not local auth/bootstrap commands.
 
 This document provides detailed information about the OAuth token refresh implementation in the gdrive-mcp server.
 

@@ -1,6 +1,6 @@
 # Natural Language Search Examples
 
-Google Workspace MCP supports intuitive natural language queries for finding Drive files and folders. In v4, use the remote `execute` tool with the `drive.search` operation. Optionally, discover the operation first via `search`.
+AOJ Workbench supports intuitive natural language queries for finding Drive files and folders. In v4, use the remote `execute` tool with the `drive.search` operation. Optionally, discover the operation first via `search`.
 
 ## Overview
 

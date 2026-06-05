@@ -1,6 +1,7 @@
 import { describe, it, expect, jest } from '@jest/globals';
 import { createConfiguredServer } from '../../server/factory.js';
 import type { ServerConfig } from '../../server/factory.js';
+import { PROJECT_IDENTITY } from '../../server/identity.js';
 import { assertAnthropicCompatibleToolList } from '../../server/schema-compat.js';
 
 function makeDeps(overrides: Partial<ServerConfig> = {}): ServerConfig {
@@ -38,12 +39,12 @@ describe('createConfiguredServer', () => {
     expect(typeof server.connect).toBe('function');
   });
 
-  it('uses the Google Workspace MCP server identity', () => {
+  it('uses the configured MCP server identity', () => {
     const server = createConfiguredServer(makeDeps()) as unknown as {
       _serverInfo: { name: string };
     };
 
-    expect(server._serverInfo.name).toBe('google-workspace');
+    expect(server._serverInfo.name).toBe(PROJECT_IDENTITY.mcpServerName);
   });
 
   it('marks search as read-only for clients', async () => {

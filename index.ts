@@ -2,9 +2,11 @@
 /**
  * Unsupported local entry point.
  *
- * Google Workspace MCP is remote-only. MCP clients must connect to the
+ * AOJ Workbench is remote-only. MCP clients must connect to the
  * deployed Cloudflare Worker /mcp endpoint.
  */
+
+import { PROJECT_IDENTITY } from './src/server/identity.js';
 
 const command = process.argv[2] ?? 'unsupported';
 
@@ -15,7 +17,7 @@ const setupHint =
 process.stderr.write(
   [
     `Unsupported local command: ${command}`,
-    'Google Workspace MCP does not support local stdio, local HTTP, Docker, or local OAuth bootstrap MCP runtimes.',
+    `${PROJECT_IDENTITY.productName} does not support local stdio, local HTTP, Docker, or local OAuth bootstrap MCP runtimes.`,
     'Connect MCP clients to the deployed Cloudflare Workers /mcp URL.',
     setupHint,
   ].join('\n') + '\n'
