@@ -32,6 +32,7 @@
     "smoke:worker": "node scripts/smoke/remote-worker-smoke.mjs"
   },
   "dependencies": {
+    "@composio/core": "^0.10.0",
     "@modelcontextprotocol/sdk": "^1.25.1",
     "@xmldom/xmldom": "^0.9.10",
     "googleapis": "^144.0.0",

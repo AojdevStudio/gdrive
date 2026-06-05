@@ -6,22 +6,20 @@
  * per-session state (sessionIdGenerator: undefined).
  *
  * Auth flow:
- *   1. GET /setup/google/start starts remote Google OAuth setup.
- *   2. GET /setup/google/callback validates one-time state and stores encrypted tokens in GDRIVE_KV.
- *   3. getValidAccessToken() reads tokens from GDRIVE_KV, refreshes if needed.
- *   4. A lightweight fetch-based auth object is injected into every Google API call.
+ *   1. MCP clients authenticate to AOJ Workbench with MCP_BEARER_TOKEN.
+ *   2. Provider auth is handled by Composio managed auth for AOJ_WORKBENCH_USER_ID.
+ *   3. Legacy /setup/google routes remain only as migration scaffolding until removed.
  *
  * To deploy:
  *   1. Create KV namespace: wrangler kv:namespace create GDRIVE_KV --preview false
  *   2. Fill in the id in wrangler.toml
- *   3. Set secrets: GDRIVE_CLIENT_ID, GDRIVE_CLIENT_SECRET, GDRIVE_TOKEN_ENCRYPTION_KEY, MCP_BEARER_TOKEN, MCP_SETUP_TOKEN
+ *   3. Set secrets: COMPOSIO_API_KEY, AOJ_WORKBENCH_USER_ID, MCP_BEARER_TOKEN
  *   4. Deploy: wrangler deploy
- *   5. Open /setup/google/start with setup bearer auth to authorize Google Workspace APIs.
  */
 
 import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js';
 import { WorkersKVCache, NullCache } from './src/storage/kv-store.js';
-import { getValidAccessToken, type KVNamespace } from './src/auth/workers-auth.js';
+import type { KVNamespace } from './src/auth/workers-auth.js';
 import {
   handleGoogleOAuthCallback,
   handleGoogleOAuthStart,
@@ -38,9 +36,11 @@ import {
 
 export interface Env {
   GDRIVE_KV: KVNamespace;
-  GDRIVE_CLIENT_ID: string;
-  GDRIVE_CLIENT_SECRET: string;
-  GDRIVE_TOKEN_ENCRYPTION_KEY: string;
+  GDRIVE_CLIENT_ID?: string;
+  GDRIVE_CLIENT_SECRET?: string;
+  GDRIVE_TOKEN_ENCRYPTION_KEY?: string;
+  COMPOSIO_API_KEY?: string;
+  AOJ_WORKBENCH_USER_ID?: string;
   MCP_BEARER_TOKEN?: string;
   MCP_SETUP_TOKEN?: string;
   MCP_ALLOWED_ORIGINS?: string;
@@ -54,71 +54,6 @@ export function validateWorkerRequestAuth(request: Request, env: Env): Response 
     allowedOrigins: env.MCP_ALLOWED_ORIGINS,
     runtimeName: 'Cloudflare Worker',
   });
-}
-
-// Auth adapter that satisfies googleapis' OAuth2Client contract on Workers.
-// googleapis internally calls authClient.request() for API calls.
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function makeAuth(accessToken: string): any {
-  const authObj = {
-    getAccessToken: async () => ({ token: accessToken, res: null }),
-    getClient: async () => authObj,
-    // googleapis' gaxios calls request() to make authenticated HTTP calls
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    request: async (opts: any) => {
-      const url = opts.url || opts.uri;
-      const method = (opts.method || 'GET').toUpperCase();
-      const headers: Record<string, string> = {
-        ...(opts.headers || {}),
-        'Authorization': `Bearer ${accessToken}`,
-      };
-
-      // Build fetch options
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const fetchOpts: any = { method, headers };
-      if (opts.body) {
-        fetchOpts.body = typeof opts.body === 'string' ? opts.body : JSON.stringify(opts.body);
-        if (!headers['Content-Type']) {
-          headers['Content-Type'] = 'application/json';
-        }
-      }
-      if (opts.data) {
-        fetchOpts.body = typeof opts.data === 'string' ? opts.data : JSON.stringify(opts.data);
-        if (!headers['Content-Type']) {
-          headers['Content-Type'] = 'application/json';
-        }
-      }
-
-      // Handle query params
-      const fetchUrl = new URL(url);
-      if (opts.params) {
-        for (const [key, val] of Object.entries(opts.params)) {
-          if (val !== undefined && val !== null) {
-            fetchUrl.searchParams.set(key, String(val));
-          }
-        }
-      }
-
-      const workerFetch = globalThis.fetch;
-      if (typeof workerFetch !== 'function') {
-        throw new Error('Fetch API is not available in this runtime');
-      }
-      const response = await workerFetch(fetchUrl.toString(), fetchOpts);
-      if (!response.ok) {
-        const errorBody = await response.text().catch(() => '');
-        throw new Error(
-          `Google API request failed: ${response.status} ${response.statusText}${errorBody ? ` — ${errorBody}` : ''}`
-        );
-      }
-      const contentType = response.headers.get('content-type') ?? '';
-      const data = contentType.includes('application/json')
-        ? await response.json()
-        : await response.text();
-
-      return { data, status: response.status, statusText: response.statusText, headers: response.headers };
-    },
-  };
-  return authObj;
 }
 
 // Minimal logger for Workers (no winston — uses console which routes to CF logs)
@@ -181,26 +116,15 @@ export default {
 
     const logger = makeLogger();
 
-    // Resolve auth
-    let accessToken: string;
-    try {
-      accessToken = await getValidAccessToken(
-        env.GDRIVE_KV,
-        env.GDRIVE_CLIENT_ID,
-        env.GDRIVE_CLIENT_SECRET,
-        env.GDRIVE_TOKEN_ENCRYPTION_KEY
-      );
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Google OAuth token resolution failed';
-      logger.error('Google OAuth token resolution failed', { message });
+    if (!env.COMPOSIO_API_KEY || !env.AOJ_WORKBENCH_USER_ID) {
+      logger.error('Composio provider runtime configuration missing');
       return jsonError(
-        401,
-        'Google OAuth token resolution failed',
-        'Use /setup/status to inspect remote Google OAuth state, then /setup/google/start to recover.'
+        500,
+        'Composio provider runtime is not configured',
+        'Set COMPOSIO_API_KEY and AOJ_WORKBENCH_USER_ID on the deployed Worker.'
       );
     }
 
-    const auth = makeAuth(accessToken);
     const cache = env.GDRIVE_KV ? new WorkersKVCache(env.GDRIVE_KV) : new NullCache();
 
     const performanceMonitor = {
@@ -212,8 +136,10 @@ export default {
       logger: logger as any,
       cacheManager: cache,
       performanceMonitor,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      auth: auth as any,
+      composio: {
+        apiKey: env.COMPOSIO_API_KEY,
+        userId: env.AOJ_WORKBENCH_USER_ID,
+      },
     });
 
     // No sessionIdGenerator means stateless mode in MCP SDK transport.

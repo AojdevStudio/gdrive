@@ -25,6 +25,11 @@ export default {
     '**/__tests__/**/*.test.ts',
     '**/tests/**/*.test.ts',
   ],
+  testPathIgnorePatterns: [
+    '<rootDir>/.worktrees/',
+    '<rootDir>/dist/',
+    '<rootDir>/dist-worker/',
+  ],
   collectCoverageFrom: [
     'src/**/*.ts',
     '!src/**/*.d.ts',

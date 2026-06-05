@@ -3,6 +3,41 @@ import { createConfiguredServer } from '../../server/factory.js';
 import type { ServerConfig } from '../../server/factory.js';
 import { PROJECT_IDENTITY } from '../../server/identity.js';
 import { assertAnthropicCompatibleToolList } from '../../server/schema-compat.js';
+import type { ComposioDiscoveryResult, ComposioProviderRuntime } from '../../provider/composio/runtime.js';
+
+const fakeComposioProvider: ComposioProviderRuntime = {
+  discover: jest.fn(async (service?: string, operation?: string): Promise<ComposioDiscoveryResult> => {
+    const result: ComposioDiscoveryResult = {
+      provider: 'composio',
+      configured: true,
+      operations: {
+        [operation ?? 'search']: {
+          service: service ?? 'drive',
+          operation: operation ?? 'search',
+          provider: 'composio',
+          toolkit: 'googledrive',
+          signature: 'search(options: { query: string, pageSize?: number })',
+          auth: {
+            toolkit: 'googledrive',
+            connected: true,
+            status: 'active',
+            auth: { managed: true },
+          },
+        },
+      },
+      toolkits: {},
+      guidance: 'Use AOJ Workbench execute.',
+    };
+    if (service) {
+      result.service = service;
+    }
+    if (operation) {
+      result.operation = operation;
+    }
+    return result;
+  }),
+  execute: jest.fn(async () => ({ ok: true })),
+};
 
 function makeDeps(overrides: Partial<ServerConfig> = {}): ServerConfig {
   return {
@@ -10,6 +45,7 @@ function makeDeps(overrides: Partial<ServerConfig> = {}): ServerConfig {
     cacheManager: { get: jest.fn(), set: jest.fn(), invalidate: jest.fn() } as unknown as ServerConfig['cacheManager'],
     performanceMonitor: { track: jest.fn() } as unknown as ServerConfig['performanceMonitor'],
     auth: {},
+    composioProvider: fakeComposioProvider,
     ...overrides,
   };
 }
@@ -29,6 +65,27 @@ async function listTools(server: ReturnType<typeof createConfiguredServer>) {
       annotations?: Record<string, unknown>;
       inputSchema: Record<string, unknown>;
     }>;
+  }>;
+}
+
+async function callTool(
+  server: ReturnType<typeof createConfiguredServer>,
+  name: string,
+  args: Record<string, unknown>
+) {
+  const handlers = (server as unknown as {
+    _requestHandlers: Map<string, (request: unknown, extra: unknown) => Promise<unknown>>;
+  })._requestHandlers;
+  const handler = handlers.get('tools/call');
+  if (!handler) {
+    throw new Error('tools/call handler not registered');
+  }
+  return handler({
+    method: 'tools/call',
+    params: { name, arguments: args },
+  }, {}) as Promise<{
+    content: Array<{ type: string; text: string }>;
+    isError?: boolean;
   }>;
 }
 
@@ -66,13 +123,13 @@ describe('createConfiguredServer', () => {
     expect(search?.description).toContain('returns the matching detailed spec subset');
   });
 
-  it('describes execute as a read/write Google Workspace operation runner', async () => {
+  it('describes execute as a read/write AOJ Workbench operation runner', async () => {
     const server = createConfiguredServer(makeDeps());
     const result = await listTools(server);
 
     const execute = result.tools.find((tool) => tool.name === 'execute');
 
-    expect(execute?.description).toContain('read and write Google Workspace data');
+    expect(execute?.description).toContain('AOJ Workbench operation through the Composio-backed provider runtime');
     expect(execute?.description).toContain('Some operations modify files, send email, or update calendar events');
   });
 
@@ -98,5 +155,40 @@ describe('createConfiguredServer', () => {
     const result = await listTools(server);
 
     expect(() => assertAnthropicCompatibleToolList(result.tools)).not.toThrow();
+  });
+
+  it('routes operation search through the Composio provider wrapper', async () => {
+    const composioProvider = {
+      ...fakeComposioProvider,
+      discover: jest.fn(fakeComposioProvider.discover),
+    };
+    const server = createConfiguredServer(makeDeps({ composioProvider }));
+
+    const result = await callTool(server, 'search', { service: 'drive', operation: 'search' });
+    const body = JSON.parse(result.content[0]?.text ?? '{}') as Record<string, unknown>;
+
+    expect(composioProvider.discover).toHaveBeenCalledWith('drive', 'search');
+    expect(JSON.stringify(body)).not.toContain('GOOGLEDRIVE_FIND_FILE');
+  });
+
+  it('routes execute through the Composio provider wrapper', async () => {
+    const composioProvider = {
+      ...fakeComposioProvider,
+      execute: jest.fn(fakeComposioProvider.execute),
+    };
+    const server = createConfiguredServer(makeDeps({ composioProvider }));
+
+    const result = await callTool(server, 'execute', {
+      service: 'drive',
+      operation: 'search',
+      args: { query: 'smoke' },
+    });
+
+    expect(composioProvider.execute).toHaveBeenCalledWith({
+      service: 'drive',
+      operation: 'search',
+      args: { query: 'smoke' },
+    });
+    expect(JSON.parse(result.content[0]?.text ?? '{}')).toEqual({ result: { ok: true } });
   });
 });

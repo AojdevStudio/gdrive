@@ -14,31 +14,35 @@ import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
-import { google } from 'googleapis';
 import type { Logger } from 'winston';
 import type { CacheManagerLike, PerformanceMonitorLike } from '../modules/types.js';
 import { SDK_SPEC } from '../sdk/spec.js';
-import { createSDKRuntime } from '../sdk/runtime.js';
-import { RateLimiter } from '../sdk/rate-limiter.js';
-import type { FullContext } from '../sdk/types.js';
+import {
+  COMPOSIO_SERVICES,
+  listComposioOperations,
+  type ComposioServiceName,
+} from '../provider/composio/operation-registry.js';
+import {
+  createComposioProviderRuntime,
+  type ComposioProviderRuntime,
+} from '../provider/composio/runtime.js';
 import { MCP_SERVER_INFO } from './identity.js';
 import { assertAnthropicCompatibleToolList } from './schema-compat.js';
 
-// Auth object accepted by googleapis — OAuth2Client or similar credential
-// We use a broad type here since the factory accepts both OAuth2Client (Node) and
-// the lightweight fetch-based auth object (Workers).
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type GoogleAuth = any;
-
 // Valid service names for structured execution
-const VALID_SERVICES = ['drive', 'sheets', 'forms', 'docs', 'gmail', 'calendar'] as const;
-type ServiceName = (typeof VALID_SERVICES)[number];
+const VALID_SERVICES = COMPOSIO_SERVICES;
+type ServiceName = ComposioServiceName;
 
 export interface ServerConfig {
   logger: Logger;
   cacheManager: CacheManagerLike;
   performanceMonitor: PerformanceMonitorLike;
-  auth: GoogleAuth;
+  auth?: unknown;
+  composio?: {
+    apiKey?: string;
+    userId?: string;
+  };
+  composioProvider?: ComposioProviderRuntime;
 }
 
 export function createConfiguredServer(deps: ServerConfig): Server {
@@ -47,29 +51,13 @@ export function createConfiguredServer(deps: ServerConfig): Server {
     { capabilities: { tools: {} } }
   );
 
-  const sharedRateLimiter = new RateLimiter();
-
-  function buildContext(): FullContext {
-    const { auth, logger, cacheManager, performanceMonitor } = deps;
-    return {
-      logger,
-      cacheManager,
-      performanceMonitor,
-      startTime: Date.now(),
-      drive: google.drive({ version: 'v3', auth }),
-      sheets: google.sheets({ version: 'v4', auth }),
-      forms: google.forms({ version: 'v1', auth }),
-      docs: google.docs({ version: 'v1', auth }),
-      gmail: google.gmail({ version: 'v1', auth }),
-      calendar: google.calendar({ version: 'v3', auth }),
-    };
-  }
+  const composioProvider = deps.composioProvider ?? createComposioProviderRuntime(deps.composio ?? {});
 
   const tools = [
     {
       name: 'search',
       description:
-        'Use this first to discover Google Workspace operations, signatures, parameters, and examples before calling execute. Without filters, returns a service-to-operation summary; with service or operation filters, returns the matching detailed spec subset.',
+        'Use this first to discover AOJ Workbench operations, signatures, parameters, provider auth status, and examples before calling execute. Without filters, returns a service-to-operation summary; with service or operation filters, returns the matching detailed spec subset.',
       annotations: {
         readOnlyHint: true,
       },
@@ -94,7 +82,7 @@ export function createConfiguredServer(deps: ServerConfig): Server {
     {
       name: 'execute',
       description:
-        'Use this to run a specific Google Workspace operation that can read and write Google Workspace data. Some operations modify files, send email, or update calendar events. Use service + operation + args.',
+        'Use this to run a specific AOJ Workbench operation through the Composio-backed provider runtime. Some operations modify files, send email, or update calendar events. Use service + operation + args.',
       inputSchema: {
         type: 'object' as const,
         properties: {
@@ -146,9 +134,18 @@ export function createConfiguredServer(deps: ServerConfig): Server {
             ],
           };
         }
-        return {
-          content: [{ type: 'text' as const, text: JSON.stringify({ [operation]: op }) }],
-        };
+        try {
+          const discovery = await composioProvider.discover(service, operation);
+          return {
+            content: [{ type: 'text' as const, text: JSON.stringify({ [operation]: discovery.operations[operation] }) }],
+          };
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
+          return {
+            content: [{ type: 'text' as const, text: JSON.stringify({ error: message }) }],
+            isError: true,
+          };
+        }
       }
 
       if (service) {
@@ -166,15 +163,24 @@ export function createConfiguredServer(deps: ServerConfig): Server {
             ],
           };
         }
-        return {
-          content: [{ type: 'text' as const, text: JSON.stringify(svc) }],
-        };
+        try {
+          const discovery = await composioProvider.discover(service);
+          return {
+            content: [{ type: 'text' as const, text: JSON.stringify(discovery.operations) }],
+          };
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
+          return {
+            content: [{ type: 'text' as const, text: JSON.stringify({ error: message }) }],
+            isError: true,
+          };
+        }
       }
 
       // No filter — return summary of all services
       const summary: Record<string, string[]> = {};
-      for (const [svc, ops] of Object.entries(SDK_SPEC)) {
-        summary[svc] = Object.keys(ops);
+      for (const svc of VALID_SERVICES) {
+        summary[svc] = listComposioOperations(svc).map((op) => op.operation);
       }
       return {
         content: [{ type: 'text' as const, text: JSON.stringify(summary) }],
@@ -187,9 +193,6 @@ export function createConfiguredServer(deps: ServerConfig): Server {
         operation?: string;
         args?: Record<string, unknown>;
       };
-
-      const context = buildContext();
-      const sdk = createSDKRuntime(context, sharedRateLimiter);
 
       // Structured execution: service + operation + args → direct SDK call
       if (service && operation) {
@@ -206,18 +209,8 @@ export function createConfiguredServer(deps: ServerConfig): Server {
           };
         }
 
-        const serviceObj = sdk[service as ServiceName];
-        const candidate = Object.prototype.hasOwnProperty.call(serviceObj, operation)
-          ? serviceObj[operation as keyof typeof serviceObj]
-          : undefined;
-        const fn = typeof candidate === 'function'
-          ? (candidate as (opts: unknown) => Promise<unknown>)
-          : undefined;
-
-        if (!fn) {
-          const available = Object.keys(serviceObj).filter(
-            k => Object.prototype.hasOwnProperty.call(serviceObj, k) && typeof (serviceObj as Record<string, unknown>)[k] === 'function'
-          );
+        const available = listComposioOperations(service).map((op) => op.operation);
+        if (!available.includes(operation)) {
           return {
             content: [{
               type: 'text' as const,
@@ -231,7 +224,11 @@ export function createConfiguredServer(deps: ServerConfig): Server {
         }
 
         try {
-          const result = await fn(opArgs ?? {});
+          const result = await composioProvider.execute({
+            service,
+            operation,
+            args: opArgs ?? {},
+          });
           return {
             content: [{
               type: 'text' as const,
@@ -247,6 +244,8 @@ export function createConfiguredServer(deps: ServerConfig): Server {
             }],
             isError: true,
           };
+        } finally {
+          await composioProvider.flushTelemetry?.();
         }
       }
 
