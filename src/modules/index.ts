@@ -1,5 +1,5 @@
 /**
- * Google Workspace MCP Modules
+ * AOJ Workbench Modules
  *
  * This is the main entry point for all Google Workspace operations
  * designed for code execution environments.

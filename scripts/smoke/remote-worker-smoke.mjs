@@ -68,7 +68,7 @@ const baseUrl = workerUrl.replace(/\/+$/, '');
 await check('root identifies the Worker', async () => {
   const response = await fetch(`${baseUrl}/`);
   const text = await response.text();
-  if (response.status !== 200 || !text.includes('Google Workspace MCP Worker')) {
+  if (response.status !== 200 || !text.includes('Worker') || !text.includes('POST /mcp')) {
     throw new Error(`Unexpected root response ${response.status}: ${redact(text)}`);
   }
 });

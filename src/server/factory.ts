@@ -21,6 +21,7 @@ import { SDK_SPEC } from '../sdk/spec.js';
 import { createSDKRuntime } from '../sdk/runtime.js';
 import { RateLimiter } from '../sdk/rate-limiter.js';
 import type { FullContext } from '../sdk/types.js';
+import { MCP_SERVER_INFO } from './identity.js';
 import { assertAnthropicCompatibleToolList } from './schema-compat.js';
 
 // Auth object accepted by googleapis — OAuth2Client or similar credential
@@ -42,7 +43,7 @@ export interface ServerConfig {
 
 export function createConfiguredServer(deps: ServerConfig): Server {
   const server = new Server(
-    { name: 'google-workspace', version: '4.0.0-alpha' },
+    MCP_SERVER_INFO,
     { capabilities: { tools: {} } }
   );
 

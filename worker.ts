@@ -1,5 +1,5 @@
 /**
- * Cloudflare Workers entry point for Google Workspace MCP.
+ * Cloudflare Workers entry point for AOJ Workbench.
  *
  * Uses WebStandardStreamableHTTPServerTransport (MCP SDK v1.27+) to handle
  * MCP-over-HTTP. Each request is stateless; the Worker does NOT maintain
@@ -29,6 +29,7 @@ import {
 } from './src/auth/workers-oauth.js';
 import { createConfiguredServer } from './src/server/factory.js';
 import { jsonError, validateBearerRequest } from './src/server/http-auth.js';
+import { WORKER_ROOT_RESPONSE } from './src/server/identity.js';
 import {
   jsonMetadata,
   oauthAuthorizationServerNotImplemented,
@@ -168,7 +169,7 @@ export default {
 
     // Only handle POST requests to /mcp (or root)
     if (request.method !== 'POST' || (url.pathname !== '/' && url.pathname !== '/mcp')) {
-      return new Response('Google Workspace MCP Worker v4.0.0-alpha\nPOST /mcp to connect.', {
+      return new Response(WORKER_ROOT_RESPONSE, {
         status: url.pathname === '/' ? 200 : 404,
       });
     }

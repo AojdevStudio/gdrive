@@ -1,6 +1,6 @@
 # Historical Redis Troubleshooting
 
-Redis is not part of the supported Google Workspace MCP v4 runtime.
+Redis is not part of the supported AOJ Workbench v4 runtime.
 
 Runtime state is stored through Cloudflare Workers KV. Check Worker setup state instead:
 

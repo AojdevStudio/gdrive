@@ -9,8 +9,8 @@ The Jest fixture covers:
 - `/setup/status` behavior
 - unauthenticated `/mcp` rejection
 - authenticated `tools/list` exposing `search` and `execute`
-- missing Google OAuth state recovery guidance
-- expired token refresh through the Worker path
+- missing legacy Google OAuth state recovery guidance
+- expired legacy token refresh through the Worker path
 - redaction of access tokens, refresh tokens, authorization codes, client secrets, encryption keys, and bearer tokens
 
 Run it with:
@@ -35,6 +35,8 @@ The live smoke test verifies:
 - root Worker identity response
 - unauthenticated `/mcp` rejection
 - `/setup/status` response when `MCP_SETUP_TOKEN` is provided
-- authenticated `tools/list` when `MCP_BEARER_TOKEN` is provided and Google OAuth state is configured
+- authenticated `tools/list` when `MCP_BEARER_TOKEN` is provided
+
+Legacy direct-Google smoke paths may still require Google OAuth state until provider replacement slices remove them.
 
 The script redacts configured secret values before printing failures.

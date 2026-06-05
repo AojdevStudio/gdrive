@@ -6,6 +6,7 @@ import {
   getToolDefinition,
   LIST_TOOLS_RESOURCE,
 } from '../../tools/listTools.js';
+import { PROJECT_IDENTITY } from '../../server/identity.js';
 
 describe('listTools resource helpers', () => {
   it('exposes the tool discovery resource metadata', () => {
@@ -38,7 +39,7 @@ describe('listTools resource helpers', () => {
       }],
     });
 
-    expect(formatted).toContain('# Google Workspace MCP Operations');
+    expect(formatted).toContain(`# ${PROJECT_IDENTITY.productName} Operations`);
     expect(formatted).toContain('## ./modules/drive');
     expect(formatted).toContain('### files.list');
     expect(formatted).toContain('await context.drive.files.list({})');

@@ -1,6 +1,6 @@
-# Google Workspace MCP Troubleshooting
+# AOJ Workbench Troubleshooting
 
-Google Workspace MCP is remote-only. Current MCP clients must connect to the Cloudflare Workers `/mcp` endpoint.
+AOJ Workbench is remote-only. Current MCP clients must connect to the Cloudflare Workers `/mcp` endpoint.
 
 ```text
 https://your-worker.workers.dev/mcp
@@ -9,7 +9,7 @@ https://your-worker.workers.dev/mcp
 ## Current Checks
 
 - Confirm the MCP client is configured with the remote Worker URL.
-- Confirm the client server name is `google-workspace`, not `gdrive`, unless you intentionally kept a legacy alias.
+- Confirm the client server name is `aoj-workbench`, not `gdrive`, unless you intentionally kept a legacy alias.
 - Confirm the bearer token configured in the MCP client matches the Worker's `MCP_BEARER_TOKEN`.
 - Start a fresh MCP client session after changing MCP config.
 - Confirm the expected tools are `search` and `execute`.
@@ -26,7 +26,7 @@ Check the configured URL and restart the client session. The endpoint must end w
 
 ### Agent Thinks This Is Drive-Only
 
-Rename the MCP server entry to `google-workspace`. The server covers Drive, Sheets, Forms, Docs, Gmail, and Calendar.
+Rename the MCP server entry to `aoj-workbench`. The server covers Drive, Sheets, Forms, Docs, Gmail, and Calendar.
 
 ## Legacy Pages
 

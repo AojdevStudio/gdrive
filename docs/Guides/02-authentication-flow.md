@@ -1,8 +1,8 @@
 # Authentication Flow Guide
 
-> Legacy reference: this guide describes older local OAuth/bootstrap setup. Google Workspace MCP is now remote-only; MCP clients must use the Cloudflare Workers `/mcp` endpoint.
+> Legacy reference: this guide describes older local OAuth/bootstrap setup. AOJ Workbench is now remote-only; MCP clients must use the Cloudflare Workers `/mcp` endpoint.
 
-This guide covers the complete OAuth 2.0 authentication process for the Google Drive MCP Server, including initial setup, token management, and troubleshooting.
+This guide covers the complete OAuth 2.0 authentication process for the AOJ Workbench, including initial setup, token management, and troubleshooting.
 
 ## Prerequisites
 
@@ -100,7 +100,7 @@ node ./dist/index.js auth
 
 3. **OAuth Consent Screen**
    ```
-   Google Drive MCP Server wants to:
+   AOJ Workbench wants to:
    ✓ See, edit, create, and delete all of your Google Drive files
    ✓ See, edit, create, and delete your spreadsheets in Google Drive
    ✓ See, edit, create, and delete your documents in Google Drive
@@ -528,7 +528,7 @@ node ./dist/index.js auth
 
 # Revoke access in Google Account settings
 # Go to myaccount.google.com/permissions
-# Find "Google Drive MCP Server" and remove access
+# Find "AOJ Workbench" and remove access
 
 # Re-authenticate
 rm -f credentials/.gdrive-mcp-tokens.json
@@ -593,4 +593,4 @@ Once authentication is complete:
 
 **Authentication Complete!** ✅
 
-Your Google Drive MCP Server is now authenticated and ready to use. The server will automatically manage token refresh and maintain authentication status.
+Your AOJ Workbench is now authenticated and ready to use. The server will automatically manage token refresh and maintain authentication status.

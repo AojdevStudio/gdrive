@@ -6,6 +6,7 @@ import {
   type WorkersTokenData,
 } from './workers-auth.js';
 import { jsonError, validateBearerRequest } from '../server/http-auth.js';
+import { PROJECT_IDENTITY } from '../server/identity.js';
 
 const AUTHORIZATION_ENDPOINT = 'https://accounts.google.com/o/oauth2/v2/auth';
 const STATE_KEY_PREFIX = 'gdrive:oauth:state:';
@@ -289,7 +290,7 @@ export async function handleGoogleOAuthCallback(
 
     return jsonResponse(200, {
       status: 'configured',
-      message: 'Google Workspace MCP remote Google OAuth setup completed.',
+      message: `${PROJECT_IDENTITY.productName} remote Google OAuth setup completed.`,
       next: 'Verify remote setup at /setup/status, then connect MCP clients to /mcp.',
     });
   } catch (err) {

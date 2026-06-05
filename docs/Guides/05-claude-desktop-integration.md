@@ -1,6 +1,6 @@
 # Claude Integration Guide
 
-This guide connects Claude to **Google Workspace MCP** through the remote Cloudflare Workers HTTP endpoint.
+This guide connects Claude to **AOJ Workbench** through the remote Cloudflare Workers HTTP endpoint.
 
 ## Supported Runtime
 
@@ -17,13 +17,13 @@ Local stdio, local HTTP, Docker, and local bootstrap flows are not supported MCP
 Use a descriptive server name:
 
 ```bash
-claude mcp add --scope user --transport http google-workspace https://your-worker.workers.dev/mcp
+claude mcp add --scope user --transport http aoj-workbench https://your-worker.workers.dev/mcp
 ```
 
 Project scope is only appropriate when the Workspace account or Worker endpoint is project-specific:
 
 ```bash
-claude mcp add --scope project --transport http google-workspace https://your-worker.workers.dev/mcp
+claude mcp add --scope project --transport http aoj-workbench https://your-worker.workers.dev/mcp
 ```
 
 ## Claude Desktop
@@ -33,7 +33,7 @@ Configure Claude Desktop with the remote URL:
 ```json
 {
   "mcpServers": {
-    "google-workspace": {
+    "aoj-workbench": {
       "url": "https://your-worker.workers.dev/mcp"
     }
   }
@@ -53,4 +53,4 @@ Use `search` to discover operations across Drive, Sheets, Forms, Docs, Gmail, an
 
 ## Naming
 
-Use `google-workspace` as the MCP server name in client config. Avoid `gdrive` because this server is not Drive-only.
+Use `aoj-workbench` as the MCP server name in client config. Avoid `gdrive` because this server is not Drive-only.

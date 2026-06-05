@@ -1,6 +1,6 @@
 # Docker Deployment
 
-Docker deployment is no longer a supported MCP runtime for **Google Workspace MCP**.
+Docker deployment is no longer a supported MCP runtime for **AOJ Workbench**.
 
 The supported runtime is the remote Cloudflare Workers HTTP endpoint:
 

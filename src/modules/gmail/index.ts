@@ -1,5 +1,5 @@
 /**
- * Gmail module - Email operations for the Google Workspace MCP server
+ * Gmail module - Email operations for the AOJ Workbench server
  *
  * @module gmail
  * @version 3.3.0

@@ -1,8 +1,8 @@
-# Google Drive MCP Server - Product Roadmap
+# AOJ Workbench - Product Roadmap
 
 ## Project Overview
 
-The Google Drive MCP Server provides comprehensive integration with Google Workspace through the Model Context Protocol (MCP), enabling access to Drive, Sheets, Forms, Docs, Gmail, and Calendar with enterprise-grade security features.
+The AOJ Workbench provides comprehensive integration with Google Workspace through the Model Context Protocol (MCP), enabling access to Drive, Sheets, Forms, Docs, Gmail, and Calendar with enterprise-grade security features.
 
 **Current Version**: 4.0.0-alpha  
 **Architecture**: v4 code mode with `search` + `execute` tools (progressive SDK discovery and sandboxed execution)  

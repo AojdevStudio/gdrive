@@ -1,9 +1,11 @@
 # Authentication Problems
 
-Google Workspace MCP has two auth surfaces:
+AOJ Workbench has two auth surfaces:
 
 - MCP client to Worker: `MCP_BEARER_TOKEN` on `POST /mcp`
 - Operator setup to Worker: `MCP_SETUP_TOKEN` on `/setup/status` and `/setup/google/start`
+
+The target provider model uses Composio managed auth. The Google setup routes below are legacy direct-provider troubleshooting paths and should disappear as provider replacement slices remove the direct Google implementation.
 
 ## `/mcp` Returns 401 Unauthorized
 
@@ -15,7 +17,7 @@ Authorization: Bearer <MCP_BEARER_TOKEN>
 
 The value must match the Worker secret.
 
-## Google OAuth Token Resolution Failed
+## Legacy Google OAuth Token Resolution Failed
 
 Check setup state:
 

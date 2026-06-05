@@ -4,7 +4,7 @@
 
 # AOJ Workbench
 
-### One remote MCP endpoint for Drive, Sheets, Forms, Docs, Gmail, and Calendar.
+### One private MCP endpoint for your knowledge-work toolkits.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![TypeScript](https://img.shields.io/badge/TypeScript-007ACC?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
@@ -12,9 +12,9 @@
 [![Cloudflare Workers](https://img.shields.io/badge/Cloudflare-Workers-F38020?logo=cloudflare&logoColor=white)](https://workers.cloudflare.com/)
 [![v4.0.0](https://img.shields.io/badge/version-4.0.0-green)](https://github.com/AojdevStudio/gdrive/releases)
 
-*Give an AI agent a URL and it can work across your Google Workspace API surface.*
+*Give an AI agent one URL and it can work through AOJ Workbench.*
 
-[**Quick Start**](#quick-start) . [**Services**](#services) . [**Docs**](./docs/README.md)
+[**Quick Start**](#quick-start) . [**Provider Model**](#provider-model) . [**Docs**](./docs/README.md)
 
 </div>
 
@@ -22,7 +22,7 @@
 
 ## Remote Only
 
-AOJ Workbench is a **remote HTTP MCP server** hosted on Cloudflare Workers.
+AOJ Workbench is a **private remote HTTP MCP server** hosted on Cloudflare Workers.
 
 The supported client experience is:
 
@@ -36,16 +36,16 @@ Legacy local commands and Docker instructions from older versions are not part o
 
 ## Why This Exists
 
-AI agents can draft plans, reason over code, and summarize documents, but work usually finishes in Google Workspace:
+AI agents can draft plans, reason over code, and summarize documents, but daily work spans many tools:
 
-- Send and search Gmail messages
-- Read and update Sheets
-- Create and edit Docs
-- Search and write Drive files
-- Create Forms and read responses
-- Check Calendar availability and create events
+- Gmail and Google Workspace
+- Outlook
+- Notion
+- Stripe
+- YouTube
+- other selected Composio-supported toolkits
 
-AOJ Workbench gives agents that working surface through one remote MCP endpoint.
+AOJ Workbench gives agents one MCP endpoint. The target provider layer is the Composio SDK with managed auth. The current direct Google implementation is legacy migration scaffolding until provider replacement slices remove it.
 
 ## Quick Start
 
@@ -57,14 +57,14 @@ Use the deployed Worker URL:
 https://your-worker.workers.dev/mcp
 ```
 
-The Worker must already be deployed and configured with Google Workspace OAuth state, Cloudflare KV, and any required MCP bearer token.
+The Worker must already be deployed and configured with its MCP bearer token and the required Composio runtime secrets. Current legacy Google slices may still require Google OAuth state until they are replaced.
 
 ### 2. Connect Claude Code
 
 Use a descriptive MCP server name so agents understand the full surface area:
 
 ```bash
-claude mcp add --scope user --transport http google-workspace https://your-worker.workers.dev/mcp
+claude mcp add --scope user --transport http aoj-workbench https://your-worker.workers.dev/mcp
 ```
 
 If bearer auth is enabled for the Worker, configure the same bearer token expected by the server.
@@ -72,16 +72,20 @@ If bearer auth is enabled for the Worker, configure the same bearer token expect
 ### 3. Connect Codex
 
 ```bash
-export GOOGLE_WORKSPACE_MCP_TOKEN="replace-with-worker-token"
+export AOJ_WORKBENCH_MCP_TOKEN="replace-with-worker-token"
 
-codex mcp add google-workspace \
+codex mcp add aoj-workbench \
   --url https://your-worker.workers.dev/mcp \
-  --bearer-token-env-var GOOGLE_WORKSPACE_MCP_TOKEN
+  --bearer-token-env-var AOJ_WORKBENCH_MCP_TOKEN
 ```
 
 Start a fresh Codex session after changing MCP config.
 
-## Services
+## Provider Model
+
+AOJ Workbench keeps one public MCP connector. Behind that connector, Composio SDK sessions discover and execute selected provider toolkit actions.
+
+The direct Google Workspace operations currently in the repo are legacy paths. Migrate them vertically: prove one Composio-backed behavior, then remove the matching legacy Google code. Current legacy capabilities include:
 
 | Service | Operations | Highlights |
 |:--------|:-----------|:-----------|
@@ -99,10 +103,10 @@ v4 exposes two MCP tools:
 
 | Tool | Purpose |
 |:-----|:--------|
-| `search` | Discover available Google Workspace services, operations, signatures, parameters, and examples |
-| `execute` | Run a specific Google Workspace operation through the SDK-style runtime |
+| `search` | Discover provider/toolkit capabilities, schemas, auth status, and execution guidance |
+| `execute` | Run a selected provider toolkit operation |
 
-This keeps the MCP tool list small while preserving the full Google Workspace API surface behind AOJ Workbench.
+This keeps the MCP tool list small while avoiding separate client connectors for every provider.
 
 Example direct operation call:
 
@@ -142,9 +146,9 @@ MCP client
   v
 Cloudflare Worker /mcp
   |
-  | Google OAuth token resolution and refresh
+  | Composio SDK sessions and managed auth
   v
-Google Workspace APIs
+Provider toolkits
 ```
 
 Persistent state belongs in Cloudflare services, primarily Workers KV. The user-facing MCP runtime is the Worker URL.
@@ -152,9 +156,9 @@ Persistent state belongs in Cloudflare services, primarily Workers KV. The user-
 ## Security
 
 - MCP clients authenticate to the Worker with static bearer auth when configured.
-- Google OAuth authorizes the Worker to call Google Workspace APIs.
+- Provider authorization belongs to Composio managed auth in the target architecture.
 - This server is not an OAuth authorization server for MCP clients.
-- Do not point MCP client auth metadata at Google OAuth.
+- Do not point MCP client auth metadata at provider OAuth.
 
 See [MCP Client Auth Boundary](./docs/adr/0001-mcp-client-auth-boundary.md).
 
@@ -173,17 +177,13 @@ Do not add local stdio, local HTTP, or Docker connection instructions back to us
 
 ## Roadmap
 
-- [x] Google Drive — file management and search
-- [x] Google Sheets — spreadsheet control with formatting
-- [x] Google Forms — form creation and response management
-- [x] Google Docs — document creation and rich text editing
-- [x] Gmail — email management including send
-- [x] Calendar — CRUD with natural language scheduling
+- [ ] Composio native provider — discovery, auth status, schema lookup, execution
+- [ ] Google provider replacement — migrate current direct Google capabilities behind Composio
+- [ ] Notion toolkit — selected private-workbench workflows
+- [ ] Stripe toolkit — selected private-workbench workflows
+- [ ] YouTube toolkit — selected private-workbench workflows
+- [ ] Outlook toolkit — selected private-workbench workflows
 - [x] Cloudflare Workers — remote HTTP MCP runtime
-- [ ] Google Slides — presentation creation and editing
-- [ ] Google Chat — workspace messaging integration
-- [ ] Contacts — contact management and lookup
-- [ ] Tasks — Google Tasks integration
 
 ## Contributing
 

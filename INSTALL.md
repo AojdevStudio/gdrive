@@ -18,7 +18,7 @@
 
 ## Overview
 
-This guide deploys the gdrive MCP server to Cloudflare Workers, giving any MCP client
+This guide deploys the AOJ Workbench server to Cloudflare Workers, giving any MCP client
 (Claude Code, Claude Desktop, etc.) access to your Google Workspace via a permanent URL.
 
 After setup, token refresh is automatic — you authenticate once and it works forever.
@@ -112,7 +112,7 @@ Tell the user:
 Tell the user:
 > "Configure the OAuth consent screen:
 > 1. User type: choose **External** (unless you have a Google Workspace org, then **Internal**)
-> 2. App name: `Google Drive MCP Server`
+> 2. App name: `AOJ Workbench`
 > 3. User support email: your email address
 > 4. Developer contact: your email address
 > 5. Click **Save and Continue**

@@ -1,10 +1,10 @@
 # Key Rotation Operations Runbook
 
-> Legacy reference: this runbook describes older local token/key operations. Google Workspace MCP is now remote-only; MCP clients must use the Cloudflare Workers `/mcp` endpoint.
+> Legacy reference: this runbook describes older local token/key operations. AOJ Workbench is now remote-only; MCP clients must use the Cloudflare Workers `/mcp` endpoint.
 
 ## Overview
 
-This runbook provides procedures for managing encryption key rotation in the gdrive MCP server. Key rotation is critical for maintaining security compliance and protecting OAuth tokens.
+This runbook provides procedures for managing encryption key rotation in the AOJ Workbench server. Key rotation is critical for maintaining security compliance and protecting OAuth tokens.
 
 **Supported CLI commands:** `auth`, `health`, `rotate-key`, `verify-keys`, `migrate-tokens`
 
