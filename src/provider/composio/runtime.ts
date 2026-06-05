@@ -80,6 +80,11 @@ function toSafeError(error: unknown): Error {
   if (message.startsWith('Composio provider runtime is not configured')) {
     return new Error(message);
   }
+  if (/No active connection found for toolkit/i.test(message)) {
+    return new Error(
+      'Composio provider connection is not active for this AOJ Workbench user. Connect the provider account in Composio and retry.'
+    );
+  }
   if (/api[_ -]?key|bearer|token|secret|connected[_ -]?account/i.test(message)) {
     return new Error('Composio provider request failed. Inspect provider logs with credentials redacted.');
   }

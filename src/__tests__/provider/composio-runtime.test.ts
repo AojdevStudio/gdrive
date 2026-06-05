@@ -69,6 +69,27 @@ describe('SDKComposioProviderRuntime', () => {
     expect(JSON.stringify(discovery.operations.search)).not.toContain('connectedAccount');
   });
 
+  it('discovers Forms operations without auto-enabling the auth-config-required toolkit', async () => {
+    const { runtime, create } = makeRuntime();
+
+    const discovery = await runtime.discover('forms');
+
+    expect(discovery.provider).toBe('composio');
+    expect(discovery.operations.createForm).toEqual(
+      expect.objectContaining({
+        service: 'forms',
+        operation: 'createForm',
+        provider: 'composio',
+        toolkit: 'googleforms',
+      })
+    );
+    expect(create).toHaveBeenCalledWith('aoj-workbench-test', expect.objectContaining({
+      toolkits: {
+        enable: expect.not.arrayContaining(['googleforms']),
+      },
+    }));
+  });
+
   it('rejects invalid drive.search arguments before provider execution', async () => {
     const { runtime, execute } = makeRuntime();
 
@@ -113,6 +134,30 @@ describe('SDKComposioProviderRuntime', () => {
         },
       ],
     });
+  });
+
+  it('returns safe guidance when a provider account is disconnected', async () => {
+    const execute = jest.fn(async () => {
+      throw new Error(
+        "400 {\"error\":{\"message\":\"No active connection found for toolkit(s) 'googledrive' in this session. To fix this, call COMPOSIO_MANAGE_CONNECTIONS with toolkits=['googledrive'] to establish a connection, then retry this tool call.\"}}"
+      );
+    });
+    const runtime = new SDKComposioProviderRuntime(
+      { apiKey: 'test-key', userId: 'aoj-workbench-test' },
+      () => ({
+        create: jest.fn(async () => ({
+          sessionId: 'session-1',
+          toolkits: jest.fn(async () => ({ items: [] })),
+          execute,
+        })),
+      })
+    );
+
+    await expect(runtime.execute({
+      service: 'drive',
+      operation: 'search',
+      args: { query: 'smoke' },
+    })).rejects.toThrow('Composio provider connection is not active for this AOJ Workbench user');
   });
 
   it('fails closed when Composio credentials are missing', async () => {

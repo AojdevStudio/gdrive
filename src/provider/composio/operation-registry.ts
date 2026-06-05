@@ -266,6 +266,11 @@ export function listComposioOperations(service?: string): ComposioOperationDefin
 }
 
 export function listEnabledComposioToolkits(): string[] {
-  return [...new Set(listComposioOperations().map((operation) => operation.toolkit))];
+  return [...new Set(
+    listComposioOperations()
+      .map((operation) => operation.toolkit)
+      // Google Forms currently requires an explicit Composio auth config; keep it discoverable
+      // but do not auto-enable it or it prevents sessions for every other Google toolkit.
+      .filter((toolkit) => toolkit !== 'googleforms')
+  )];
 }
-
