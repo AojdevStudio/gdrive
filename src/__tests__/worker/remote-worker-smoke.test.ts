@@ -13,6 +13,7 @@ const SENSITIVE_VALUES = [
   'refresh-token-secret',
   'refreshed-access-token-secret',
   'auth-code-secret',
+  'composio-key-secret',
   TEST_KEY,
 ];
 
@@ -38,6 +39,8 @@ function makeEnv(kv = new MemoryKV(), overrides: Partial<Env> = {}): Env {
     GDRIVE_CLIENT_ID: 'client-id',
     GDRIVE_CLIENT_SECRET: 'client-secret',
     GDRIVE_TOKEN_ENCRYPTION_KEY: TEST_KEY,
+    COMPOSIO_API_KEY: 'composio-key-secret',
+    AOJ_WORKBENCH_USER_ID: 'aoj-workbench-user',
     MCP_BEARER_TOKEN: 'mcp-secret',
     MCP_SETUP_TOKEN: 'setup-secret',
     ...overrides,
@@ -124,12 +127,9 @@ describe('remote Worker smoke contract', () => {
   });
 
   it('lists the search and execute tools through authenticated /mcp', async () => {
-    const kv = new MemoryKV();
-    await storeTokens(kv, makeTokens());
-
     const response = await worker.fetch(
       mcpToolsListRequest({ Authorization: 'Bearer mcp-secret' }),
-      makeEnv(kv),
+      makeEnv(),
       {}
     );
 
@@ -141,28 +141,30 @@ describe('remote Worker smoke contract', () => {
     expectRedacted(body);
   });
 
-  it('returns remote recovery guidance for missing Google OAuth state', async () => {
+  it('returns remote recovery guidance for missing Composio provider config', async () => {
     jest.spyOn(console, 'error').mockImplementation(() => undefined);
+    const env = makeEnv();
+    delete env.COMPOSIO_API_KEY;
 
     const response = await worker.fetch(
       mcpToolsListRequest({ Authorization: 'Bearer mcp-secret' }),
-      makeEnv(),
+      env,
       {}
     );
 
-    expect(response.status).toBe(401);
+    expect(response.status).toBe(500);
     const body = await response.json();
     expect(body).toEqual({
-      error: 'Google OAuth token resolution failed',
-      detail: 'Use /setup/status to inspect remote Google OAuth state, then /setup/google/start to recover.',
+      error: 'Composio provider runtime is not configured',
+      detail: 'Set COMPOSIO_API_KEY and AOJ_WORKBENCH_USER_ID on the deployed Worker.',
     });
     expectRedacted(body);
   });
 
-  it('refreshes expired token state through the Worker path without leaking secrets', async () => {
+  it('does not refresh legacy Google token state before authenticated tool listing', async () => {
     const kv = new MemoryKV();
     await storeTokens(kv, makeTokens({ expiry_date: Date.now() - 60_000 }));
-    jest.spyOn(globalThis, 'fetch').mockResolvedValue({
+    const fetchSpy = jest.spyOn(globalThis, 'fetch').mockResolvedValue({
       ok: true,
       json: async () => ({
         access_token: 'refreshed-access-token-secret',
@@ -180,31 +182,8 @@ describe('remote Worker smoke contract', () => {
     expect(response.status).toBe(200);
     const body = await readJsonResponse(response);
     expectRedacted(body);
+    expect(fetchSpy).not.toHaveBeenCalled();
     expect(kv.values.get(KV_TOKEN_KEY)).not.toContain('refreshed-access-token-secret');
     expect(kv.values.get(KV_TOKEN_KEY)).not.toContain('refresh-token-secret');
-  });
-
-  it('returns generic token refresh failure details without leaking configured secrets', async () => {
-    const kv = new MemoryKV();
-    await storeTokens(kv, makeTokens({ expiry_date: Date.now() - 60_000 }));
-    jest.spyOn(globalThis, 'fetch').mockResolvedValue({
-      ok: false,
-      status: 400,
-    } as Response);
-    jest.spyOn(console, 'error').mockImplementation(() => undefined);
-
-    const response = await worker.fetch(
-      mcpToolsListRequest({ Authorization: 'Bearer mcp-secret' }),
-      makeEnv(kv),
-      {}
-    );
-
-    expect(response.status).toBe(401);
-    const body = await response.json();
-    expect(body).toEqual({
-      error: 'Google OAuth token resolution failed',
-      detail: 'Use /setup/status to inspect remote Google OAuth state, then /setup/google/start to recover.',
-    });
-    expectRedacted(body);
   });
 });

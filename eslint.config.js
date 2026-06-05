@@ -3,6 +3,15 @@ import tsPlugin from '@typescript-eslint/eslint-plugin';
 import tsParser from '@typescript-eslint/parser';
 
 export default [
+  {
+    ignores: [
+      '.worktrees/**',
+      '**/dist/**',
+      '**/dist-worker/**',
+      'node_modules/**',
+      'coverage/**',
+    ]
+  },
   js.configs.recommended,
   {
     files: ['**/*.ts'],

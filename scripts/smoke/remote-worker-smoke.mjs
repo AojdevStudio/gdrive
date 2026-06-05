@@ -5,10 +5,13 @@
 const workerUrl = process.env.WORKER_URL;
 const mcpToken = process.env.MCP_BEARER_TOKEN;
 const setupToken = process.env.MCP_SETUP_TOKEN;
+const executePlan = process.env.AOJ_WORKBENCH_SMOKE_EXECUTE_JSON;
 
 const secretValues = [
   mcpToken,
   setupToken,
+  process.env.COMPOSIO_API_KEY,
+  process.env.AOJ_WORKBENCH_MCP_TOKEN,
   process.env.GDRIVE_CLIENT_SECRET,
   process.env.GDRIVE_TOKEN_ENCRYPTION_KEY,
   process.env.GOOGLE_AUTH_CODE,
@@ -34,6 +37,23 @@ function fail(message, detail) {
 
 function pass(message) {
   console.log(`PASS ${message}`);
+}
+
+async function callMcp(method, params) {
+  const response = await fetch(`${baseUrl}/mcp`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${mcpToken}`,
+      'Content-Type': 'application/json',
+      Accept: 'application/json, text/event-stream',
+    },
+    body: JSON.stringify({ jsonrpc: '2.0', id: Date.now(), method, params }),
+  });
+  const body = await readBody(response);
+  if (response.status !== 200) {
+    throw new Error(`Expected 200, got ${response.status}: ${redact(body)}`);
+  }
+  return body;
 }
 
 async function readBody(response) {
@@ -107,24 +127,54 @@ if (setupToken) {
 
 if (mcpToken) {
   await check('authenticated tools/list exposes search and execute', async () => {
-    const response = await fetch(`${baseUrl}/mcp`, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${mcpToken}`,
-        'Content-Type': 'application/json',
-        Accept: 'application/json, text/event-stream',
-      },
-      body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list', params: {} }),
-    });
-    const body = await readBody(response);
-    if (response.status !== 200) {
-      throw new Error(`Expected 200, got ${response.status}: ${redact(body)}`);
-    }
+    const body = await callMcp('tools/list', {});
     const names = body?.result?.tools?.map((tool) => tool.name).sort();
     if (JSON.stringify(names) !== JSON.stringify(['execute', 'search'])) {
       throw new Error(`Unexpected tools/list response: ${redact(body)}`);
     }
   });
+
+  const services = ['drive', 'sheets', 'docs', 'gmail', 'forms', 'calendar'];
+  for (const service of services) {
+    await check(`search discovers Composio-backed ${service} operations`, async () => {
+      const body = await callMcp('tools/call', {
+        name: 'search',
+        arguments: { service },
+      });
+      const text = body?.result?.content?.[0]?.text;
+      const parsed = typeof text === 'string' ? JSON.parse(text) : undefined;
+      if (!parsed || typeof parsed !== 'object' || Object.keys(parsed).length === 0) {
+        throw new Error(`Unexpected search response for ${service}: ${redact(body)}`);
+      }
+      const serialized = JSON.stringify(parsed);
+      if (!serialized.includes('"provider":"composio"')) {
+        throw new Error(`Search response did not report Composio provider for ${service}: ${redact(body)}`);
+      }
+    });
+  }
+
+  if (executePlan) {
+    const operations = JSON.parse(executePlan);
+    if (!Array.isArray(operations)) {
+      throw new Error('AOJ_WORKBENCH_SMOKE_EXECUTE_JSON must be an array of { service, operation, args } objects');
+    }
+    for (const item of operations) {
+      const { service, operation, args } = item;
+      await check(`execute runs ${service}.${operation} through AOJ Workbench`, async () => {
+        const body = await callMcp('tools/call', {
+          name: 'execute',
+          arguments: { service, operation, args },
+        });
+        const text = body?.result?.content?.[0]?.text;
+        const parsed = typeof text === 'string' ? JSON.parse(text) : undefined;
+        if (!parsed || parsed.error || !('result' in parsed)) {
+          throw new Error(`Unexpected execute response for ${service}.${operation}: ${redact(body)}`);
+        }
+      });
+    }
+  } else {
+    console.log('SKIP execute service smoke (AOJ_WORKBENCH_SMOKE_EXECUTE_JSON not set)');
+  }
 } else {
   console.log('SKIP authenticated tools/list exposes search and execute (MCP_BEARER_TOKEN not set)');
 }

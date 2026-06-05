@@ -295,8 +295,10 @@ describe('remote setup status route', () => {
   });
 });
 
-describe('worker Google OAuth failures', () => {
-  it('returns remote recovery guidance for missing token state on /mcp', async () => {
+describe('worker Composio provider failures', () => {
+  it('returns remote recovery guidance for missing provider config on /mcp', async () => {
+    jest.spyOn(console, 'error').mockImplementation(() => undefined);
+
     const response = await worker.fetch(
       new Request('https://worker.example.com/mcp', {
         method: 'POST',
@@ -307,10 +309,10 @@ describe('worker Google OAuth failures', () => {
       {}
     );
 
-    expect(response.status).toBe(401);
+    expect(response.status).toBe(500);
     expect(await response.json()).toEqual({
-      error: 'Google OAuth token resolution failed',
-      detail: 'Use /setup/status to inspect remote Google OAuth state, then /setup/google/start to recover.',
+      error: 'Composio provider runtime is not configured',
+      detail: 'Set COMPOSIO_API_KEY and AOJ_WORKBENCH_USER_ID on the deployed Worker.',
     });
   });
 });
