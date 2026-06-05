@@ -67,7 +67,7 @@ Current legacy Workspace operations exist only while provider replacement slices
 | Sheets | listSheets, readSheet, createSheet, renameSheet, deleteSheet, updateCells, updateFormula, formatCells, addConditionalFormat, freezeRowsColumns, setColumnWidth, appendRows |
 | Forms | createForm, readForm, addQuestion, listResponses |
 | Docs | createDocument, insertText, replaceText, applyTextStyle, insertTable |
-| Gmail | listMessages, listThreads, getMessage, getThread, searchMessages, createDraft, sendMessage, sendDraft, listLabels, createLabel, modifyLabels, listAttachments, downloadAttachment, sendWithAttachments |
+| Gmail | listMessages, listThreads, getMessage, getThread, searchMessages, createDraft, sendMessage, sendDraft, listLabels, createLabel, modifyLabels, listAttachments, downloadAttachment, readAttachmentText, sendWithAttachments |
 | Calendar | listCalendars, getCalendar, listEvents, getEvent, createEvent, updateEvent, deleteEvent, quickAdd, checkFreeBusy |
 
 ## Environment Variables

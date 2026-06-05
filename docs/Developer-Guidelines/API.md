@@ -55,7 +55,17 @@ The services below are the current direct-Google provider path. They are migrati
 | `sheets` | `listSheets`, `readSheet`, `createSheet`, `renameSheet`, `deleteSheet`, `updateCells`, `updateFormula`, `formatCells`, `addConditionalFormat`, `freezeRowsColumns`, `setColumnWidth`, `appendRows` |
 | `forms` | `createForm`, `readForm`, `addQuestion`, `listResponses` |
 | `docs` | `createDocument`, `insertText`, `replaceText`, `applyTextStyle`, `insertTable` |
-| `gmail` | `listMessages`, `listThreads`, `getMessage`, `getThread`, `searchMessages`, `createDraft`, `sendMessage`, `sendDraft`, `listLabels`, `createLabel`, `modifyLabels` |
+| `gmail` | `listMessages`, `listThreads`, `getMessage`, `getThread`, `searchMessages`, `createDraft`, `sendMessage`, `sendDraft`, `listLabels`, `createLabel`, `modifyLabels`, `listAttachments`, `downloadAttachment`, `readAttachmentText`, `sendWithAttachments`, and other Gmail management operations |
 | `calendar` | `listCalendars`, `getCalendar`, `listEvents`, `getEvent`, `createEvent`, `updateEvent`, `deleteEvent`, `quickAdd`, `checkFreeBusy` |
 
 Use `search` for exact signatures and examples before calling `execute`.
+
+## Gmail Attachments
+
+AOJ Workbench separates attachment handling into three contracts:
+
+- **Attachment metadata**: `gmail.listAttachments({ messageId })` returns opaque `attachmentId`, `filename`, `mimeType`, and `size`.
+- **Attachment content**: `gmail.downloadAttachment({ messageId, attachmentId, maxBytes? })` returns raw Gmail content as `data` with `dataEncoding: "base64url"`.
+- **Decoded attachment text**: `gmail.readAttachmentText({ messageId, attachmentId, maxBytes?, maxCharacters?, pdfMaxPages?, docxMaxXmlBytes? })` returns UTF-8 text for text-like files, PDFs with extractable text, and Word `.docx` files.
+
+`gmail.getMessage` returns message headers/body when available, but it does not embed attachment metadata. `gmail.searchMessages` returns message IDs/thread IDs; use `listAttachments` after search results with `has:attachment`.

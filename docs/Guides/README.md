@@ -8,6 +8,7 @@ AOJ Workbench is remote-only. MCP clients connect to the Cloudflare Workers `/mc
 - [Claude Integration](./05-claude-desktop-integration.md)
 - [Environment Variables](./06-environment-variables.md)
 - [Composio Native Provider](./10-composio-native-provider.md)
+- [Gmail Attachment Workflow](./09-gmail-attachment-workflow.md)
 
 ## Unsupported Legacy Guides
 

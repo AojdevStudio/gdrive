@@ -200,8 +200,8 @@ export async function generateToolStructure(): Promise<ModuleStructure> {
       {
         name: 'getMessage',
         signature: 'getMessage({ id: string, format?: "minimal" | "full" | "raw" | "metadata" })',
-        description: 'Get a specific message by ID with full content',
-        example: 'gmail.getMessage({ id: "18c123abc", format: "full" })',
+        description: 'Get a specific message by ID with headers/body when available. Attachment metadata is separate; use listAttachments({ messageId }).',
+        example: 'const msg = await gmail.getMessage({ id: "18c123abc", format: "full" });\nconst files = await gmail.listAttachments({ messageId: msg.id });',
       },
       {
         name: 'getThread',
@@ -212,8 +212,8 @@ export async function generateToolStructure(): Promise<ModuleStructure> {
       {
         name: 'searchMessages',
         signature: 'searchMessages({ query: string, maxResults?: number, pageToken?: string, includeSpamTrash?: boolean })',
-        description: 'Search messages using Gmail query syntax',
-        example: 'gmail.searchMessages({ query: "from:boss@company.com is:unread", maxResults: 20 })',
+        description: 'Search messages using Gmail query syntax. Returns message IDs/thread IDs only; use getMessage for body and listAttachments for attachment metadata.',
+        example: 'gmail.searchMessages({ query: "has:attachment subject:report", maxResults: 20 })',
       },
       {
         name: 'createDraft',
@@ -250,6 +250,24 @@ export async function generateToolStructure(): Promise<ModuleStructure> {
         signature: 'modifyLabels({ messageId: string, addLabelIds?: string[], removeLabelIds?: string[] })',
         description: 'Add or remove labels from a message',
         example: 'gmail.modifyLabels({ messageId: "18c123abc", removeLabelIds: ["UNREAD", "INBOX"] })',
+      },
+      {
+        name: 'listAttachments',
+        signature: 'listAttachments({ messageId: string })',
+        description: 'List attachment metadata for a message: opaque attachmentId, filename, mimeType, and size. Use downloadAttachment for raw content or readAttachmentText for decoded text.',
+        example: 'const result = await gmail.listAttachments({ messageId: "18c123abc" });\nconsole.log(result.attachments.map(a => `${a.filename}: ${a.attachmentId}`));',
+      },
+      {
+        name: 'downloadAttachment',
+        signature: 'downloadAttachment({ messageId: string, attachmentId: string, maxBytes?: number })',
+        description: 'Download raw Gmail attachment content as base64url with explicit dataEncoding and size guardrails.',
+        example: 'const raw = await gmail.downloadAttachment({ messageId: "18c123abc", attachmentId: "ANGjdJ..." });\nconst bytes = Buffer.from(raw.data, "base64url");',
+      },
+      {
+        name: 'readAttachmentText',
+        signature: 'readAttachmentText({ messageId: string, attachmentId: string, maxBytes?: number, maxCharacters?: number, pdfMaxPages?: number, docxMaxXmlBytes?: number })',
+        description: 'Read supported attachments as decoded UTF-8 text. Supports text-like files, extractable PDFs, and Word .docx; returns typed unsupported/oversize/extraction_failed results for deferred formats.',
+        example: 'const decoded = await gmail.readAttachmentText({ messageId: "18c123abc", attachmentId: "ANGjdJ..." });\nif (decoded.status === "decoded") console.log(decoded.text);',
       },
       {
         name: 'dryRun',

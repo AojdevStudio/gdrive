@@ -87,6 +87,7 @@ export interface SDKRuntime {
     forwardMessage(options: unknown): Promise<unknown>;
     listAttachments(options: unknown): Promise<unknown>;
     downloadAttachment(options: unknown): Promise<unknown>;
+    readAttachmentText(options: unknown): Promise<unknown>;
     sendWithAttachments(options: unknown): Promise<unknown>;
     trashMessage(options: unknown): Promise<unknown>;
     untrashMessage(options: unknown): Promise<unknown>;

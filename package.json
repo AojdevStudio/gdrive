@@ -33,7 +33,10 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.25.1",
+    "@xmldom/xmldom": "^0.9.10",
     "googleapis": "^144.0.0",
+    "jszip": "^3.10.1",
+    "pdfjs-dist": "^6.0.227",
     "winston": "^3.17.0"
   },
   "overrides": {
@@ -41,7 +44,7 @@
     "uuid": "^11.1.1"
   },
   "engines": {
-    "node": ">=22.0.0"
+    "node": ">=22.13.0 || >=24"
   },
   "devDependencies": {
     "@eslint/js": "^9.21.0",

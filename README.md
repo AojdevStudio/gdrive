@@ -14,7 +14,7 @@
 
 *Give an AI agent one URL and it can work through AOJ Workbench.*
 
-[**Quick Start**](#quick-start) . [**Services**](#services) . [**Docs**](./docs/README.md)
+[**Quick Start**](#quick-start) . [**Provider Model**](#provider-model) . [**Docs**](./docs/README.md)
 
 </div>
 
@@ -85,7 +85,17 @@ Start a fresh Codex session after changing MCP config.
 
 AOJ Workbench keeps one public MCP connector. Behind that connector, Composio SDK sessions discover and execute selected provider toolkit actions.
 
-The direct Google Workspace operations currently in the repo are legacy paths. Migrate them vertically: prove one Composio-backed behavior, then remove the matching legacy Google code.
+The direct Google Workspace operations currently in the repo are legacy paths. Migrate them vertically: prove one Composio-backed behavior, then remove the matching legacy Google code. Current legacy capabilities include:
+
+| Service | Operations | Highlights |
+|:--------|:-----------|:-----------|
+| **Drive** | 7 | Search, enhanced search, read, create, update, batch operations |
+| **Sheets** | 12 | Read/write cells, formulas, formatting, conditional formatting, freeze, column width |
+| **Gmail** | 30+ | List, search, read, draft, send emails, manage labels, and work with attachments |
+| **Calendar** | 9 | Full CRUD, natural language quickAdd, free/busy checks |
+| **Docs** | 5 | Create, insert text, replace, rich text styling, insert tables |
+| **Forms** | 4 | Create forms, add questions, read responses |
+| | **70+ total** | |
 
 ## Tools
 

@@ -25,6 +25,7 @@ describe('listTools resource helpers', () => {
       expect.arrayContaining(['drive', 'sheets', 'forms', 'docs', 'gmail', 'calendar'])
     );
     expect((structure.gmail ?? []).map((tool) => tool.name)).toContain('sendMessage');
+    expect((structure.gmail ?? []).map((tool) => tool.name)).toContain('readAttachmentText');
     expect((structure.calendar ?? []).map((tool) => tool.name)).toContain('checkFreeBusy');
   });
 
@@ -48,6 +49,7 @@ describe('listTools resource helpers', () => {
     await expect(getModuleTools('gmail')).resolves.toEqual(
       expect.arrayContaining([
         expect.objectContaining({ name: 'sendMessage' }),
+        expect.objectContaining({ name: 'readAttachmentText' }),
       ])
     );
 
