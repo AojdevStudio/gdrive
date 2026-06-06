@@ -83,11 +83,17 @@ function missingRuntimeError(): Error {
 }
 
 function toSafeError(error: unknown): Error {
-  const message = error instanceof Error ? error.message : String(error);
+  const messages: string[] = [];
+  let current: unknown = error;
+  while (current) {
+    messages.push(current instanceof Error ? current.message : String(current));
+    current = current instanceof Error ? current.cause : undefined;
+  }
+  const message = messages.join(' ');
   if (message.startsWith('Composio provider runtime is not configured')) {
     return new Error(message);
   }
-  if (/No active connection found for toolkit/i.test(message)) {
+  if (/No (?:active )?connected? account found|No active connection found|No active connection exists/i.test(message)) {
     return new Error(
       'Composio provider connection is not active for this AOJ Workbench user. Connect the provider account in Composio and retry.'
     );
@@ -106,6 +112,26 @@ function mapArguments(
   args: Record<string, unknown> | undefined,
   definition: ComposioOperationDefinition
 ): Record<string, unknown> {
+  if (definition.service === 'forms' && definition.operation === 'createForm') {
+    const sourceInfo = args?.info && typeof args.info === 'object' && !Array.isArray(args.info)
+      ? args.info as Record<string, unknown>
+      : {};
+    const info: Record<string, unknown> = { ...sourceInfo };
+    for (const key of ['title', 'description', 'documentTitle'] as const) {
+      if (args?.[key] !== undefined && info[key] === undefined) {
+        info[key] = args[key];
+      }
+    }
+    if (typeof info.title !== 'string' || info.title.trim().length === 0) {
+      throw new Error('forms.createForm requires a non-empty title string.');
+    }
+    const mapped: Record<string, unknown> = { info };
+    if (typeof args?.unpublished === 'boolean') {
+      mapped.unpublished = args.unpublished;
+    }
+    return mapped;
+  }
+
   const mapped: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(args ?? {})) {
     const alias = definition.argAliases?.[key] ?? key;
