@@ -1,6 +1,6 @@
 import { describe, it, expect, jest } from '@jest/globals';
 import { WorkersKVCache, encryptToken } from '../../storage/kv-store.js';
-import type { KVNamespace } from '../../auth/workers-auth.js';
+import type { KVNamespace } from '../../../worker.js';
 
 describe('WorkersKVCache', () => {
   it('throws clear error for non-32-byte encryption keys', async () => {

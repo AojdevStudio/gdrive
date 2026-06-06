@@ -84,11 +84,11 @@ export class AuthManager {
       if (authError.isLegacyFormat || authError.message === 'LEGACY_TOKEN_FORMAT') {
         this.logger.error('Legacy token format detected during initialization');
         this.logger.error('\n❌ Legacy Token Format Detected\n');
-        this.logger.error('Your tokens are in the old local format and cannot be used by the remote Worker runtime.');
+        this.logger.error('Your tokens are in the old local format and are not used by the remote Worker /mcp runtime.');
         this.logger.error('\nTo fix this issue:');
-        this.logger.error('1. Configure Worker secrets for Google OAuth and token encryption.');
-        this.logger.error('2. Open /setup/google/start with MCP_SETUP_TOKEN.');
-        this.logger.error('3. Check /setup/status with MCP_SETUP_TOKEN before connecting /mcp.\n');
+        this.logger.error('1. Configure COMPOSIO_API_KEY, AOJ_WORKBENCH_USER_ID, and MCP_BEARER_TOKEN on the Worker.');
+        this.logger.error('2. Connect provider accounts in Composio managed auth.');
+        this.logger.error('3. Connect MCP clients only to the deployed Worker /mcp endpoint.\n');
         process.exit(1);
       }
       

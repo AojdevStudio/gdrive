@@ -11,8 +11,7 @@ https://your-worker.workers.dev/mcp
 Current troubleshooting starts with:
 
 ```bash
-curl -H "Authorization: Bearer $MCP_SETUP_TOKEN" \
-  https://your-worker.workers.dev/setup/status
+curl -i https://your-worker.workers.dev/
 ```
 
 See [Authentication Problems](./authentication-problems.md).

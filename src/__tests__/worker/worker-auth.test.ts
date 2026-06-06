@@ -8,9 +8,6 @@ function makeEnv(overrides: Partial<Env> = {}): Env {
       put: async () => undefined,
       delete: async () => undefined,
     },
-    GDRIVE_CLIENT_ID: 'client-id',
-    GDRIVE_CLIENT_SECRET: 'client-secret',
-    GDRIVE_TOKEN_ENCRYPTION_KEY: Buffer.alloc(32).toString('base64'),
     COMPOSIO_API_KEY: 'composio-key-secret',
     AOJ_WORKBENCH_USER_ID: 'aoj-workbench-user',
     MCP_BEARER_TOKEN: 'secret-token',
@@ -108,7 +105,7 @@ describe('worker Composio provider failures', () => {
     expect(JSON.stringify(body)).not.toMatch(/node|dist\/index|stdio|docker|local auth/i);
   });
 
-  it('does not consult legacy Google OAuth state before listing MCP tools', async () => {
+  it('does not consult legacy provider auth before listing MCP tools', async () => {
     jest.spyOn(console, 'error').mockImplementation(() => undefined);
     const fetchSpy = jest.spyOn(globalThis, 'fetch').mockResolvedValue({
       ok: false,
@@ -127,7 +124,7 @@ describe('worker Composio provider failures', () => {
         },
         body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list', params: {} }),
       }),
-      makeEnv({ GDRIVE_CLIENT_SECRET: 'client-secret' }),
+      makeEnv(),
       {}
     );
 

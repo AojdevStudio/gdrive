@@ -4,16 +4,12 @@
 
 const workerUrl = process.env.WORKER_URL;
 const mcpToken = process.env.MCP_BEARER_TOKEN;
-const setupToken = process.env.MCP_SETUP_TOKEN;
 const executePlan = process.env.AOJ_WORKBENCH_SMOKE_EXECUTE_JSON;
 
 const secretValues = [
   mcpToken,
-  setupToken,
   process.env.COMPOSIO_API_KEY,
   process.env.AOJ_WORKBENCH_MCP_TOKEN,
-  process.env.GDRIVE_CLIENT_SECRET,
-  process.env.GDRIVE_TOKEN_ENCRYPTION_KEY,
   process.env.GOOGLE_AUTH_CODE,
   process.env.GOOGLE_ACCESS_TOKEN,
   process.env.GOOGLE_REFRESH_TOKEN,
@@ -107,23 +103,21 @@ await check('unauthenticated /mcp is rejected', async () => {
   }
 });
 
-if (setupToken) {
-  await check('setup/status route responds with setup bearer auth', async () => {
-    const response = await fetch(`${baseUrl}/setup/status`, {
-      headers: { Authorization: `Bearer ${setupToken}` },
+await check('legacy Google setup routes are not served', async () => {
+  const paths = [
+    '/setup/google/start',
+    '/setup/google/callback?state=redacted&code=redacted',
+    '/setup/status',
+  ];
+  for (const path of paths) {
+    const response = await fetch(`${baseUrl}${path}`, {
+      headers: { Authorization: 'Bearer redacted-route-probe' },
     });
-    const body = await readBody(response);
-    if (response.status !== 200 || typeof body !== 'object' || body === null || !('status' in body)) {
-      throw new Error(`Unexpected setup/status response ${response.status}: ${redact(body)}`);
+    if (response.status !== 404) {
+      throw new Error(`Expected ${path} to return 404, got ${response.status}: ${redact(await readBody(response))}`);
     }
-    const serialized = JSON.stringify(body);
-    if (secretValues.some((secret) => serialized.includes(secret))) {
-      throw new Error('setup/status response leaked a configured secret');
-    }
-  });
-} else {
-  console.log('SKIP setup/status route responds with setup bearer auth (MCP_SETUP_TOKEN not set)');
-}
+  }
+});
 
 if (mcpToken) {
   await check('authenticated tools/list exposes search and execute', async () => {

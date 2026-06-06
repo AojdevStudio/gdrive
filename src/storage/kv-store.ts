@@ -7,7 +7,7 @@
  */
 
 import type { CacheManagerLike } from '../modules/types.js';
-import type { KVNamespace } from '../auth/workers-auth.js';
+import type { KVNamespace } from '../../worker.js';
 
 // ─── Web Crypto helpers ───────────────────────────────────────────────────────
 
@@ -39,7 +39,7 @@ function getWebCrypto(): Crypto {
 }
 
 async function importKey(rawKey: string): Promise<CryptoKey> {
-  // Key is expected as a base64-encoded 32-byte value (matches GDRIVE_TOKEN_ENCRYPTION_KEY format)
+  // Key is expected as a base64-encoded 32-byte value.
   const keyBytes = decodeBase64(rawKey);
   if (keyBytes.length !== 32) {
     throw new Error(`Encryption key must be exactly 32 bytes (got ${keyBytes.length})`);

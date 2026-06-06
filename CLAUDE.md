@@ -83,7 +83,7 @@ Worker-facing variables:
 | `MCP_AUTHORIZATION_SERVER_URL` | Metadata-only external OAuth authorization server URL for MCP clients |
 | `LOG_LEVEL` | Worker log level hint |
 
-Legacy direct-Google variables such as `GDRIVE_KV`, `GDRIVE_CLIENT_ID`, `GDRIVE_CLIENT_SECRET`, and `GDRIVE_TOKEN_ENCRYPTION_KEY` remain only until provider replacement slices remove the matching code.
+`GDRIVE_KV` may remain as a migration-sensitive Worker KV binding for cache/tracking compatibility. Direct Google OAuth secrets such as `GDRIVE_CLIENT_ID`, `GDRIVE_CLIENT_SECRET`, and `GDRIVE_TOKEN_ENCRYPTION_KEY` are not part of the `/mcp` runtime.
 
 ## Gotchas
 

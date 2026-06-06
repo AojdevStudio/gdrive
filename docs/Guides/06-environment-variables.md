@@ -13,17 +13,8 @@ Set these as Cloudflare Worker secrets or bindings:
 - `COMPOSIO_API_KEY` - Composio SDK/API key for the native provider layer
 - `AOJ_WORKBENCH_USER_ID` - stable Composio user ID for connected accounts
 - `MCP_BEARER_TOKEN` - bearer token validated by `POST /mcp`
-- `MCP_SETUP_TOKEN` - separate bearer token for setup/status routes
 - `MCP_ALLOWED_ORIGINS` - optional CORS allowlist
 - `MCP_AUTHORIZATION_SERVER_URL` - optional protected-resource metadata for a real external MCP authorization server
-
-The direct Google variables below are legacy provider scaffolding and should disappear as provider replacement slices retire the direct Google code:
-
-- `GDRIVE_CLIENT_ID` - Google OAuth client ID
-- `GDRIVE_CLIENT_SECRET` - Google OAuth client secret
-- `GDRIVE_TOKEN_ENCRYPTION_KEY` - 32-byte base64 key for encrypted token storage
-- `GDRIVE_TOKEN_CURRENT_KEY_VERSION` - optional active key version
-- `GDRIVE_TOKEN_ENCRYPTION_KEY_V2`, `GDRIVE_TOKEN_ENCRYPTION_KEY_V3`, `GDRIVE_TOKEN_ENCRYPTION_KEY_V4` - optional rotation keys
 
 `MCP_AUTHORIZATION_SERVER_URL` is metadata only. Do not set it to a provider OAuth URL; provider authorization belongs to the Composio native provider layer and is not Codex-to-MCP authentication.
 
@@ -62,17 +53,12 @@ Store only the current v1 values:
 - `COMPOSIO_API_KEY`
 - `AOJ_WORKBENCH_USER_ID`
 - `MCP_BEARER_TOKEN`
-- `MCP_SETUP_TOKEN`
 - `AOJDEVSTUDIO_CLOUDFLARE_API_TOKEN`
 
 Set `AOJ_WORKBENCH_MCP_TOKEN` equal to `MCP_BEARER_TOKEN` in local client environments.
 
 ## Optional Runtime Tuning
 
-- `GDRIVE_TOKEN_REFRESH_INTERVAL`
-- `GDRIVE_TOKEN_PREEMPTIVE_REFRESH`
-- `GDRIVE_TOKEN_MAX_RETRIES`
-- `GDRIVE_TOKEN_RETRY_DELAY`
 - `LOG_LEVEL`
 - `REDIS_URL`
 - `PAI_CONTACTS_PATH`
