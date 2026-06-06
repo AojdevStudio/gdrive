@@ -225,6 +225,32 @@ describe('SDKComposioProviderRuntime', () => {
     })).rejects.toThrow('Composio provider connection is not active for this AOJ Workbench user');
   });
 
+  it('returns safe guidance when Composio reports no connected accounts with plural wording', async () => {
+    const execute = jest.fn(async () => {
+      throw new Error(
+        'Error executing the tool GOOGLEFORMS_CREATE_FORM',
+        { cause: new Error('No connected accounts found for user ID redacted for toolkit googleforms') }
+      );
+    });
+    const runtime = new SDKComposioProviderRuntime(
+      { apiKey: 'test-key', userId: 'aoj-workbench-test' },
+      () => ({
+        create: jest.fn(async () => ({
+          sessionId: 'session-1',
+          toolkits: jest.fn(async () => ({ items: [] })),
+          execute: jest.fn(async () => ({})),
+        })),
+        tools: { execute },
+      })
+    );
+
+    await expect(runtime.execute({
+      service: 'forms',
+      operation: 'createForm',
+      args: { title: 'Smoke Form' },
+    })).rejects.toThrow('Composio provider connection is not active for this AOJ Workbench user');
+  });
+
   it('fails closed when Composio credentials are missing', async () => {
     const runtime = new SDKComposioProviderRuntime({});
 

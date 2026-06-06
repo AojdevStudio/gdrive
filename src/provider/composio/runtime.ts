@@ -93,7 +93,7 @@ function toSafeError(error: unknown): Error {
   if (message.startsWith('Composio provider runtime is not configured')) {
     return new Error(message);
   }
-  if (/No (?:active )?connected? account found|No active connection found|No active connection exists/i.test(message)) {
+  if (/No (?:active )?(?:connected )?accounts? found|No active connections? found|No active connection exists/i.test(message)) {
     return new Error(
       'Composio provider connection is not active for this AOJ Workbench user. Connect the provider account in Composio and retry.'
     );
