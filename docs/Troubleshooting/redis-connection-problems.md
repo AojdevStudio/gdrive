@@ -2,11 +2,8 @@
 
 Redis is not part of the supported AOJ Workbench v4 runtime.
 
-Runtime state is stored through Cloudflare Workers KV. Check Worker setup state instead:
+The deployed Worker may use Cloudflare Workers KV for cache/tracking compatibility. Check the Worker identity response and `/mcp` bearer auth instead:
 
 ```bash
-curl -H "Authorization: Bearer $MCP_SETUP_TOKEN" \
-  https://your-worker.workers.dev/setup/status
+curl -i https://your-worker.workers.dev/
 ```
-
-If token state is missing or malformed, restart setup at `/setup/google/start`.

@@ -8,23 +8,14 @@
  * Auth flow:
  *   1. MCP clients authenticate to AOJ Workbench with MCP_BEARER_TOKEN.
  *   2. Provider auth is handled by Composio managed auth for AOJ_WORKBENCH_USER_ID.
- *   3. Legacy /setup/google routes remain only as migration scaffolding until removed.
  *
  * To deploy:
- *   1. Create KV namespace: wrangler kv:namespace create GDRIVE_KV --preview false
- *   2. Fill in the id in wrangler.toml
- *   3. Set secrets: COMPOSIO_API_KEY, AOJ_WORKBENCH_USER_ID, MCP_BEARER_TOKEN
- *   4. Deploy: wrangler deploy
+ *   1. Set secrets: COMPOSIO_API_KEY, AOJ_WORKBENCH_USER_ID, MCP_BEARER_TOKEN
+ *   2. Deploy: wrangler deploy
  */
 
 import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js';
 import { WorkersKVCache, NullCache } from './src/storage/kv-store.js';
-import type { KVNamespace } from './src/auth/workers-auth.js';
-import {
-  handleGoogleOAuthCallback,
-  handleGoogleOAuthStart,
-  handleGoogleOAuthStatus,
-} from './src/auth/workers-oauth.js';
 import { createConfiguredServer } from './src/server/factory.js';
 import { jsonError, validateBearerRequest } from './src/server/http-auth.js';
 import { WORKER_ROOT_RESPONSE } from './src/server/identity.js';
@@ -34,15 +25,17 @@ import {
   protectedResourceMetadata,
 } from './src/server/http-metadata.js';
 
+export interface KVNamespace {
+  get(key: string): Promise<string | null>;
+  put(key: string, value: string, options?: { expirationTtl?: number }): Promise<void>;
+  delete(key: string): Promise<void>;
+}
+
 export interface Env {
   GDRIVE_KV: KVNamespace;
-  GDRIVE_CLIENT_ID?: string;
-  GDRIVE_CLIENT_SECRET?: string;
-  GDRIVE_TOKEN_ENCRYPTION_KEY?: string;
   COMPOSIO_API_KEY?: string;
   AOJ_WORKBENCH_USER_ID?: string;
   MCP_BEARER_TOKEN?: string;
-  MCP_SETUP_TOKEN?: string;
   MCP_ALLOWED_ORIGINS?: string;
   MCP_AUTHORIZATION_SERVER_URL?: string;
   LOG_LEVEL?: string;
@@ -88,18 +81,6 @@ export default {
 
     if (request.method === 'GET' && url.pathname === '/.well-known/oauth-authorization-server') {
       return jsonMetadata(oauthAuthorizationServerNotImplemented(), 501);
-    }
-
-    if (request.method === 'GET' && url.pathname === '/setup/google/start') {
-      return handleGoogleOAuthStart(request, env);
-    }
-
-    if (request.method === 'GET' && url.pathname === '/setup/google/callback') {
-      return handleGoogleOAuthCallback(request, env);
-    }
-
-    if (request.method === 'GET' && url.pathname === '/setup/status') {
-      return handleGoogleOAuthStatus(request, env);
     }
 
     // Only handle POST requests to /mcp (or root)

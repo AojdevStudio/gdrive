@@ -3,9 +3,9 @@
 AOJ Workbench has two auth surfaces:
 
 - MCP client to Worker: `MCP_BEARER_TOKEN` on `POST /mcp`
-- Operator setup to Worker: `MCP_SETUP_TOKEN` on `/setup/status` and `/setup/google/start`
+- Provider account auth: Composio managed auth for the configured AOJ Workbench user
 
-The target provider model uses Composio managed auth. The Google setup routes below are legacy direct-provider troubleshooting paths and should disappear as provider replacement slices remove the direct Google implementation.
+The Worker no longer serves direct Google setup routes. Connect or repair provider accounts in Composio, then use AOJ Workbench `search` and `execute` through the deployed `/mcp` endpoint.
 
 ## `/mcp` Returns 401 Unauthorized
 
@@ -17,26 +17,16 @@ Authorization: Bearer <MCP_BEARER_TOKEN>
 
 The value must match the Worker secret.
 
-## Legacy Google OAuth Token Resolution Failed
+## Provider Connection Is Not Active
 
-Check setup state:
+The Worker returns a redacted provider-auth error when Composio has no active account for the requested provider toolkit:
 
-```bash
-curl -H "Authorization: Bearer $MCP_SETUP_TOKEN" \
-  https://your-worker.workers.dev/setup/status
+```text
+Composio provider connection is not active for this AOJ Workbench user. Connect the provider account in Composio and retry.
 ```
 
-Recover with:
-
-```bash
-curl -i -H "Authorization: Bearer $MCP_SETUP_TOKEN" \
-  https://your-worker.workers.dev/setup/google/start
-```
-
-## Setup Routes Return 401
-
-Confirm the request uses `MCP_SETUP_TOKEN`, not `MCP_BEARER_TOKEN`.
+Fix the connected account in the Composio dashboard. Do not add Google OAuth client IDs or token secrets to the Worker.
 
 ## Redaction
 
-Do not share access tokens, refresh tokens, authorization codes, client secrets, encryption keys, or bearer tokens in issues or logs.
+Do not share access tokens, refresh tokens, authorization codes, client secrets, API keys, private aliases, connected-account inventories, or bearer tokens in issues or logs.
