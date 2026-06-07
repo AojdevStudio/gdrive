@@ -138,6 +138,42 @@ describe('SDKComposioProviderRuntime', () => {
     });
   });
 
+  it('maps forms.createForm into the live Composio schema shape', async () => {
+    const { runtime, execute } = makeRuntime();
+
+    await runtime.execute({
+      service: 'forms',
+      operation: 'createForm',
+      args: {
+        title: 'Smoke Form',
+        description: 'Smoke description',
+      },
+    });
+
+    expect(execute).toHaveBeenCalledWith('GOOGLEFORMS_CREATE_FORM', {
+      userId: 'aoj-workbench-test',
+      arguments: {
+        info: {
+          title: 'Smoke Form',
+          description: 'Smoke description',
+        },
+      },
+      dangerouslySkipVersionCheck: true,
+    });
+  });
+
+  it('rejects invalid forms.createForm arguments before provider execution', async () => {
+    const { runtime, execute } = makeRuntime();
+
+    await expect(runtime.execute({
+      service: 'forms',
+      operation: 'createForm',
+      args: { description: 'missing title' },
+    })).rejects.toThrow('forms.createForm requires a non-empty title string');
+
+    expect(execute).not.toHaveBeenCalled();
+  });
+
   it('returns safe guidance when a provider account is disconnected', async () => {
     const execute = jest.fn(async () => {
       throw new Error(
@@ -160,6 +196,58 @@ describe('SDKComposioProviderRuntime', () => {
       service: 'drive',
       operation: 'search',
       args: { query: 'smoke' },
+    })).rejects.toThrow('Composio provider connection is not active for this AOJ Workbench user');
+  });
+
+  it('returns safe guidance when Composio reports no connected account', async () => {
+    const execute = jest.fn(async () => {
+      throw new Error(
+        'Error executing the tool GOOGLEFORMS_CREATE_FORM',
+        { cause: new Error('No connected account found for user ID redacted for toolkit googleforms') }
+      );
+    });
+    const runtime = new SDKComposioProviderRuntime(
+      { apiKey: 'test-key', userId: 'aoj-workbench-test' },
+      () => ({
+        create: jest.fn(async () => ({
+          sessionId: 'session-1',
+          toolkits: jest.fn(async () => ({ items: [] })),
+          execute: jest.fn(async () => ({})),
+        })),
+        tools: { execute },
+      })
+    );
+
+    await expect(runtime.execute({
+      service: 'forms',
+      operation: 'createForm',
+      args: { title: 'Smoke Form' },
+    })).rejects.toThrow('Composio provider connection is not active for this AOJ Workbench user');
+  });
+
+  it('returns safe guidance when Composio reports no connected accounts with plural wording', async () => {
+    const execute = jest.fn(async () => {
+      throw new Error(
+        'Error executing the tool GOOGLEFORMS_CREATE_FORM',
+        { cause: new Error('No connected accounts found for user ID redacted for toolkit googleforms') }
+      );
+    });
+    const runtime = new SDKComposioProviderRuntime(
+      { apiKey: 'test-key', userId: 'aoj-workbench-test' },
+      () => ({
+        create: jest.fn(async () => ({
+          sessionId: 'session-1',
+          toolkits: jest.fn(async () => ({ items: [] })),
+          execute: jest.fn(async () => ({})),
+        })),
+        tools: { execute },
+      })
+    );
+
+    await expect(runtime.execute({
+      service: 'forms',
+      operation: 'createForm',
+      args: { title: 'Smoke Form' },
     })).rejects.toThrow('Composio provider connection is not active for this AOJ Workbench user');
   });
 
