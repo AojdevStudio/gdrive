@@ -57,7 +57,7 @@ Use the deployed Worker URL:
 https://your-worker.workers.dev/mcp
 ```
 
-The Worker must already be deployed and configured with its MCP bearer token and the required Composio runtime secrets. Current legacy Google slices may still require Google OAuth state until they are replaced.
+The Worker must already be deployed and configured with its MCP bearer token and the required Composio runtime secrets. Provider accounts are connected in Composio for the configured AOJ Workbench user.
 
 ### 2. Connect Claude Code
 
@@ -85,7 +85,7 @@ Start a fresh Codex session after changing MCP config.
 
 AOJ Workbench keeps one public MCP connector. Behind that connector, Composio SDK sessions discover and execute selected provider toolkit actions.
 
-The direct Google Workspace operations currently in the repo are legacy paths. Migrate them vertically: prove one Composio-backed behavior, then remove the matching legacy Google code. Current legacy capabilities include:
+The direct Google Workspace modules that remain in the repo are legacy migration scaffolding. The supported runtime routes provider discovery and execution through the Composio native provider layer. Current AOJ Workbench capabilities include:
 
 | Service | Operations | Highlights |
 |:--------|:-----------|:-----------|
@@ -96,6 +96,8 @@ The direct Google Workspace operations currently in the repo are legacy paths. M
 | **Docs** | 5 | Create, insert text, replace, rich text styling, insert tables |
 | **Forms** | 4 | Create forms, add questions, read responses |
 | | **70+ total** | |
+
+Live Forms execution requires an active Google Forms-capable connected account in Composio for `AOJ_WORKBENCH_USER_ID`.
 
 ## Tools
 

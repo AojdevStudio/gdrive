@@ -28,6 +28,6 @@ Check the configured URL and restart the client session. The endpoint must end w
 
 Rename the MCP server entry to `aoj-workbench`. The server covers Drive, Sheets, Forms, Docs, Gmail, and Calendar.
 
-## Legacy Pages
+## Historical Pages
 
-Older troubleshooting pages in this directory may describe local stdio, Docker, Redis, or local auth flows. Those are retained only as historical references and are not supported MCP runtime guidance.
+Historical troubleshooting pages in this directory redirect local stdio, Docker, Redis, and local auth flows back to the remote Worker runtime. They are not supported MCP setup guidance.

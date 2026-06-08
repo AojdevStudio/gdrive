@@ -4,17 +4,18 @@ AOJ Workbench is remote-only. MCP clients connect to the Cloudflare Workers `/mc
 
 ## Current Guides
 
+- [Initial Setup](./01-initial-setup.md)
 - [Codex MCP Integration](./08-codex-mcp.md)
 - [Claude Integration](./05-claude-desktop-integration.md)
 - [Environment Variables](./06-environment-variables.md)
+- [Remote Worker Smoke Test](./09-remote-worker-smoke-test.md)
 - [Composio Native Provider](./10-composio-native-provider.md)
 - [Gmail Attachment Workflow](./09-gmail-attachment-workflow.md)
 
-## Unsupported Legacy Guides
+## Historical Guides
 
-The following files are retained only for historical reference. They do not describe supported MCP runtime setup:
+The following files are retained only to mark older flows as unsupported. They do not describe supported MCP runtime setup:
 
-- [Initial Setup and Installation](./01-initial-setup.md)
 - [Authentication Flow](./02-authentication-flow.md)
 - [Docker Deployment](./03-docker-deployment.md)
 - [Redis Configuration](./04-redis-configuration.md)
