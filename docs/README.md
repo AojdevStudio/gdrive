@@ -15,17 +15,19 @@ Do not use legacy docs that describe local stdio, local HTTP, Docker, or local b
 ## Start Here
 
 1. [Codex MCP Integration](./Guides/08-codex-mcp.md) — connect Codex to the remote Worker URL.
-2. [Composio Native Provider](./Guides/10-composio-native-provider.md) — understand the target provider model and migration rules.
-3. [MCP Client Auth Boundary](./adr/0001-mcp-client-auth-boundary.md) — understand client auth vs provider authorization.
-4. [Gmail Attachment Workflow](./Guides/09-gmail-attachment-workflow.md) — search, list metadata, download raw content, and read decoded text in the current legacy provider.
-5. [Examples](./Examples/) — SDK-style `search` and `execute` usage patterns.
-6. [Architecture](./Architecture/ARCHITECTURE.md) — implementation details for contributors.
+2. [Install](../INSTALL.md) — configure the deployed Worker and MCP clients.
+3. [Remote Worker Smoke Test](./Guides/09-remote-worker-smoke-test.md) — verify the deployed `/mcp` contract.
+4. [Composio Native Provider](./Guides/10-composio-native-provider.md) — understand the target provider model and migration rules.
+5. [MCP Client Auth Boundary](./adr/0001-mcp-client-auth-boundary.md) — understand client auth vs provider authorization.
+6. [Gmail Attachment Workflow](./Guides/09-gmail-attachment-workflow.md) — search, list metadata, download raw content, and read decoded text through AOJ Workbench.
+7. [Examples](./Examples/) — SDK-style `search` and `execute` usage patterns.
+8. [Architecture](./Architecture/ARCHITECTURE.md) — implementation details for contributors.
 
 ## Provider Model
 
 Composio is the native provider layer. Google Workspace, Gmail, Outlook, Notion, Stripe, YouTube, and other selected services are provider toolkits behind that layer.
 
-The current Drive, Sheets, Forms, Docs, Gmail, and Calendar implementation is the legacy direct-Google provider path. It should be removed through provider replacement slices after equivalent Composio-backed behavior is proven.
+The supported runtime uses Composio as the native provider layer. Any direct-Google modules still present in the repo are migration scaffolding and should not be documented as client setup requirements.
 
 Current legacy direct-Google capabilities include:
 

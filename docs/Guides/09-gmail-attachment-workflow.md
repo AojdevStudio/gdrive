@@ -104,6 +104,6 @@ The operation returns a typed `status`:
 
 AOJ Workbench does not implement OCR in this slice. Scanned PDFs, images, legacy `.doc`, non-docx Office files, and unknown binary formats return a typed unsupported/extraction result. Issue #103 remains the place to decide future OCR and broader binary parsing behavior.
 
-## OAuth Scope Expectations
+## Provider Permission Expectations
 
-Gmail attachment reads use the same Gmail message-read access needed for message search, message retrieval, and attachment download through the Gmail API. If `searchMessages`, `getMessage`, or attachment operations return Google authorization errors, verify the deployed Worker Google OAuth state through the remote setup status route and reauthorize the Google Workspace API surface with the required Gmail scopes.
+Gmail attachment reads use the same Gmail message-read access needed for message search, message retrieval, and attachment download. If `searchMessages`, `getMessage`, or attachment operations return provider authorization errors, repair the Gmail-capable connected account in Composio for `AOJ_WORKBENCH_USER_ID` and retry through the deployed AOJ Workbench `/mcp` endpoint.
